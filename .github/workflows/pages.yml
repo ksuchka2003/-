@@ -14,12 +14,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: book-club
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: book-club/package-lock.json
       - run: npm ci
       - run: npm run check:edge
       - run: npm run check
@@ -30,7 +34,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: book-club/dist
       - name: Разместить
         id: deployment
         uses: actions/deploy-pages@v4

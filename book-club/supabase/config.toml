@@ -1,0 +1,23 @@
+project_id = "bookclub"
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+[db]
+port = 54322
+major_version = 17
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+jwt_expiry = 600
+enable_signup = false
+[auth.email]
+enable_signup = false
+enable_confirmations = true
+[functions.telegram-auth]
+verify_jwt = false
+[functions.club-api]
+verify_jwt = false
+[functions.notifications]
+verify_jwt = false

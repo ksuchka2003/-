@@ -1,0 +1,65 @@
+import { endpoint, body, service, checked } from '../_shared/http.ts';
+import { validateInitData } from '../_shared/telegram.ts';
+Deno.serve(
+  endpoint(async (req) => {
+    const input = await body(req);
+    if (typeof input.initData !== 'string') throw new Error('Нужны initData Telegram');
+    const tg = await validateInitData(input.initData, Deno.env.get('TELEGRAM_BOT_TOKEN')!);
+    const admin = service();
+    let member = checked(
+      await admin.from('club_members').select('*').eq('telegram_id', tg.id).maybeSingle(),
+    );
+    if (!member && String(tg.id) === Deno.env.get('INITIAL_ADMIN_TELEGRAM_ID'))
+      member = checked(
+        await admin
+          .from('club_members')
+          .upsert({ telegram_id: tg.id, role: 'admin' }, { onConflict: 'telegram_id' })
+          .select()
+          .single(),
+      );
+    if (!member?.active) throw new Error('Вы не включены в список участников клуба');
+    // GoTrue issues a normal short-lived Supabase JWT. OTP and refresh token stay on the server.
+    const link = checked(
+      await admin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: `${member.id}@telegram.bookclub.invalid`,
+      }),
+    );
+    if (!link.user || !link.properties) throw new Error('Не удалось создать учётную запись');
+    if (member.auth_user_id && member.auth_user_id !== link.user.id)
+      throw new Error('Конфликт учётной записи');
+    checked(
+      await admin.from('club_members').update({ auth_user_id: link.user.id }).eq('id', member.id),
+    );
+    const auth = checked(
+      await service().auth.verifyOtp({
+        type: 'magiclink',
+        token_hash: link.properties.hashed_token,
+      }),
+    );
+    if (!auth.session) throw new Error('Не удалось создать сессию');
+    const name = [tg.first_name, tg.last_name].filter(Boolean).join(' ').slice(0, 200);
+    checked(
+      await admin.from('member_profiles').upsert(
+        {
+          member_id: member.id,
+          name,
+          username: tg.username || null,
+          avatar_url: tg.photo_url?.startsWith('https://') ? tg.photo_url : null,
+          joined_at: member.joined_at,
+        },
+        { onConflict: 'member_id', ignoreDuplicates: true },
+      ),
+    );
+    checked(
+      await admin
+        .from('member_privacy_settings')
+        .upsert({ member_id: member.id }, { onConflict: 'member_id', ignoreDuplicates: true }),
+    );
+    return {
+      access_token: auth.session.access_token,
+      expires_at: auth.session.expires_at,
+      member: { id: member.id, role: member.role },
+    };
+  }),
+);

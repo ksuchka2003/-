@@ -43,6 +43,7 @@ export function initializeTelegram() {
   };
   app?.ready();
   app?.expand();
+  app?.BackButton?.hide();
   theme();
   app?.onEvent('themeChanged', theme);
   app?.onEvent('safeAreaChanged', theme);
@@ -66,23 +67,3 @@ export function initializeTelegram() {
   };
 }
 export const initData = () => window.Telegram?.WebApp.initData || '';
-const backActions: { action: () => void; priority: number }[] = [];
-const dispatchBack = () => [...backActions].sort((a, b) => b.priority - a.priority)[0]?.action();
-function updateBack() {
-  const back = window.Telegram?.WebApp.BackButton;
-  back?.offClick(dispatchBack);
-  if (backActions.length) {
-    back?.onClick(dispatchBack);
-    back?.show();
-  } else back?.hide();
-}
-export function registerBack(action: () => void, priority = 0) {
-  const entry = { action, priority };
-  backActions.push(entry);
-  updateBack();
-  return () => {
-    const index = backActions.indexOf(entry);
-    if (index >= 0) backActions.splice(index, 1);
-    updateBack();
-  };
-}

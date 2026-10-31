@@ -50,7 +50,8 @@ test('узкий экран: поиск ISBN по Enter, форма без пе�
   await page.getByRole('button', { name: 'Ещё', exact: true }).click();
   await page.getByRole('dialog').getByRole('link', { name: 'Участники', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Участники', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Назад', exact: true })).toHaveCount(0);
+  await page.locator('.bottom-nav').getByRole('link', { name: 'Мои книги', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Мои книги' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

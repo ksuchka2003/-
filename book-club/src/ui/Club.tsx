@@ -296,9 +296,6 @@ export function ClubDetail() {
     );
   return (
     <CloudGate>
-      <Link className="back" to="/club">
-        ← Библиотека клуба
-      </Link>
       <section className="book-detail">
         <Cover title={b.title} cover={b.cover} />
         <div>

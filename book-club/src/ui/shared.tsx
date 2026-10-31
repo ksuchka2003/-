@@ -15,7 +15,6 @@ import { useQuery } from '@tanstack/react-query';
 import { X, BookOpen, LoaderCircle } from 'lucide-react';
 import { type Identity, rows } from '../cloud';
 import { message } from '../domain';
-import { registerBack } from '../telegram';
 export const Session = createContext<{
   identity: Identity | null;
   error: string;
@@ -69,7 +68,6 @@ export function Modal({
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     section.current?.focus();
-    const unregister = registerBack(() => close.current(), 100);
     const keydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -96,7 +94,6 @@ export function Modal({
     };
     document.addEventListener('keydown', keydown);
     return () => {
-      unregister();
       document.removeEventListener('keydown', keydown);
       document.body.style.overflow = overflow;
       previous?.focus();

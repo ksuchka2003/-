@@ -1,5 +1,8 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import type { LibraryChange, LibraryRecord } from '../../src/privateTypes';
+import type { Availability, Attendance } from '../../src/calendar';
+import type { Meeting } from '../../src/domain';
+import { clubDay } from '../../src/calendar';
 
 const owner = '10000000-0000-4000-8000-000000000001';
 function backend() {
@@ -22,6 +25,14 @@ function backend() {
     show_quotes: false,
   };
   const publications: unknown[] = [];
+  const availability: Availability[] = [];
+  const meetings: Meeting[] = [];
+  const attendance: Attendance[] = [];
+  const participants = [
+    { member_id: owner, name: 'Анна' },
+    { member_id: '10000000-0000-4000-8000-000000000002', name: 'Борис' },
+  ];
+  let failAvailability = false;
   async function connect(context: BrowserContext, failLogin = false) {
     await context.addInitScript(() => {
       window.Telegram = {
@@ -74,6 +85,38 @@ function backend() {
             records.set(key, record);
             return { status: 'applied', record };
           });
+        } else if (input.action === 'availability') {
+          if (failAvailability)
+            return route.fulfill({
+              status: 400,
+              headers,
+              json: { error: 'Не удалось сохранить время. Повторите' },
+            });
+          const index = availability.findIndex(
+            (a) => a.day === input.data.day && a.member_id === owner,
+          );
+          if (index >= 0) availability.splice(index, 1);
+          if (input.data.status) availability.push({ ...input.data, member_id: owner });
+          body = { ok: true };
+        } else if (input.action === 'admin.meeting') {
+          const index = meetings.findIndex((m) => m.id === input.data.id);
+          const old = meetings[index];
+          const changed = old && old.starts_at !== input.data.starts_at;
+          const record = {
+            ...input.data,
+            version: (old?.version || 0) + 1,
+            schedule_version: (old?.schedule_version || 1) + (changed ? 1 : 0),
+          };
+          if (index >= 0) meetings[index] = record;
+          else meetings.push(record);
+          body = { ok: true };
+        } else if (input.action === 'attendance') {
+          const index = attendance.findIndex(
+            (a) => a.meeting_id === input.data.meeting_id && a.member_id === owner,
+          );
+          if (index >= 0) attendance.splice(index, 1);
+          attendance.push({ ...input.data, member_id: owner });
+          body = { ok: true };
         } else if (input.action === 'profile') {
           profile = { ...profile, ...input.data };
           body = { ok: true };
@@ -84,18 +127,37 @@ function backend() {
       } else {
         const table = url.pathname.split('/').at(-1);
         body =
-          table === 'private_library_records'
-            ? [...records.values()]
-            : table === 'member_profiles'
-              ? [profile]
-              : table === 'member_privacy_settings'
-                ? [privacy]
-                : [];
+          table === 'meeting_availability'
+            ? availability
+            : table === 'meeting_participants'
+              ? participants
+              : table === 'meetings'
+                ? meetings
+                : table === 'meeting_attendance'
+                  ? attendance
+                  : table === 'private_library_records'
+                    ? [...records.values()]
+                    : table === 'member_profiles'
+                      ? [profile]
+                      : table === 'member_privacy_settings'
+                        ? [privacy]
+                        : [];
       }
       await route.fulfill({ headers, json: body });
     });
   }
-  return { records, publications, connect };
+  return {
+    records,
+    publications,
+    connect,
+    availability,
+    attendance,
+    meetings,
+    participants,
+    failAvailability: () => {
+      failAvailability = true;
+    },
+  };
 }
 async function synced(page: Page) {
   await expect(page.locator('.connection-bar')).toContainText('Синхронизировано');
@@ -211,4 +273,83 @@ test('ошибка авторизации видна, локальный реж�
   await page.goto('/#/books');
   await expect(page.getByRole('heading', { name: 'Пока нет книг' })).toBeVisible();
   await expect(page.locator('.connection-bar')).toContainText('Только на этом устройстве');
+});
+
+test('календарь: занятое утро оставляет вечер, отметки приходят на другое устройство, приглашение с комментарием', async ({
+  browser,
+  baseURL,
+}) => {
+  const api = backend();
+  const first = await browser.newContext({ baseURL, viewport: { width: 320, height: 740 } });
+  const second = await browser.newContext({ baseURL });
+  const day = clubDay(new Date(Date.now() + 2 * 86400000));
+  api.availability.push({
+    member_id: api.participants[1].member_id,
+    day,
+    status: 'partial',
+    busy_ranges: [[0, 720]],
+    comment: 'Свободен после обеда',
+  });
+  try {
+    await api.connect(first);
+    await api.connect(second);
+    const a = await first.newPage(),
+      b = await second.newPage();
+    await a.goto('/#/meetings');
+    const openDay = async (page: Page) => {
+      while (
+        !(await page
+          .getByRole('button', { name: new RegExp('^' + Number(day.slice(-2)) + ' ') })
+          .count())
+      )
+        await page.getByRole('button', { name: 'Следующий месяц' }).click();
+      await page
+        .getByRole('button', { name: new RegExp('^' + Number(day.slice(-2)) + ' ') })
+        .click();
+    };
+    await openDay(a);
+    await expect(a.getByText('Свободен после обеда', { exact: true })).toBeVisible();
+    await a.getByLabel('Моя доступность').selectOption('free');
+    await a.getByLabel('Комментарий к дню').fill('Хочу обсудить финал');
+    await a.getByRole('button', { name: 'Сохранить моё время' }).click();
+    await expect(a.getByRole('dialog')).toHaveCount(0);
+    expect(api.availability).toHaveLength(2);
+    await b.goto('/#/meetings');
+    await openDay(b);
+    await expect(b.getByLabel('Комментарий к дню')).toHaveValue('Хочу обсудить финал');
+    await expect(
+      b.getByText('Общее свободное время: 12:00–23:00 · МСК', { exact: true }),
+    ).toBeVisible();
+    await b.getByLabel('Начало встречи (МСК)').fill('18:00');
+    await b.getByRole('button', { name: 'Предложить это время' }).click();
+    await b.getByLabel('Название встречи').fill('Разговор о книге');
+    await b.getByRole('button', { name: 'Предложить участникам' }).click();
+    await expect.poll(() => api.meetings.length).toBe(1);
+    await b.getByRole('button', { name: 'Ответить', exact: true }).click();
+    await b.getByLabel('Сможете прийти?').selectOption('no');
+    await b.getByLabel('Комментарий к встрече').fill('Хочу, но удобнее в субботу');
+    await b.getByRole('button', { name: 'Сохранить ответ' }).click();
+    await b.getByRole('button', { name: 'Встречи', exact: true }).click();
+    await expect(b.getByText('Ваш ответ: Хочу, но не смогу', { exact: true })).toBeVisible();
+    await expect(b.getByText('Хочу, но удобнее в субботу', { exact: true }).first()).toBeVisible();
+    expect(api.attendance).toHaveLength(1);
+    expect(await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await a.screenshot({ path: '../../work/calendar-mobile.png', fullPage: true });
+  } finally {
+    await first.close();
+    await second.close();
+  }
+});
+test('ошибка сохранения времени не показывает ложный успех', async ({ page, context }) => {
+  const api = backend();
+  api.failAvailability();
+  await api.connect(context);
+  await page.goto('/#/meetings');
+  await page.locator('.calendar-day:not([disabled])').first().click();
+  await page.getByRole('button', { name: 'Сохранить моё время' }).click();
+  await expect(
+    page.getByText('Не удалось сохранить время. Повторите', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(api.availability).toHaveLength(0);
 });

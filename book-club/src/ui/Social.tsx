@@ -248,9 +248,6 @@ export function MemberDetail() {
     );
   return (
     <CloudGate>
-      <Link className="back" to="/members">
-        ← Участники
-      </Link>
       <div className="profile-header">
         <Avatar profile={p} />
         <div>

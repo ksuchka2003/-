@@ -166,6 +166,8 @@ export type Meeting = {
   description: string;
   cancelled: boolean;
   version: number;
+  duration_minutes?: number;
+  schedule_version?: number;
 };
 export type Proposal = {
   id: string;

@@ -4,6 +4,7 @@ export type TelegramUser = {
   last_name?: string;
   username?: string;
   photo_url?: string;
+  startParam?: string;
 };
 const enc = new TextEncoder();
 async function hmac(key: BufferSource, data: string) {
@@ -46,5 +47,5 @@ export async function validateInitData(
   const user = JSON.parse(p.get('user') || '{}');
   if (!Number.isSafeInteger(user.id) || user.id <= 0 || typeof user.first_name !== 'string')
     throw new Error('Пользователь Telegram отсутствует');
-  return user;
+  return { ...user, startParam: p.get('start_param') || '' };
 }

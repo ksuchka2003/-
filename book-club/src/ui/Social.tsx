@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Heart, BookmarkPlus, Users } from 'lucide-react';
+import { Heart, BookmarkPlus, Users, ChevronRight } from 'lucide-react';
 import {
   type Profile,
   type PublicQuote,
@@ -204,14 +204,16 @@ export function Members() {
         ) : !filtered.length ? (
           <Empty title={q ? 'Никого не найдено' : 'Пока нет участников'} />
         ) : (
-          <div className="member-grid">
+          <div className="member-list">
             {filtered.map((p) => (
               <Link to={`/members/${p.member_id}`} className="member-card" key={p.member_id}>
                 <Avatar profile={p} />
-                <h3>{p.name}</h3>
-                {p.username && <small>@{p.username}</small>}
-                {p.bio && <p>{p.bio}</p>}
-                {p.genres && <span className="badge">{p.genres}</span>}
+                <div className="member-summary">
+                  <h3>{p.name}</h3>
+                  {p.username && <small>@{p.username}</small>}
+                  {p.bio && <p>{p.bio}</p>}
+                </div>
+                <ChevronRight size={18} />
               </Link>
             ))}
           </div>

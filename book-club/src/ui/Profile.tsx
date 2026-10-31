@@ -167,17 +167,7 @@ export function Profile() {
                 <Link className="primary admin-entry" to="/admin">
                   <Settings2 size={17} /> Управление клубом
                 </Link>
-              ) : (
-                <details>
-                  <summary>Как стать администратором</summary>
-                  <p>
-                    Владелец проекта Supabase должен добавить в Edge Functions → Secrets секрет{' '}
-                    <code>INITIAL_ADMIN_TELEGRAM_ID</code> со значением вашего Telegram ID
-                    {identity.telegramId ? ` (${identity.telegramId})` : ''}. После этого повторите
-                    вход.
-                  </p>
-                </details>
-              )}
+              ) : null}
               <button className="text-button" onClick={retryLogin}>
                 Обновить вход и права
               </button>
@@ -208,7 +198,8 @@ export function Profile() {
                       : 'Подключаем библиотеку…'}
             </p>
             <p className="muted">
-              Личная библиотека доступна на ваших устройствах. Её видите только вы.
+              Основная копия библиотеки хранится на сервере и доступна только вам. На этом
+              устройстве сохраняется локальная копия для работы без сети.
             </p>
             <button
               disabled={busy || status?.phase === 'syncing'}

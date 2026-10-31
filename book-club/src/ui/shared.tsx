@@ -3,6 +3,8 @@ import {
   useContext,
   useState,
   useId,
+  useEffect,
+  useRef,
   cloneElement,
   isValidElement,
   type ReactElement,
@@ -13,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, BookOpen, LoaderCircle } from 'lucide-react';
 import { type Identity, rows } from '../cloud';
 import { message } from '../domain';
+import { registerBack } from '../telegram';
 export const Session = createContext<{
   identity: Identity | null;
   error: string;
@@ -26,6 +29,7 @@ export function useCloud<T>(table: string) {
     queryKey: ['cloud', identity?.id, table],
     queryFn: () => rows<T>(table, identity?.id),
     enabled: !!identity,
+    networkMode: 'always',
   });
 }
 export function useTask() {
@@ -57,6 +61,47 @@ export function Modal({
   children: ReactNode;
   onClose: () => void;
 }) {
+  const section = useRef<HTMLElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    section.current?.focus();
+    const unregister = registerBack(() => close.current(), 100);
+    const keydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close.current();
+      }
+      if (e.key !== 'Tab') return;
+      const nodes = [
+        ...(section.current?.querySelectorAll<HTMLElement>(
+          'button,a[href],input,select,textarea,summary',
+        ) || []),
+      ].filter((n) => !n.hasAttribute('disabled') && n.getClientRects().length);
+      const first = nodes[0],
+        last = nodes.at(-1);
+      if (
+        e.shiftKey &&
+        (document.activeElement === first || document.activeElement === section.current)
+      ) {
+        e.preventDefault();
+        last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener('keydown', keydown);
+    return () => {
+      unregister();
+      document.removeEventListener('keydown', keydown);
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
+  }, []);
   return (
     <div
       className="overlay"
@@ -64,7 +109,14 @@ export function Modal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <section className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <section
+        ref={section}
+        tabIndex={-1}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         <header>
           <h2>{title}</h2>
           <button className="icon" aria-label="Закрыть" onClick={onClose}>

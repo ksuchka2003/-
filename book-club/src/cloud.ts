@@ -42,7 +42,10 @@ export async function authenticate(): Promise<Identity> {
   if (authenticating) return authenticating;
   authenticating = (async () => {
     if (!initData()) throw new Error('Для доступа к клубу откройте приложение внутри Telegram');
-    const data = await edge('telegram-auth', { initData: initData() });
+    const data = await edge('telegram-auth', {
+      initData: initData(),
+      inviteToken: new URLSearchParams(location.search).get('invite') || undefined,
+    });
     token = data.access_token;
     expiry = data.expires_at;
     identity = data.member;
@@ -75,6 +78,30 @@ async function ensureAuth() {
   if (!identity || expiry * 1000 < Date.now() + 60000) await authenticate();
 }
 export async function rows<T>(table: string, expectedMember?: string): Promise<T[]> {
+  const cachedTables = [
+    'club_books',
+    'club_readings',
+    'member_profiles',
+    'member_privacy_settings',
+    'meetings',
+    'meeting_books',
+    'meeting_attendance',
+    'visible_progress',
+    'visible_reviews',
+    'public_quotes',
+    'quote_likes',
+    'visible_book_polls',
+  ];
+  const cacheable = cachedTables.includes(table);
+  if (
+    !navigator.onLine &&
+    identity &&
+    (!expectedMember || identity.id === expectedMember) &&
+    cacheable
+  ) {
+    const cached = await getDB().cloud_cache.get(table);
+    if (cached) return cached.rows as T[];
+  }
   await ensureAuth();
   if (expectedMember && identity?.id !== expectedMember)
     throw new Error('Аккаунт изменился. Закройте и снова откройте приложение.');
@@ -86,6 +113,8 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
     meeting_attendance: ['meeting_id', 'member_id'],
     club_settings: ['key'],
     private_library_records: ['kind', 'entity_id'],
+    visible_member_invites: ['id'],
+    visible_book_polls: ['id'],
   };
   const data: unknown[] = [];
   for (let start = 0; ; start += 500) {
@@ -96,6 +125,15 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
     const response = await (table === 'notification_jobs'
       ? request
       : request.range(start, start + 499));
+    if (
+      response.error &&
+      cacheable &&
+      (!navigator.onLine ||
+        /Failed to fetch|NetworkError|fetch failed/i.test(response.error.message))
+    ) {
+      const cached = await getDB().cloud_cache.get(table);
+      if (cached) return cached.rows as T[];
+    }
     if (response.error)
       throw new Error('Не удалось загрузить данные клуба. Проверьте сеть и состояние проекта.');
     data.push(...(response.data || []));
@@ -103,8 +141,15 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
   }
   if (expectedMember && identity?.id !== expectedMember)
     throw new Error('Аккаунт изменился. Закройте и снова откройте приложение.');
-  if (table === 'club_books' && data)
-    await getDB().club_catalog_cache.bulkPut(data as unknown as import('./domain').ClubBook[]);
+  if (table === 'club_books') {
+    const db = getDB();
+    await db.transaction('rw', db.club_catalog_cache, async () => {
+      await db.club_catalog_cache.clear();
+      await db.club_catalog_cache.bulkPut(data as import('./domain').ClubBook[]);
+    });
+  }
+  if (cacheable)
+    await getDB().cloud_cache.put({ table, rows: data, savedAt: new Date().toISOString() });
   return data as T[];
 }
 export async function action(name: string, data: unknown, expectedMember?: string) {

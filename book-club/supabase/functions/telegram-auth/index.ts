@@ -6,6 +6,21 @@ Deno.serve(
     if (typeof input.initData !== 'string') throw new Error('Нужны initData Telegram');
     const tg = await validateInitData(input.initData, Deno.env.get('TELEGRAM_BOT_TOKEN')!);
     const admin = service();
+    const invitation = tg.startParam?.startsWith('join_')
+      ? tg.startParam.slice(5)
+      : input.inviteToken;
+    if (invitation) {
+      if (typeof invitation !== 'string' || !/^[a-f0-9]{48}$/.test(invitation))
+        throw new Error('Неверное приглашение');
+      const hash = [
+        ...new Uint8Array(
+          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(invitation)),
+        ),
+      ]
+        .map((x) => x.toString(16).padStart(2, '0'))
+        .join('');
+      checked(await admin.rpc('redeem_member_invite', { p_hash: hash, p_telegram_id: tg.id }));
+    }
     const resolution = await admin.rpc('resolve_telegram_member', {
       p_telegram_id: tg.id,
       p_bootstrap_admin: String(tg.id) === Deno.env.get('INITIAL_ADMIN_TELEGRAM_ID')?.trim(),

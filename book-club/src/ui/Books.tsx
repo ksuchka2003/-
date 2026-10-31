@@ -12,7 +12,7 @@ import {
   type Metadata,
   type Review,
 } from '../domain';
-import { searchBooks } from '../bookSearch';
+import { searchBooks, normalizedIsbn } from '../bookSearch';
 import { Modal, Field, Empty, Cover, useTask, ErrorNote, useSession } from './shared';
 const blank = (): Metadata => ({
   title: '',
@@ -34,7 +34,7 @@ export function MetadataFields({
   const set = (key: keyof Metadata, v: unknown) => onChange({ ...value, [key]: v });
   return (
     <>
-      <div className="form-grid">
+      <div className="form-grid metadata-grid">
         <Field label="Название">
           <input
             required
@@ -77,25 +77,33 @@ export function MetadataFields({
           />
         </Field>
         <Field label="ISBN">
-          <input maxLength={30} value={value.isbn} onChange={(e) => set('isbn', e.target.value)} />
+          <input
+            maxLength={30}
+            value={value.isbn}
+            onChange={(e) => set('isbn', e.target.value)}
+            onBlur={() => set('isbn', normalizedIsbn(value.isbn) || value.isbn.trim())}
+          />
         </Field>
       </div>
-      <Field label="Обложка (HTTPS-ссылка)">
-        <input
-          type="url"
-          pattern="https://.*"
-          value={value.cover}
-          onChange={(e) => set('cover', e.target.value)}
-        />
-      </Field>
-      <Field label="Описание">
-        <textarea
-          maxLength={10000}
-          rows={3}
-          value={value.description}
-          onChange={(e) => set('description', e.target.value)}
-        />
-      </Field>
+      <details className="book-extra">
+        <summary>Обложка и описание</summary>
+        <Field label="Обложка (HTTPS-ссылка)">
+          <input
+            type="url"
+            pattern="https://.*"
+            value={value.cover}
+            onChange={(e) => set('cover', e.target.value)}
+          />
+        </Field>
+        <Field label="Описание">
+          <textarea
+            maxLength={10000}
+            rows={3}
+            value={value.description}
+            onChange={(e) => set('description', e.target.value)}
+          />
+        </Field>
+      </details>
     </>
   );
 }
@@ -104,9 +112,14 @@ export function BookLookup({ onSelect }: { onSelect: (b: Metadata) => void }) {
   const [results, setResults] = useState<Metadata[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     setError('');
+    setSearched(false);
+    setResults([]);
+    setBusy(false);
     if (q.trim().length < 2) {
       setResults([]);
       setBusy(false);
@@ -115,30 +128,57 @@ export function BookLookup({ onSelect }: { onSelect: (b: Metadata) => void }) {
     const timeout = setTimeout(() => {
       setBusy(true);
       searchBooks(q, controller.signal)
-        .then(setResults)
+        .then((data) => {
+          if (!controller.signal.aborted) {
+            setResults(data);
+            setSearched(true);
+          }
+        })
         .catch((e) => {
-          if (e.name !== 'AbortError') setError(e.message);
+          if (!controller.signal.aborted && e.name !== 'AbortError') setError(e.message);
         })
         .finally(() => {
           if (!controller.signal.aborted) setBusy(false);
         });
-    }, 450);
+    }, 650);
     return () => {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [q]);
+  }, [q, retry]);
   return (
     <section className="lookup">
-      <Field label="Найти издание автоматически">
+      <Field label="Поиск книги по названию, автору или ISBN">
         <input
           value={q}
           placeholder="Название, автор или ISBN"
+          maxLength={200}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              setRetry((n) => n + 1);
+            }
+          }}
           onChange={(e) => setQ(e.target.value)}
         />
       </Field>
+      <button
+        className="lookup-search"
+        type="button"
+        disabled={busy || q.trim().length < 2}
+        onClick={() => setRetry((n) => n + 1)}
+      >
+        <Search size={16} />
+        Найти
+      </button>
       <ErrorNote text={error} />
       {busy && <p className="muted">Ищем в Google Books и Open Library…</p>}
+      {searched && !busy && !results.length && (
+        <p className="hint" role="status">
+          В доступных каталогах книга не найдена. Попробуйте название или заполните поля ниже — ISBN
+          можно сохранить вручную.
+        </p>
+      )}
       <div className="lookup-results">
         {results.map((b, i) => (
           <button
@@ -217,6 +257,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
       >
         {!book && <BookLookup onSelect={(b) => setValue({ ...value, ...b })} />}
         <MetadataFields value={value} onChange={(b) => setValue({ ...value, ...b })} />
+        <h3 className="form-section-title">Моё чтение</h3>
         <div className="form-grid">
           <Field label="Личный статус">
             <select
@@ -255,6 +296,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
             </select>
           </Field>
         </div>
+        <h3 className="form-section-title">Отзыв и личные заметки</h3>
         <Field label="Мой отзыв">
           <textarea
             rows={4}

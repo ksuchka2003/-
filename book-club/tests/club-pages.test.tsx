@@ -40,6 +40,7 @@ function view(
     'visible_progress',
     'visible_reviews',
     'quote_likes',
+    'visible_book_polls',
   ])
     q.setQueryData(['cloud', owner, table], data[table] || []);
   return render(
@@ -55,6 +56,14 @@ function view(
   );
 }
 afterEach(cleanup);
+it('предложение книги доступно только во вкладке будущего чтения', () => {
+  view(<Club />);
+  expect(screen.queryByRole('button', { name: 'Предложить книгу' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Будем читать' }));
+  expect(screen.getByRole('button', { name: 'Предложить книгу' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Прочитано' }));
+  expect(screen.queryByRole('button', { name: 'Предложить книгу' })).toBeNull();
+});
 it('главная показывает текущее чтение, ближайшую встречу и ссылки', () => {
   const current = book('Клубная книга', 'reading');
   view(<Home />, {

@@ -14,6 +14,46 @@ async function addBook(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.route('https://telegram.org/**', (route) => route.abort());
 });
+test('узкий экран: поиск ISBN по Enter, форма без переполнения и меню разделов', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.route('https://www.googleapis.com/books/**', (r) =>
+    r.fulfill({
+      json: {
+        items: [
+          {
+            volumeInfo: {
+              title: 'Найденное издание',
+              authors: ['Автор'],
+              pageCount: 280,
+              industryIdentifiers: [{ type: 'ISBN_10', identifier: '536700198X' }],
+            },
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('https://openlibrary.org/**', (r) => r.fulfill({ json: {} }));
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const lookup = dialog.getByLabel('Поиск книги по названию, автору или ISBN');
+  await lookup.fill('536700198Х');
+  await lookup.press('Enter');
+  await expect(dialog.locator('.lookup-results button')).toHaveCount(1);
+  await dialog.locator('.lookup-results button').click();
+  await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Найденное издание');
+  await expect(dialog.getByLabel('ISBN', { exact: true })).toHaveValue('536700198X');
+  expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
+  await page.getByRole('button', { name: 'Ещё', exact: true }).click();
+  await page.getByRole('dialog').getByRole('link', { name: 'Участники', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Участники', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Мои книги' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
 test('книга: добавление, редактирование, сохранение после перезагрузки, удаление', async ({
   page,
 }) => {

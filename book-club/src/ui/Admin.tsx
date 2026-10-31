@@ -12,6 +12,7 @@ import {
 import { action } from '../cloud';
 import { CloudGate, Field, Modal, useCloud, useSession, useTask, ErrorNote, Empty } from './shared';
 import { MetadataFields, BookLookup } from './Books';
+import type { BookPoll } from './Polls';
 function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) {
   const [id] = useState(book?.id || uid());
   const [v, setV] = useState<Metadata>(
@@ -90,6 +91,8 @@ function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) 
   );
 }
 function ReviewProposal({ proposal, onClose }: { proposal: Proposal; onClose: () => void }) {
+  const polls = useCloud<BookPoll>('visible_book_polls');
+  const poll = polls.data?.find((p) => p.id === proposal.id);
   const [v, setV] = useState(proposal.metadata);
   const [reason, setReason] = useState('');
   const { run, busy, error } = useTask();
@@ -108,6 +111,12 @@ function ReviewProposal({ proposal, onClose }: { proposal: Proposal; onClose: ()
   };
   return (
     <Modal title="Рассмотрение заявки" onClose={onClose}>
+      {poll && (
+        <p className="hint">
+          Голосование: хотят читать {poll.yes_votes}, позже {poll.later_votes}, против{' '}
+          {poll.no_votes}.
+        </p>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -227,9 +236,20 @@ export function Admin() {
   const books = useCloud<ClubBook>('club_books');
   const proposals = useCloud<Proposal>('book_proposals');
   const readings = useCloud<Reading>('club_readings');
-  const members = useCloud<{ id: string; telegram_id: number; role: string; active: boolean }>(
-    'club_members',
-  );
+  const members = useCloud<{
+    id: string;
+    name: string | null;
+    username: string | null;
+    role: string;
+    active: boolean;
+  }>('visible_club_members');
+  const invites = useCloud<{
+    id: string;
+    expires_at: string;
+    uses: number;
+    max_uses: number;
+    revoked: boolean;
+  }>('visible_member_invites');
   const jobs = useCloud<{ id: string; status: string; kind: string; last_error: string }>(
     'notification_jobs',
   );
@@ -237,7 +257,9 @@ export function Admin() {
   const [book, setBook] = useState<ClubBook | true | null>(null);
   const [reading, setReading] = useState<Reading | true | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
-  const [telegramId, setTelegramId] = useState('');
+  const [inviteUses, setInviteUses] = useState(1);
+  const [inviteLink, setInviteLink] = useState('');
+  const [bot, setBot] = useState<{ username: string; hasMainApp: boolean } | null>(null);
   const { run, busy, error } = useTask();
   const q = useQueryClient();
   if (identity?.role !== 'admin')
@@ -344,53 +366,134 @@ export function Admin() {
       )}
       {tab === 'members' && (
         <>
-          <form
-            className="toolbar"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(async () => {
-                await action('admin.invite', { telegram_id: telegramId });
-                setTelegramId('');
-                await q.invalidateQueries({ queryKey: ['cloud'] });
-              }, 'Участник добавлен в список доступа');
-            }}
-          >
-            <input
-              required
-              pattern="[1-9][0-9]{0,15}"
-              inputMode="numeric"
-              placeholder="Telegram ID участника"
-              aria-label="Telegram ID участника"
-              value={telegramId}
-              onChange={(e) => setTelegramId(e.target.value)}
-            />
-            <button className="primary" disabled={busy}>
-              Пригласить / восстановить
+          <section className="panel invitation-panel">
+            <h2>Пригласить участника</h2>
+            <p className="muted">
+              Человек откроет ссылку в Telegram и войдёт в клуб. ID вводить не нужно.
+            </p>
+            <Field label="Для кого приглашение">
+              <select value={inviteUses} onChange={(e) => setInviteUses(Number(e.target.value))}>
+                <option value={1}>Для одного человека</option>
+                <option value={19}>Для группы — до 19 новых участников</option>
+              </select>
+            </Field>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const info = await action('admin.telegram', {});
+                  setBot(info);
+                  const invitation = await action('admin.invitation', { max_uses: inviteUses });
+                  setInviteLink(`https://t.me/${info.username}?start=join_${invitation.token}`);
+                  await q.invalidateQueries({ queryKey: ['cloud'] });
+                }, 'Приглашение создано')
+              }
+            >
+              Создать ссылку на 7 дней
             </button>
-          </form>
-          {members.data?.map((m) => (
-            <div className="proposal-row" key={m.id}>
-              <span>
-                {m.telegram_id} · {m.role === 'admin' ? 'Администратор' : 'Участник'} ·{' '}
-                {m.active ? 'Доступен' : 'Отключён'}
-              </span>
-              {m.active && m.role !== 'admin' && (
+            {inviteLink && (
+              <div className="invitation-result">
+                <input
+                  aria-label="Ссылка приглашения"
+                  readOnly
+                  value={inviteLink}
+                  onFocus={(e) => e.target.select()}
+                />
                 <button
-                  className="danger"
-                  disabled={busy}
-                  onClick={() => {
-                    if (confirm('Закрыть доступ этому участнику?'))
-                      void run(async () => {
-                        await action('admin.member', { id: m.id, active: false });
-                        await q.invalidateQueries({ queryKey: ['cloud'] });
-                      }, 'Доступ закрыт');
-                  }}
+                  onClick={() =>
+                    void run(() => navigator.clipboard.writeText(inviteLink), 'Ссылка скопирована')
+                  }
                 >
-                  Отключить
+                  Скопировать
                 </button>
-              )}
+              </div>
+            )}
+            <div className="stack">
+              {invites.data
+                ?.filter(
+                  (i) => !i.revoked && Date.parse(i.expires_at) > Date.now() && i.uses < i.max_uses,
+                )
+                .map((i) => (
+                  <div className="proposal-row" key={i.id}>
+                    <small>
+                      Использовано {i.uses} из {i.max_uses} · до{' '}
+                      {new Date(i.expires_at).toLocaleDateString('ru-RU')}
+                    </small>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          await action('admin.revoke_invite', { id: i.id });
+                          await q.invalidateQueries({ queryKey: ['cloud'] });
+                        }, 'Приглашение отозвано')
+                      }
+                    >
+                      Отозвать
+                    </button>
+                  </div>
+                ))}
             </div>
-          ))}
+          </section>
+          <section className="panel invitation-panel">
+            <h2>Клуб в Telegram-группе</h2>
+            <p className="muted">
+              Добавьте бота в группу. Команда /club покажет кнопку входа в приложение.
+            </p>
+            {bot ? (
+              <a
+                className="button"
+                href={`https://t.me/${bot.username}?startgroup=club`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Добавить бота в группу
+              </a>
+            ) : (
+              <button
+                disabled={busy}
+                onClick={() => void run(async () => setBot(await action('admin.telegram', {})), '')}
+              >
+                Получить ссылку для группы
+              </button>
+            )}
+          </section>
+          <div className="stack">
+            {members.data?.map((m) => (
+              <div className="proposal-row" key={m.id}>
+                <div>
+                  <h3>{m.name || (m.active ? 'Новый участник' : 'Удалённый участник')}</h3>
+                  <small>
+                    {m.username ? `@${m.username} · ` : ''}
+                    {m.role === 'admin' ? 'Администратор' : m.active ? 'Участник' : 'Доступ закрыт'}
+                  </small>
+                </div>
+                {m.role !== 'admin' && (
+                  <button
+                    className={m.active ? 'danger' : ''}
+                    disabled={busy}
+                    onClick={() => {
+                      if (
+                        !m.active ||
+                        confirm(
+                          'Удалить участника из клуба? Доступ и публичный профиль будут закрыты. Его личная библиотека сохранится.',
+                        )
+                      )
+                        void run(
+                          async () => {
+                            await action('admin.member', { id: m.id, active: !m.active });
+                            await q.invalidateQueries({ queryKey: ['cloud'] });
+                          },
+                          m.active ? 'Участник удалён из клуба' : 'Участник восстановлен',
+                        );
+                    }}
+                  >
+                    {m.active ? 'Удалить из клуба' : 'Восстановить'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </>
       )}
       {tab === 'notifications' && (

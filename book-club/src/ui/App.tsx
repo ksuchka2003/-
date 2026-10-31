@@ -1,5 +1,5 @@
 import { useEffect, useState, Component, type ReactNode } from 'react';
-import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom';
+import { NavLink, Route, Routes, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -14,15 +14,17 @@ import {
   CloudOff,
   RefreshCw,
   Check,
+  ArrowLeft,
+  Menu,
 } from 'lucide-react';
 import { authenticate, configured, currentIdentity, flushQueue, type Identity } from '../cloud';
 import { getDB, openLibrary, purgeTrash } from '../db';
-import { initializeTelegram, initData } from '../telegram';
+import { initializeTelegram, initData, registerBack } from '../telegram';
 import { setSyncScope } from '../local';
 import { accountSync } from '../accountSync';
 import type { LibrarySyncState } from '../privateTypes';
 import { message } from '../domain';
-import { Session, Loading } from './shared';
+import { Session, Loading, Modal } from './shared';
 import { Home, Club, ClubDetail } from './Club';
 import { MyBooks } from './Books';
 import { Quotes } from './Quotes';
@@ -72,6 +74,23 @@ function Shell({
   const [online, setOnline] = useState(navigator.onLine);
   const query = useQueryClient();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [more, setMore] = useState(false);
+  const back = () => {
+    if (Number(window.history.state?.idx || 0) > 0) navigate(-1);
+    else
+      navigate(
+        location.pathname.startsWith('/members/')
+          ? '/members'
+          : location.pathname.startsWith('/club/')
+            ? '/club'
+            : '/',
+      );
+  };
+  useEffect(
+    () => (location.pathname === '/' ? undefined : registerBack(back)),
+    [location.pathname, location.key],
+  );
   const pending = useLiveQuery(() => getDB().sync_queue.toArray()) || [];
   const ownPending = pending.filter((x) => x.scope === identity?.id);
   const libraryState = useLiveQuery(() => getDB().settings.get('_librarySync'))?.value as
@@ -227,6 +246,11 @@ function Shell({
             </p>
           )}
           <main>
+            {location.pathname !== '/' && (
+              <button className="page-back" onClick={back}>
+                <ArrowLeft size={18} /> Назад
+              </button>
+            )}
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/club" element={<Club />} />
@@ -251,13 +275,44 @@ function Shell({
           </main>
         </div>
         <nav className="bottom-nav">
-          {navigation.map(([to, label, Icon]) => (
+          {navigation.slice(0, 4).map(([to, label, Icon]) => (
             <NavLink key={to} to={to} end={to === '/'}>
               <Icon size={20} />
               <span>{label}</span>
             </NavLink>
           ))}
+          <button
+            className={
+              ['/members', '/meetings', '/profile', '/admin'].some((p) =>
+                location.pathname.startsWith(p),
+              )
+                ? 'active'
+                : ''
+            }
+            onClick={() => setMore(true)}
+          >
+            <Menu size={20} />
+            <span>Ещё</span>
+          </button>
         </nav>
+        {more && (
+          <Modal title="Разделы клуба" onClose={() => setMore(false)}>
+            <nav className="more-menu">
+              {navigation.slice(4).map(([to, label, Icon]) => (
+                <Link to={to} key={to} onClick={() => setMore(false)}>
+                  <Icon size={22} />
+                  {label}
+                </Link>
+              ))}
+              {identity?.role === 'admin' && (
+                <Link to="/admin" onClick={() => setMore(false)}>
+                  <Settings2 size={22} />
+                  Управление клубом
+                </Link>
+              )}
+            </nav>
+          </Modal>
+        )}
         {toast && (
           <div className="toast" role="status">
             <Check size={18} />
@@ -297,6 +352,13 @@ function Bootstrap() {
       } catch {
         if (active)
           setError('Браузер не разрешил локальное хранилище. Проверьте настройки приватности.');
+      }
+      if (who && active) {
+        try {
+          await accountSync().sync();
+        } catch {
+          /* The local copy remains available; sync status shows the failure. */
+        }
       }
       if (active) setReady(true);
     })();

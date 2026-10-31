@@ -31,6 +31,7 @@ import {
   dateLabel,
 } from './shared';
 import { PublicContent } from './Social';
+import { BookPolls } from './Polls';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -153,6 +154,9 @@ export function ProposalEditor({
   const query = useQueryClient();
   return (
     <Modal title="Предложить книгу" onClose={onClose}>
+      <p className="hint">
+        После отправки участники смогут проголосовать за книгу. В каталог её добавит администратор.
+      </p>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -209,11 +213,6 @@ export function Club() {
     <>
       <div className="page-heading">
         <h1>Библиотека клуба</h1>
-        {identity && (
-          <button className="primary" onClick={() => setProposal(true)}>
-            <Plus size={18} /> Предложить
-          </button>
-        )}
       </div>
       <CloudGate>
         {!!books.data?.length && (
@@ -242,6 +241,18 @@ export function Club() {
             </button>
           ))}
         </div>
+        {status === 'planned' && (
+          <>
+            <div className="section-actions">
+              {identity && (
+                <button className="primary" onClick={() => setProposal(true)}>
+                  <Plus size={18} /> Предложить книгу
+                </button>
+              )}
+            </div>
+            <BookPolls />
+          </>
+        )}
         <ErrorNote text={books.error?.message || readings.error?.message} />
         {books.isLoading || readings.isLoading ? (
           <Loading />

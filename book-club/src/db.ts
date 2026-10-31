@@ -18,6 +18,7 @@ export class LibraryDB extends Dexie {
   sync_queue!: Table<SyncOp, string>;
   private_sync_meta!: Table<LibraryBase, string>;
   private_conflicts!: Table<LibraryConflict, string>;
+  cloud_cache!: Table<{ table: string; rows: unknown[]; savedAt: string }, string>;
   constructor(name: string) {
     super(name);
     this.version(1).stores({
@@ -33,6 +34,7 @@ export class LibraryDB extends Dexie {
       private_sync_meta: 'key,kind,entityId',
       private_conflicts: 'key,kind,entityId',
     });
+    this.version(3).stores({ cloud_cache: 'table' });
   }
 }
 let db = new LibraryDB('bookclub-local');

@@ -6,17 +6,15 @@ Deno.serve(
     if (typeof input.initData !== 'string') throw new Error('Нужны initData Telegram');
     const tg = await validateInitData(input.initData, Deno.env.get('TELEGRAM_BOT_TOKEN')!);
     const admin = service();
-    let member = checked(
-      await admin.from('club_members').select('*').eq('telegram_id', tg.id).maybeSingle(),
-    );
-    if (!member && String(tg.id) === Deno.env.get('INITIAL_ADMIN_TELEGRAM_ID'))
-      member = checked(
-        await admin
-          .from('club_members')
-          .upsert({ telegram_id: tg.id, role: 'admin' }, { onConflict: 'telegram_id' })
-          .select()
-          .single(),
+    const resolution = await admin.rpc('resolve_telegram_member', {
+      p_telegram_id: tg.id,
+      p_bootstrap_admin: String(tg.id) === Deno.env.get('INITIAL_ADMIN_TELEGRAM_ID')?.trim(),
+    });
+    if (resolution.error?.message === 'Вы не включены в список участников клуба')
+      throw new Error(
+        `Вы не включены в список участников клуба. Ваш Telegram ID: ${tg.id}. Передайте его владельцу клуба для настройки доступа.`,
       );
+    const member = checked(resolution);
     if (!member?.active) throw new Error('Вы не включены в список участников клуба');
     // GoTrue issues a normal short-lived Supabase JWT. OTP and refresh token stay on the server.
     const link = checked(
@@ -56,10 +54,19 @@ Deno.serve(
         .from('member_privacy_settings')
         .upsert({ member_id: member.id }, { onConflict: 'member_id', ignoreDuplicates: true }),
     );
+    checked(
+      await admin
+        .from('member_profiles')
+        .update({
+          username: tg.username || null,
+          avatar_url: tg.photo_url?.startsWith('https://') ? tg.photo_url : null,
+        })
+        .eq('member_id', member.id),
+    );
     return {
       access_token: auth.session.access_token,
       expires_at: auth.session.expires_at,
-      member: { id: member.id, role: member.role },
+      member: { id: member.id, role: member.role, telegramId: String(tg.id) },
     };
   }),
 );

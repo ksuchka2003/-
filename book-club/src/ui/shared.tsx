@@ -17,13 +17,14 @@ export const Session = createContext<{
   identity: Identity | null;
   error: string;
   notify: (s: string) => void;
+  retryLogin?: () => void;
 }>({ identity: null, error: '', notify: () => {} });
 export const useSession = () => useContext(Session);
 export function useCloud<T>(table: string) {
   const { identity } = useSession();
   return useQuery({
     queryKey: ['cloud', identity?.id, table],
-    queryFn: () => rows<T>(table),
+    queryFn: () => rows<T>(table, identity?.id),
     enabled: !!identity,
   });
 }
@@ -106,14 +107,7 @@ export function ErrorNote({ text }: { text?: string }) {
 }
 export function CloudGate({ children }: { children: ReactNode }) {
   const { identity, error } = useSession();
-  return identity ? (
-    <>{children}</>
-  ) : (
-    <Empty title="Клуб по приглашению">
-      {error ||
-        'Подключите Supabase по README и откройте приложение в Telegram. Личная библиотека уже работает на этом устройстве.'}
-    </Empty>
-  );
+  return identity ? <>{children}</> : <Empty title="Войдите через Telegram" />;
 }
 export function Loading() {
   return (

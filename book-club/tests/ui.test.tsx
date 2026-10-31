@@ -15,7 +15,7 @@ it('показывает ограничение клуба без ложных �
       </CloudGate>
     </Session.Provider>,
   );
-  expect(screen.getByText('Доступ только по приглашению')).toBeVisible();
+  expect(screen.getByText('Войдите через Telegram')).toBeVisible();
   expect(screen.queryByText('Секретные данные')).toBeNull();
 });
 it('не выдумывает профиль при отсутствии подключения', () => {
@@ -26,5 +26,5 @@ it('не выдумывает профиль при отсутствии под�
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  expect(screen.getByText('Клуб по приглашению')).toBeVisible();
+  expect(screen.getByText('Войдите через Telegram')).toBeVisible();
 });

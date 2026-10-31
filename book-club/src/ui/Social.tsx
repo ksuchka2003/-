@@ -75,9 +75,7 @@ export function PublicContent({
     <>
       <ErrorNote text={source.error?.message || error} />
       {!list.length ? (
-        <Empty title="Пока нет публикаций">
-          Здесь появляются только данные, которыми участники решили поделиться.
-        </Empty>
+        <Empty title="Пока нет публикаций" />
       ) : (
         <div className="quote-grid">
           {list.map((item) => (
@@ -179,41 +177,43 @@ export function PublicContent({
 export function Members() {
   const profiles = useCloud<Profile>('member_profiles');
   const [q, setQ] = useState('');
+  const filtered = (profiles.data || []).filter((p) =>
+    `${p.name} ${p.username || ''}`.toLowerCase().includes(q.trim().toLowerCase()),
+  );
   return (
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">ЛЮДИ И ИСТОРИИ</p>
-          <h1>Наш круг</h1>
+          <h1>Участники</h1>
         </div>
         <Users size={25} />
       </div>
       <CloudGate>
-        <input
-          className="full"
-          aria-label="Найти участника"
-          placeholder="Имя или username"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+        {!!profiles.data?.length && (
+          <input
+            className="full"
+            aria-label="Найти участника"
+            placeholder="Имя или username"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        )}
         <ErrorNote text={profiles.error?.message} />
         {profiles.isLoading ? (
           <Loading />
+        ) : !filtered.length ? (
+          <Empty title={q ? 'Никого не найдено' : 'Пока нет участников'} />
         ) : (
           <div className="member-grid">
-            {profiles.data
-              ?.filter((p) =>
-                `${p.name} ${p.username || ''}`.toLowerCase().includes(q.toLowerCase()),
-              )
-              .map((p) => (
-                <Link to={`/members/${p.member_id}`} className="member-card" key={p.member_id}>
-                  <Avatar profile={p} />
-                  <h3>{p.name}</h3>
-                  <small>{p.username ? `@${p.username}` : 'Участник клуба'}</small>
-                  <p>{p.bio || 'У каждой книги есть свой читатель.'}</p>
-                  <span className="badge">{p.genres || 'Открыт новым историям'}</span>
-                </Link>
-              ))}
+            {filtered.map((p) => (
+              <Link to={`/members/${p.member_id}`} className="member-card" key={p.member_id}>
+                <Avatar profile={p} />
+                <h3>{p.name}</h3>
+                {p.username && <small>@{p.username}</small>}
+                {p.bio && <p>{p.bio}</p>}
+                {p.genres && <span className="badge">{p.genres}</span>}
+              </Link>
+            ))}
           </div>
         )}
       </CloudGate>
@@ -228,6 +228,14 @@ export function MemberDetail() {
   const progress = useCloud<PublicProgress>('visible_progress');
   const [tab, setTab] = useState('progress');
   const p = profiles.data?.find((x) => x.member_id === id);
+  const counts: [string, number][] = [
+    [
+      'прочитано',
+      progress.data?.filter((x) => x.member_id === id && x.status === 'finished').length || 0,
+    ],
+    ['отзывов', reviews.data?.filter((x) => x.member_id === id).length || 0],
+    ['цитат', quotes.data?.filter((x) => x.member_id === id).length || 0],
+  ];
   if (profiles.isLoading) return <Loading />;
   if (!p)
     return (
@@ -246,28 +254,23 @@ export function MemberDetail() {
         <div>
           <h1>{p.name}</h1>
           {p.username && <p>@{p.username}</p>}
-          <p>{p.bio}</p>
-          <p className="muted">{p.genres}</p>
+          {p.bio && <p>{p.bio}</p>}
+          {p.genres && <p className="muted">{p.genres}</p>}
           <small>В клубе с {new Date(p.joined_at).toLocaleDateString('ru-RU')}</small>
         </div>
       </div>
-      <div className="stats">
-        <div>
-          <b>
-            {progress.data?.filter((x) => x.member_id === id && x.status === 'finished').length ||
-              0}
-          </b>
-          <span>публично прочитано</span>
+      {counts.some(([, count]) => count > 0) && (
+        <div className="stats">
+          {counts
+            .filter(([, count]) => count > 0)
+            .map(([label, count]) => (
+              <div key={label}>
+                <b>{count}</b>
+                <span>{label}</span>
+              </div>
+            ))}
         </div>
-        <div>
-          <b>{reviews.data?.filter((x) => x.member_id === id).length || 0}</b>
-          <span>отзывов</span>
-        </div>
-        <div>
-          <b>{quotes.data?.filter((x) => x.member_id === id).length || 0}</b>
-          <span>цитат</span>
-        </div>
-      </div>
+      )}
       <div className="tabs">
         {[
           ['progress', 'Книги'],

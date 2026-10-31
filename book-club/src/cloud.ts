@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { initData } from './telegram';
 import { getDB } from './db';
 import { type SyncOp, message } from './domain';
-export type Identity = { id: string; role: 'admin' | 'member' };
+export type Identity = { id: string; role: 'admin' | 'member'; telegramId?: string };
 export const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
@@ -13,17 +13,27 @@ let client: SupabaseClient | null = null;
 export const currentIdentity = () => identity;
 async function edge(name: string, data: unknown, auth = false) {
   if (!configured) throw new Error('Клуб ещё не подключён. Доступна личная библиотека.');
-  const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      ...(auth ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(data),
-    signal: AbortSignal.timeout(20000),
-  });
-  const result = await r.json();
+  let r: Response;
+  try {
+    r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ...(auth ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch {
+    throw new Error('Нет связи с клубом. Проверьте интернет и повторите вход.');
+  }
+  let result;
+  try {
+    result = await r.json();
+  } catch {
+    throw new Error('Сервис клуба недоступен. Сообщите администратору.');
+  }
   if (!r.ok) throw new Error(result.error || 'Ошибка сервера');
   return result;
 }
@@ -51,6 +61,12 @@ export async function authenticate(): Promise<Identity> {
   })();
   try {
     return await authenticating;
+  } catch (e) {
+    identity = null;
+    token = '';
+    expiry = 0;
+    client = null;
+    throw e;
   } finally {
     authenticating = null;
   }
@@ -58,8 +74,10 @@ export async function authenticate(): Promise<Identity> {
 async function ensureAuth() {
   if (!identity || expiry * 1000 < Date.now() + 60000) await authenticate();
 }
-export async function rows<T>(table: string): Promise<T[]> {
+export async function rows<T>(table: string, expectedMember?: string): Promise<T[]> {
   await ensureAuth();
+  if (expectedMember && identity?.id !== expectedMember)
+    throw new Error('Аккаунт изменился. Закройте и снова откройте приложение.');
   const order: Record<string, string[]> = {
     member_profiles: ['member_id'],
     member_privacy_settings: ['member_id'],
@@ -67,6 +85,7 @@ export async function rows<T>(table: string): Promise<T[]> {
     meeting_books: ['meeting_id', 'book_id'],
     meeting_attendance: ['meeting_id', 'member_id'],
     club_settings: ['key'],
+    private_library_records: ['kind', 'entity_id'],
   };
   const data: unknown[] = [];
   for (let start = 0; ; start += 500) {
@@ -82,17 +101,21 @@ export async function rows<T>(table: string): Promise<T[]> {
     data.push(...(response.data || []));
     if (table === 'notification_jobs' || (response.data?.length || 0) < 500) break;
   }
+  if (expectedMember && identity?.id !== expectedMember)
+    throw new Error('Аккаунт изменился. Закройте и снова откройте приложение.');
   if (table === 'club_books' && data)
     await getDB().club_catalog_cache.bulkPut(data as unknown as import('./domain').ClubBook[]);
   return data as T[];
 }
-export async function action(name: string, data: unknown) {
+export async function action(name: string, data: unknown, expectedMember?: string) {
   await ensureAuth();
+  if (expectedMember && identity?.id !== expectedMember)
+    throw new Error('Аккаунт изменился. Закройте и снова откройте приложение.');
   return edge('club-api', { action: name, data }, true);
 }
 let syncing = false;
 export async function flushQueue(
-  send: (op: SyncOp) => Promise<unknown> = (op) => action('sync', op),
+  send: (op: SyncOp) => Promise<unknown> = (op) => action('sync', op, op.scope),
   scope = identity?.id,
 ) {
   if (syncing || !navigator.onLine || !scope) return;

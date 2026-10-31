@@ -4,7 +4,17 @@ import { Plus, Heart, Copy, Trash2, RotateCcw, Pencil, Quote as QuoteIcon } from
 import { getDB } from '../db';
 import { now, uid, type Quote } from '../domain';
 import { saveQuote, trashQuote, restoreQuote, eraseQuote } from '../local';
-import { Modal, Field, Empty, useTask, useSession, ErrorNote, dateLabel } from './shared';
+import {
+  Modal,
+  Field,
+  Empty,
+  useTask,
+  useSession,
+  ErrorNote,
+  dateLabel,
+  CloudGate,
+} from './shared';
+import { PublicContent } from './Social';
 function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void }) {
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const { identity } = useSession();
@@ -31,10 +41,7 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
       <form
         onSubmit={async (e) => {
           e.preventDefault();
-          if (
-            await run(() => saveQuote({ ...v, updatedAt: now() }), 'Цитата сохранена на устройстве')
-          )
-            onClose();
+          if (await run(() => saveQuote({ ...v, updatedAt: now() }), 'Цитата сохранена')) onClose();
         }}
       >
         <Field label="Книга">
@@ -112,6 +119,7 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
   );
 }
 export function Quotes() {
+  const { identity } = useSession();
   const quotes = useLiveQuery(() => getDB().quotes.toArray()) || [];
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const [q, setQ] = useState('');
@@ -132,7 +140,6 @@ export function Quotes() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">СЛОВА, КОТОРЫЕ ОСТАЮТСЯ</p>
           <h1>Цитаты</h1>
         </div>
         <button className="primary" onClick={() => setEdit(true)}>
@@ -144,29 +151,36 @@ export function Quotes() {
           ['all', 'Все цитаты'],
           ['favorite', 'Избранное'],
           ['trash', 'Корзина'],
+          ...(identity ? [['club', 'В клубе']] : []),
         ].map(([k, v]) => (
           <button className={tab === k ? 'active' : ''} key={k} onClick={() => setTab(k)}>
             {v}
           </button>
         ))}
       </div>
-      <div className="toolbar">
-        <input
-          aria-label="Поиск цитат"
-          placeholder="Найти слова…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <select aria-label="Фильтр по книге" value={book} onChange={(e) => setBook(e.target.value)}>
-          <option value="all">Все книги</option>
-          {books.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.title}
-            </option>
-          ))}
-        </select>
-      </div>
-      {tab === 'trash' && (
+      {tab !== 'club' && quotes.length > 0 && (
+        <div className="toolbar">
+          <input
+            aria-label="Поиск цитат"
+            placeholder="Найти слова…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <select
+            aria-label="Фильтр по книге"
+            value={book}
+            onChange={(e) => setBook(e.target.value)}
+          >
+            <option value="all">Все книги</option>
+            {books.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {tab === 'trash' && items.length > 0 && (
         <div className="notice">
           Цитаты удаляются через 30 дней при запуске приложения.{' '}
           <button
@@ -182,10 +196,12 @@ export function Quotes() {
         </div>
       )}
       <ErrorNote text={error} />
-      {!items.length ? (
-        <Empty title={tab === 'trash' ? 'Корзина пуста' : 'Сохраните важную мысль'}>
-          Фразы из любимых книг, ваши открытия и заметки на полях.
-        </Empty>
+      {tab === 'club' ? (
+        <CloudGate>
+          <PublicContent type="quotes" />
+        </CloudGate>
+      ) : !items.length ? (
+        <Empty title={tab === 'trash' ? 'Корзина пуста' : 'Пока нет цитат'} />
       ) : (
         <div className="quote-grid">
           {items.map((x) => (

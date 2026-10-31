@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getDB } from './db';
+import { getDB, type LibraryDB } from './db';
 import {
   bookSchema,
   reviewSchema,
@@ -9,6 +9,7 @@ import {
   now,
 } from './domain';
 import { retract } from './local';
+import type { LibraryRecord } from './privateTypes';
 export const backupSchema = z.object({
   format: z.literal('bookclub'),
   version: z.literal(1),
@@ -19,8 +20,7 @@ export const backupSchema = z.object({
   quotes: z.array(quoteSchema).max(50000),
   settings: z.array(z.object({ key: z.string().max(100), value: z.unknown() })).max(100),
 });
-export async function exportBackup() {
-  const db = getDB();
+export async function exportBackup(db: LibraryDB = getDB()) {
   return {
     format: 'bookclub' as const,
     version: 1 as const,
@@ -50,7 +50,11 @@ export function parseBackup(raw: string) {
     validProgress(p.pages, b.books.find((x) => x.id === p.bookId)!.totalPages);
   return b;
 }
-export async function importBackup(raw: string, mode: 'merge' | 'replace') {
+export async function importBackup(
+  raw: string,
+  mode: 'merge' | 'replace',
+  cloudRecords?: LibraryRecord[],
+) {
   const b = parseBackup(raw);
   const db = getDB();
   await db.transaction(
@@ -62,6 +66,8 @@ export async function importBackup(raw: string, mode: 'merge' | 'replace') {
       db.quotes,
       db.settings,
       db.sync_queue,
+      db.private_sync_meta,
+      db.private_conflicts,
     ],
     async () => {
       if (mode === 'replace') {
@@ -74,7 +80,28 @@ export async function importBackup(raw: string, mode: 'merge' | 'replace') {
         await db.personal_reviews.clear();
         await db.reading_progress.clear();
         await db.quotes.clear();
-        await db.settings.where('key').notEqual('_syncClock').delete();
+        await db.settings.filter((s) => !s.key.startsWith('_')).delete();
+        if (cloudRecords)
+          await db.private_sync_meta.bulkPut(
+            cloudRecords.map((r) => ({
+              key: `${r.kind}:${r.entity_id}`,
+              kind: r.kind,
+              entityId: r.entity_id,
+              payload: r.payload,
+              revision: r.revision,
+            })),
+          );
+        else
+          for (const c of await db.private_conflicts.toArray())
+            await db.private_sync_meta.put({
+              key: c.key,
+              kind: c.kind,
+              entityId: c.entityId,
+              payload: c.cloud.payload,
+              revision: c.cloud.revision,
+            });
+        await db.private_conflicts.clear();
+        if (cloudRecords) await db.settings.put({ key: '_reconcilePublic', value: true });
       }
       // Импорт никогда не публикует данные. При объединении существующие UUID сохраняются.
       const added = new Set<string>();

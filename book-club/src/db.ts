@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import type { LibraryBase, LibraryConflict } from './privateTypes';
 import {
   type Book,
   type Progress,
@@ -15,6 +16,8 @@ export class LibraryDB extends Dexie {
   settings!: Table<{ key: string; value: unknown }, string>;
   club_catalog_cache!: Table<ClubBook, string>;
   sync_queue!: Table<SyncOp, string>;
+  private_sync_meta!: Table<LibraryBase, string>;
+  private_conflicts!: Table<LibraryConflict, string>;
   constructor(name: string) {
     super(name);
     this.version(1).stores({
@@ -25,6 +28,10 @@ export class LibraryDB extends Dexie {
       settings: 'key',
       club_catalog_cache: 'id',
       sync_queue: 'id,scope,createdAt,[kind+entityId]',
+    });
+    this.version(2).stores({
+      private_sync_meta: 'key,kind,entityId',
+      private_conflicts: 'key,kind,entityId',
     });
   }
 }

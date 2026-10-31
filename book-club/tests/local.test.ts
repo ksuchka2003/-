@@ -86,13 +86,26 @@ describe('личные данные', () => {
     expect(await getDB().personal_books.count()).toBe(1);
     expect((await getDB().personal_books.get(b.id))?.notes).toBe(b.notes);
   });
+  it('полная замена сохраняет служебные версии устройства для синхронизации', async () => {
+    await getDB().settings.bulkPut([
+      { key: '_privateDevice', value: 'device-id' },
+      { key: '_syncClock', value: 123 },
+      { key: 'theme', value: 'dark' },
+    ]);
+    const backup = await exportBackup();
+    backup.settings = [];
+    await importBackup(JSON.stringify(backup), 'replace');
+    expect((await getDB().settings.get('_privateDevice'))?.value).toBe('device-id');
+    expect((await getDB().settings.get('_syncClock'))?.value).toBe(123);
+    expect(await getDB().settings.get('theme')).toBeUndefined();
+  });
   it('отклоняет повреждённый импорт без изменения базы', async () => {
     const b = book();
     await getDB().personal_books.add(b);
     await expect(importBackup('{"format":"bad"}', 'replace')).rejects.toThrow();
     expect(await getDB().personal_books.count()).toBe(1);
   });
-  it('не ставит приватные записи в облачную очередь и не публикует заметки', async () => {
+  it('не ставит приватные записи в публичную очередь и не публикует заметки', async () => {
     const b = { ...book(), clubBookId: uid() };
     const r = {
       bookId: b.id,

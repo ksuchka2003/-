@@ -140,7 +140,6 @@ export function Meetings() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">ВСТРЕТИМСЯ МЕЖДУ СТРОК</p>
           <h1>Встречи клуба</h1>
         </div>
         {identity?.role === 'admin' && (
@@ -154,9 +153,7 @@ export function Meetings() {
         {meetings.isLoading ? (
           <Loading />
         ) : !meetings.data?.length ? (
-          <Empty title="Скоро соберёмся за одним столом">
-            Администратор назначит встречу, а вы сможете подтвердить участие.
-          </Empty>
+          <Empty title="Встреч пока нет" />
         ) : (
           <div className="stack">
             {[...meetings.data]
@@ -248,10 +245,6 @@ export function Meetings() {
               })}
           </div>
         )}
-        <p className="hint">
-          Уведомления приходят в личный чат с ботом после /start. Напоминания зависят от работы
-          Supabase и Telegram.
-        </p>
       </CloudGate>
       {edit && (
         <MeetingEditor meeting={edit === true ? undefined : edit} onClose={() => setEdit(null)} />

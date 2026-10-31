@@ -14,12 +14,14 @@ import {
   CloudOff,
   RefreshCw,
   Check,
-  Feather,
 } from 'lucide-react';
 import { authenticate, configured, currentIdentity, flushQueue, type Identity } from '../cloud';
 import { getDB, openLibrary, purgeTrash } from '../db';
 import { initializeTelegram, initData } from '../telegram';
 import { setSyncScope } from '../local';
+import { accountSync } from '../accountSync';
+import type { LibrarySyncState } from '../privateTypes';
+import { message } from '../domain';
 import { Session, Loading } from './shared';
 import { Home, Club, ClubDetail } from './Club';
 import { MyBooks } from './Books';
@@ -72,10 +74,41 @@ function Shell({
   const location = useLocation();
   const pending = useLiveQuery(() => getDB().sync_queue.toArray()) || [];
   const ownPending = pending.filter((x) => x.scope === identity?.id);
+  const libraryState = useLiveQuery(() => getDB().settings.get('_librarySync'))?.value as
+    LibrarySyncState | undefined;
   const sync = async () => {
-    await flushQueue();
-    if (identity) await query.invalidateQueries({ queryKey: ['cloud'] });
+    const db = getDB();
+    try {
+      if (identity) await accountSync().sync();
+      await flushQueue();
+      if (identity) await query.invalidateQueries({ queryKey: ['cloud'] });
+    } catch (error) {
+      if (db.isOpen())
+        await db.settings.put({
+          key: '_librarySync',
+          value: { phase: 'error', lastSynced: null, conflicts: 0, error: message(error) },
+        });
+    }
   };
+  useEffect(() => {
+    if (!identity) return;
+    let timeout: ReturnType<typeof setTimeout>;
+    const subscription = accountSync().watch(() => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => void sync(), 600);
+    });
+    const visible = () => {
+      if (document.visibilityState === 'visible') void sync();
+    };
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('focus', visible);
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+      document.removeEventListener('visibilitychange', visible);
+      window.removeEventListener('focus', visible);
+    };
+  }, [identity?.id]);
   useEffect(() => {
     const update = () => {
       setOnline(navigator.onLine);
@@ -108,7 +141,7 @@ function Shell({
     window.scrollTo(0, 0);
   }, [location.pathname]);
   return (
-    <Session.Provider value={{ identity, error, notify: setToast }}>
+    <Session.Provider value={{ identity, error, notify: setToast, retryLogin: onRetry }}>
       <div className="app-shell">
         <aside className="sidebar">
           <Link className="brand" to="/">
@@ -119,7 +152,6 @@ function Shell({
               между строк<small>КНИЖНЫЙ КЛУБ</small>
             </div>
           </Link>
-          <p className="nav-label">НАШЕ ПРОСТРАНСТВО</p>
           <nav>
             {navigation.map(([to, label, Icon]) => (
               <NavLink key={to} to={to} end={to === '/'}>
@@ -134,19 +166,6 @@ function Shell({
               </NavLink>
             )}
           </nav>
-          <div className="sidebar-note">
-            <Feather size={25} />
-            <p>
-              Хорошие книги
-              <br />
-              лучше читать вместе.
-            </p>
-            <small>
-              Маленький клуб.
-              <br />
-              Большие истории.
-            </small>
-          </div>
           <div className="sidebar-footer">
             <span className="status-dot" />
             {identity ? 'Закрытый клуб' : 'Личная библиотека'}
@@ -174,6 +193,17 @@ function Shell({
               <>
                 <CloudOff size={14} /> Нет сети · личные данные сохраняются
               </>
+            ) : identity && libraryState?.phase === 'error' ? (
+              <>
+                <CloudOff size={14} /> Не удалось синхронизировать{' '}
+                <button onClick={() => void sync()}>Повторить</button>
+              </>
+            ) : identity && (libraryState?.phase === 'syncing' || !libraryState?.lastSynced) ? (
+              <>
+                <RefreshCw size={14} /> Синхронизация…
+              </>
+            ) : identity && libraryState?.conflicts ? (
+              <Link to="/profile">Есть изменения с другого устройства — открыть профиль</Link>
             ) : ownPending.length ? (
               <>
                 <RefreshCw size={14} /> Ожидают подтверждения: {ownPending.length}
@@ -181,7 +211,7 @@ function Shell({
             ) : (
               <>
                 <Check size={14} />
-                {identity ? 'Публикации синхронизированы' : 'Сохраняется только на устройстве'}
+                {identity ? 'Синхронизировано' : 'Только на этом устройстве'}
               </>
             )}
             {identity && ownPending.length > 0 && (
@@ -218,9 +248,6 @@ function Shell({
                 }
               />
             </Routes>
-            <footer className="page-footer">
-              Между строк <span>·</span> Пространство для книг и людей
-            </footer>
           </main>
         </div>
         <nav className="bottom-nav">
@@ -246,6 +273,7 @@ function Bootstrap() {
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [localMode, setLocalMode] = useState(false);
   useEffect(() => {
     const cleanup = initializeTelegram();
     let active = true;
@@ -257,7 +285,7 @@ function Bootstrap() {
         else if (configured)
           setError('Для доступа к клубу откройте приложение через вашего Telegram-бота.');
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Ошибка входа');
+        if (active) setError(e instanceof Error ? e.message : 'Ошибка входа');
         who = null;
       }
       if (!active) return;
@@ -277,15 +305,26 @@ function Bootstrap() {
       cleanup();
     };
   }, [attempt]);
+  const retry = () => {
+    setLocalMode(false);
+    setError('');
+    setAttempt((a) => a + 1);
+  };
+  if (ready && !identity && (configured || initData()) && !localMode)
+    return (
+      <main className="login-screen">
+        <BookOpen size={32} />
+        <h1>Вход в книжный клуб</h1>
+        <p>{error || 'Подключение к клубу ещё не настроено.'}</p>
+        <button className="primary" onClick={retry}>
+          Повторить вход
+        </button>
+        <button onClick={() => setLocalMode(true)}>Открыть локальную библиотеку</button>
+        <small>В локальном режиме данные доступны только на этом устройстве.</small>
+      </main>
+    );
   return ready ? (
-    <Shell
-      identity={identity}
-      error={error}
-      onRetry={() => {
-        setError('');
-        setAttempt((a) => a + 1);
-      }}
-    />
+    <Shell identity={identity} error={error} onRetry={retry} />
   ) : (
     <main>
       <Loading />

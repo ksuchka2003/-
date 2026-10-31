@@ -1,3 +1,4 @@
+import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -36,48 +37,45 @@ export function MainBooks() {
   const personal = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const progress = useLiveQuery(() => getDB().reading_progress.toArray()) || [];
   if (books.isLoading || readings.isLoading) return <Loading />;
-  const active = (readings.data || [])
-    .filter((r) => r.status === 'active')
-    .sort((a, b) => a.position - b.position);
+  const current = currentClubBooks(books.data || [], readings.data || []);
   return (
     <>
       <ErrorNote text={books.error?.message || readings.error?.message} />
-      {!active.length ? (
-        <Empty title="Выбираем следующую историю">
-          Администратор может назначить несколько главных книг клуба.
-        </Empty>
+      {!current.length ? (
+        <Empty title="Сейчас нет книг в чтении" />
       ) : (
         <div className="main-books">
-          {active.map((r) => {
-            const b = books.data?.find((x) => x.id === r.book_id);
-            if (!b) return null;
-            const p = personal.find((x) => x.clubBookId === b.id);
-            const pages = progress.find((x) => x.bookId === p?.id)?.pages || 0;
+          {current.map(({ book: b, reading: r }) => {
+            const own = personal.find((p) => p.clubBookId === b.id);
+            const pages = progress.find((p) => p.bookId === own?.id)?.pages || 0;
             return (
-              <Link className="featured-book" key={r.id} to={`/club/${b.id}`}>
+              <Link
+                className="featured-book"
+                key={b.id}
+                aria-label={`Открыть книгу «${b.title}»`}
+                to={`/club/${b.id}`}
+              >
                 <Cover title={b.title} cover={b.cover} />
                 <div>
-                  <span className="eyebrow">ЧИТАЕМ ВМЕСТЕ</span>
                   <h2>{b.title}</h2>
                   <p>{b.authors}</p>
-                  <small>
-                    {r.starts_on}
-                    {r.ends_on ? ` → ${r.ends_on}` : ''}
-                  </small>
-                  {p ? (
+                  {r?.ends_on && (
+                    <small>
+                      До {new Date(r.ends_on + 'T12:00:00').toLocaleDateString('ru-RU')}
+                    </small>
+                  )}
+                  {own && (
                     <>
                       <div className="progress">
-                        <i style={{ width: `${percent(pages, p.totalPages)}%` }} />
+                        <i style={{ width: `${percent(pages, own.totalPages)}%` }} />
                       </div>
                       <small>
-                        Мой прогресс: {pages} / {p.totalPages} стр.
+                        Мой прогресс: {pages} / {own.totalPages} стр.
                       </small>
                     </>
-                  ) : (
-                    <p className="hint">Добавьте в мои книги, чтобы отмечать прогресс</p>
                   )}
+                  <span className="book-open-label">Открыть книгу →</span>
                 </div>
-                <ArrowUpRight size={20} />
               </Link>
             );
           })}
@@ -87,128 +85,46 @@ export function MainBooks() {
   );
 }
 export function Home() {
-  const { identity } = useSession();
-  const profiles = useCloud<{ member_id: string; name: string }>('member_profiles');
   const meetings = useCloud<Meeting>('meetings');
-  const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
-  const quotes = useLiveQuery(() => getDB().quotes.toArray()) || [];
-  const upcoming = meetings.data
-    ?.filter((m) => !m.cancelled && Date.parse(m.starts_at) > Date.now())
-    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
-  const name = profiles.data?.find((p) => p.member_id === identity?.id)?.name.split(' ')[0];
+  const upcoming = nextClubMeeting(meetings.data || []);
   return (
     <>
-      <div className="home-top">
-        <span className="eyebrow">ЗАКРЫТЫЙ КНИЖНЫЙ КЛУБ</span>
-        <span className="date-chip">
-          {new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-        </span>
-      </div>
-      <section className="hero">
-        <div>
-          <p className="hero-kicker">МЕСТО ДЛЯ ХОРОШИХ ИСТОРИЙ</p>
-          <h1>
-            {name ? `${name}, ` : ''}давайте
-            <br />
-            читать <i>вместе.</i>
-          </h1>
-          <p>
-            Книги, которые сближают.
-            <br />
-            Мысли, которыми хочется делиться.
-          </p>
-          <Link className="cream-button" to="/books">
-            <BookOpen size={17} /> Моя книжная полка <ArrowUpRight size={17} />
-          </Link>
-        </div>
-        <div className="book-art" aria-hidden="true">
-          <div className="art-book one">
-            МЕЖДУ
-            <br />
-            СТРОК<span>читаем вместе</span>
-          </div>
-          <div className="art-book two">
-            ВРЕМЯ
-            <br />
-            ЧИТАТЬ
-          </div>
-          <div className="art-book three">
-            ЕЩЁ ОДНА
-            <br />
-            ГЛАВА
-          </div>
-          <div className="art-circle" />
-        </div>
-      </section>
-      <div className="stats">
-        <div>
-          <b>
-            {books
-              .filter((b) => b.status === 'reading')
-              .length.toString()
-              .padStart(2, '0')}
-          </b>
-          <span>читаю сейчас</span>
-        </div>
-        <div>
-          <b>
-            {books
-              .filter((b) => b.status === 'finished')
-              .length.toString()
-              .padStart(2, '0')}
-          </b>
-          <span>книг прочитано</span>
-        </div>
-        <div>
-          <b>
-            {quotes
-              .filter((q) => !q.deletedAt)
-              .length.toString()
-              .padStart(2, '0')}
-          </b>
-          <span>сохранённых мыслей</span>
-        </div>
-      </div>
-      <div className="section-title">
-        <h2>На общем столе</h2>
-        <Link to="/club">
-          Весь каталог <ArrowUpRight size={15} />
-        </Link>
+      <div className="page-heading">
+        <h1>Книжный клуб</h1>
       </div>
       <CloudGate>
-        <MainBooks />
-      </CloudGate>
-      <div className="section-title">
-        <h2>Следующая встреча</h2>
-        <Link to="/meetings">
-          Все встречи <ArrowUpRight size={15} />
-        </Link>
-      </div>
-      {upcoming ? (
-        <Link className="meeting-preview" to="/meetings">
-          <CalendarDays size={28} />
-          <div>
-            <h3>{upcoming.title}</h3>
-            <p>
-              {dateLabel(upcoming.starts_at)} · {upcoming.place}
-            </p>
-          </div>
-          <ArrowUpRight />
-        </Link>
-      ) : (
-        <div className="soft-panel">
-          <CalendarDays size={22} />
-          <p>Новая встреча появится здесь, когда клуб выберет дату.</p>
+        <div className="section-title">
+          <h2>Читаем сейчас</h2>
+          <Link to="/club">
+            Все книги <ArrowUpRight size={15} />
+          </Link>
         </div>
-      )}
-      <section className="thought">
-        <span>НА ПОЛЯХ</span>
-        <p>
-          У каждой книги — своя история.
-          <br />У хорошей книги — ещё и наша.
-        </p>
-        <Link to="/quotes">Собрать свою коллекцию цитат →</Link>
-      </section>
+        <MainBooks />
+        <div className="section-title">
+          <h2>Следующая встреча</h2>
+          <Link to="/meetings">
+            Все встречи <ArrowUpRight size={15} />
+          </Link>
+        </div>
+        <ErrorNote text={meetings.error?.message} />
+        {meetings.isLoading ? (
+          <Loading />
+        ) : upcoming ? (
+          <Link className="meeting-preview" to="/meetings">
+            <CalendarDays size={25} />
+            <div>
+              <h3>{upcoming.title}</h3>
+              <p>
+                {dateLabel(upcoming.starts_at)}
+                {upcoming.place ? ` · ${upcoming.place}` : ''}
+              </p>
+            </div>
+            <ArrowUpRight size={18} />
+          </Link>
+        ) : (
+          <Empty title="Пока нет предстоящих встреч" />
+        )}
+      </CloudGate>
     </>
   );
 }
@@ -269,86 +185,82 @@ export function ProposalEditor({
 export function Club() {
   const { identity } = useSession();
   const books = useCloud<ClubBook>('club_books');
+  const readings = useCloud<Reading>('club_readings');
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState('all');
-  const [genre, setGenre] = useState('all');
+  const [status, setStatus] = useState<ClubBook['status']>('reading');
   const [proposal, setProposal] = useState(false);
-  const filtered = (books.data || []).filter(
-    (b) =>
-      (status === 'all' || b.status === status) &&
-      (genre === 'all' || b.genre === genre) &&
-      `${b.title} ${b.authors}`.toLowerCase().includes(q.toLowerCase()),
+  const categories = [
+    ['reading', 'Читаем сейчас'],
+    ['planned', 'Будем читать'],
+    ['finished', 'Прочитано'],
+  ] as const;
+  const currentIds = new Set(
+    currentClubBooks(books.data || [], readings.data || []).map(({ book }) => book.id),
   );
+  const section = (book: ClubBook) => (currentIds.has(book.id) ? 'reading' : book.status);
+  const visible = (books.data || [])
+    .filter(
+      (b) =>
+        section(b) === status &&
+        `${b.title} ${b.authors} ${b.genre}`.toLowerCase().includes(q.trim().toLowerCase()),
+    )
+    .sort((a, b) => a.title.localeCompare(b.title, 'ru'));
   return (
     <>
       <div className="page-heading">
-        <div>
-          <p className="eyebrow">ОБЩАЯ КНИЖНАЯ ПОЛКА</p>
-          <h1>Библиотека клуба</h1>
-        </div>
+        <h1>Библиотека клуба</h1>
         {identity && (
-          <>
-            <button className="primary" onClick={() => setProposal(true)}>
-              <Plus size={18} /> Предложить
-            </button>
-          </>
+          <button className="primary" onClick={() => setProposal(true)}>
+            <Plus size={18} /> Предложить
+          </button>
         )}
       </div>
       <CloudGate>
-        <div className="toolbar">
-          <input
-            aria-label="Поиск книг клуба"
-            placeholder="Название или автор"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <select
-            aria-label="Клубный статус"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="all">Все статусы</option>
-            {Object.entries(clubStatuses).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-          <select aria-label="Жанр" value={genre} onChange={(e) => setGenre(e.target.value)}>
-            <option value="all">Все жанры</option>
-            {[...new Set(books.data?.map((b) => b.genre).filter(Boolean))].map((g) => (
-              <option key={g}>{g}</option>
-            ))}
-          </select>
+        {!!books.data?.length && (
+          <div className="toolbar">
+            <input
+              aria-label="Поиск книг клуба"
+              placeholder="Название или автор"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+        )}
+        <div className="tabs" aria-label="Разделы библиотеки">
+          {categories.map(([key, label]) => (
+            <button
+              key={key}
+              className={status === key ? 'active' : ''}
+              onClick={() => setStatus(key)}
+            >
+              {label}
+              {!!(books.data || []).filter((b) => section(b) === key).length && (
+                <span className="tab-count">
+                  {(books.data || []).filter((b) => section(b) === key).length}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-        <ErrorNote text={books.error?.message} />
-        {books.isLoading ? (
+        <ErrorNote text={books.error?.message || readings.error?.message} />
+        {books.isLoading || readings.isLoading ? (
           <Loading />
-        ) : !filtered.length ? (
-          <Empty title="Каталог ждёт ваши предложения">
-            Поделитесь книгой, которую хочется обсудить вместе.
-          </Empty>
+        ) : !visible.length ? (
+          <Empty title={q ? 'Книги не найдены' : 'В этом разделе пока нет книг'} />
         ) : (
           <div className="book-grid">
-            {filtered.map((b) => (
+            {visible.map((b) => (
               <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
                 <Cover title={b.title} cover={b.cover} />
                 <div>
-                  <span className={`badge ${b.status}`}>{clubStatuses[b.status]}</span>
                   <h3>{b.title}</h3>
                   <p>{b.authors}</p>
-                  <small>
-                    {b.genre} · {b.default_pages} стр.
-                  </small>
+                  {b.genre && <small>{b.genre}</small>}
                 </div>
               </Link>
             ))}
           </div>
         )}
-        <div className="section-title">
-          <h2>Цитаты клуба</h2>
-        </div>
-        <PublicContent type="quotes" />
       </CloudGate>
       {proposal && <ProposalEditor onClose={() => setProposal(false)} />}
     </>

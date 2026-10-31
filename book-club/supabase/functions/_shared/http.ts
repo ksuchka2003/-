@@ -48,9 +48,9 @@ export async function body(req: Request) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 100000) {
+    if (size > 1000000) {
       await reader.cancel();
-      throw new Error('Запрос больше 100 КБ');
+      throw new Error('Запрос больше 1 МБ');
     }
     raw += decoder.decode(value, { stream: true });
   }

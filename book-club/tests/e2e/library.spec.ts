@@ -31,9 +31,7 @@ test('книга: добавление, редактирование, сохра
   await expect(dialog.getByLabel('Приватные заметки')).toHaveValue('Личная мысль');
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: 'Удалить', exact: true }).click();
-  await expect(
-    page.getByRole('heading', { name: 'История чтения начинается здесь' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пока нет книг' })).toBeVisible();
 });
 test('цитаты: создание, избранное, корзина и восстановление', async ({ page }) => {
   await addBook(page);
@@ -94,14 +92,12 @@ test('экспорт и валидируемый импорт JSON', async ({ pa
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: 'Импортировать' }).click();
   await page.goto('/#/books');
-  await expect(
-    page.getByRole('heading', { name: 'История чтения начинается здесь' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пока нет книг' })).toBeVisible();
 });
 test('светлая и тёмная темы, мобильная ширина без горизонтальной прокрутки', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /давайте/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Книжный клуб' })).toBeVisible();
   await expect(
     page.getByText('Браузер не разрешил локальное хранилище.', { exact: false }),
   ).not.toBeVisible();

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, Search, SlidersHorizontal, Trash2, LockKeyhole } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { getDB } from '../db';
 import { saveBook, deleteBook } from '../local';
 import {
@@ -209,7 +209,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
             await run(
               () =>
                 saveBook({ ...value, updatedAt: now() }, pages, { ...review, updatedAt: now() }),
-              'Книга сохранена на устройстве',
+              'Книга сохранена',
             )
           )
             onClose();
@@ -282,10 +282,6 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
         {identity && value.clubBookId ? (
           <fieldset>
             <legend>Публикация в клубе</legend>
-            <p className="hint">
-              Также включите соответствующие разрешения в профиле. Пока операция в очереди,
-              изменение ещё не подтверждено сервером.
-            </p>
             <label className="check">
               <input
                 type="checkbox"
@@ -303,12 +299,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
               Публиковать отзыв и оценку
             </label>
           </fieldset>
-        ) : (
-          <p className="hint">
-            <LockKeyhole size={14} /> Только на этом устройстве. Для публикации добавьте книгу из
-            клуба.
-          </p>
-        )}
+        ) : null}
         <ErrorNote text={error} />
         <footer>
           <button disabled={busy} className="primary">
@@ -358,53 +349,46 @@ export function MyBooks() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">ВАША ЛИЧНАЯ ПОЛКА</p>
-          <h1>
-            Мои книги <em>{books.length}</em>
-          </h1>
+          <h1>Мои книги {books.length > 0 && <em>{books.length}</em>}</h1>
         </div>
         <button className="primary" onClick={() => setEdit(true)}>
           <Plus size={18} /> Добавить
         </button>
       </div>
-      <div className="toolbar">
-        <label className="search">
-          <Search size={18} />
-          <input
-            aria-label="Поиск моих книг"
-            placeholder="Название или автор"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </label>
-        <select
-          aria-label="Фильтр статуса"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="all">Все статусы</option>
-          {Object.entries(personalStatuses).map(([k, v]) => (
-            <option value={k} key={k}>
-              {v}
-            </option>
-          ))}
-        </select>
-        <label className="sort">
-          <SlidersHorizontal size={16} />
-          <select aria-label="Сортировка" value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="updated">По обновлению</option>
-            <option value="title">По названию</option>
+      {books.length > 0 && (
+        <div className="toolbar">
+          <label className="search">
+            <Search size={18} />
+            <input
+              aria-label="Поиск моих книг"
+              placeholder="Название или автор"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </label>
+          <select
+            aria-label="Фильтр статуса"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="all">Все статусы</option>
+            {Object.entries(personalStatuses).map(([k, v]) => (
+              <option value={k} key={k}>
+                {v}
+              </option>
+            ))}
           </select>
-        </label>
-      </div>
-      <p className="hint">
-        <LockKeyhole size={14} /> Личные данные сохраняются в этом браузере. Делайте резервные копии
-        в профиле.
-      </p>
+          <label className="sort">
+            <SlidersHorizontal size={16} />
+            <select aria-label="Сортировка" value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="updated">По обновлению</option>
+              <option value="title">По названию</option>
+            </select>
+          </label>
+        </div>
+      )}
       {!filtered.length ? (
-        <Empty title={q ? 'Ничего не найдено' : 'История чтения начинается здесь'}>
-          Добавьте книгу вручную или найдите своё издание по названию.
-        </Empty>
+        <Empty title={q ? 'Ничего не найдено' : 'Пока нет книг'} />
       ) : (
         <div className="book-grid">
           {filtered.map((b) => {

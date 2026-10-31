@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { initData } from './telegram';
 import { getDB } from './db';
 import { type SyncOp, message } from './domain';
+import { requestJson } from '../supabase/functions/_shared/request';
 export type Identity = { id: string; role: 'admin' | 'member'; telegramId?: string };
 export const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -13,9 +14,9 @@ let client: SupabaseClient | null = null;
 export const currentIdentity = () => identity;
 async function edge(name: string, data: unknown, auth = false) {
   if (!configured) throw new Error('Клуб ещё не подключён. Доступна личная библиотека.');
-  let r: Response;
+  let reply: { response: Response; data: any };
   try {
-    r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+    reply = await requestJson<any>(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -23,19 +24,16 @@ async function edge(name: string, data: unknown, auth = false) {
         ...(auth ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(data),
-      signal: AbortSignal.timeout(20000),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof SyntaxError)
+      throw new Error('Сервис клуба недоступен. Попробуйте ещё раз позже.');
+    if (error instanceof Error && error.name === 'TimeoutError')
+      throw new Error('Сервер клуба не ответил вовремя. Нажмите «Повторить вход».');
     throw new Error('Нет связи с клубом. Проверьте интернет и повторите вход.');
   }
-  let result;
-  try {
-    result = await r.json();
-  } catch {
-    throw new Error('Сервис клуба недоступен. Сообщите администратору.');
-  }
-  if (!r.ok) throw new Error(result.error || 'Ошибка сервера');
-  return result;
+  if (!reply.response.ok) throw new Error(reply.data.error || 'Ошибка сервера');
+  return reply.data;
 }
 let authenticating: Promise<Identity> | null = null;
 export async function authenticate(): Promise<Identity> {

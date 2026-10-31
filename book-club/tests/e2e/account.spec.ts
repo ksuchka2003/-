@@ -100,6 +100,27 @@ function backend() {
 async function synced(page: Page) {
   await expect(page.locator('.connection-bar')).toContainText('Синхронизировано');
 }
+test('вход работает в мобильном WebView без AbortSignal.timeout и AbortSignal.any', async ({
+  browser,
+  baseURL,
+}) => {
+  const api = backend();
+  const context = await browser.newContext({ baseURL });
+  try {
+    await api.connect(context);
+    await context.addInitScript(() => {
+      Object.defineProperty(AbortSignal, 'timeout', { value: undefined, configurable: true });
+      Object.defineProperty(AbortSignal, 'any', { value: undefined, configurable: true });
+    });
+    const page = await context.newPage();
+    await page.goto('/#/profile');
+    await expect(page.getByRole('heading', { name: 'Анна', exact: true })).toBeVisible();
+    await expect(page.getByText('Нет связи с клубом.', { exact: false })).not.toBeVisible();
+    await expect(page.getByRole('link', { name: 'Управление клубом', exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
 test('один Telegram-аккаунт на двух устройствах: книги, заметки, цитаты, профиль, офлайн и удаление', async ({
   browser,
   baseURL,

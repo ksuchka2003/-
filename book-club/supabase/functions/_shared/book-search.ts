@@ -8,6 +8,7 @@ export type SearchBook = {
   cover: string;
   totalPages: number;
 };
+import { requestJson } from './request.ts';
 const cache = new Map<string, { time: number; books: SearchBook[] }>();
 export function normalizedIsbn(query: string): string | null {
   const raw = query
@@ -38,12 +39,9 @@ const year = (value: unknown) => {
 const pages = (value: unknown) =>
   Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 1000000 ? Number(value) : 0;
 async function get(url: string, signal?: AbortSignal) {
-  const timeout = AbortSignal.timeout(6500);
-  const response = await fetch(url, {
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-  });
+  const { response, data } = await requestJson<any>(url, { signal }, 6500);
   if (!response.ok) throw new Error('Поиск временно недоступен');
-  return response.json();
+  return data;
 }
 export async function searchProviders(
   query: string,

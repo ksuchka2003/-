@@ -92,6 +92,9 @@ it('устанавливает только свой webhook и сохраняе
   expect(call.data.url).toBe('https://club.test.invalid/functions/v1/telegram-bot');
   expect(call.data.drop_pending_updates).toBe(false);
   expect(call.data.allowed_updates).toEqual(['message', 'my_chat_member']);
+  expect(calls.find((c) => c.method === 'setChatMenuButton')?.data.menu_button.web_app.url).toBe(
+    'https://books.test.invalid/-/#/',
+  );
 });
 it('не перезаписывает webhook другого приложения', async () => {
   oldWebhook = 'https://other.test.invalid/webhook';

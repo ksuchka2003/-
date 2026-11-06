@@ -35,5 +35,11 @@ export async function installBot() {
       { command: 'disconnect_club', description: 'Отключить уведомления в этой группе' },
     ],
   });
+  const appUrl = new URL(Deno.env.get('TELEGRAM_APP_URL')!);
+  if (appUrl.protocol !== 'https:') throw new Error('Для Mini App нужен HTTPS-адрес');
+  appUrl.hash = '/';
+  await telegram('setChatMenuButton', {
+    menu_button: { type: 'web_app', text: 'Открыть клуб', web_app: { url: appUrl.href } },
+  });
   return { username: me.username, hasMainApp: Boolean(me.has_main_web_app), installed: true };
 }

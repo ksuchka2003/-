@@ -12,7 +12,7 @@ import {
   uid,
 } from '../domain';
 import { action } from '../cloud';
-import { clubDateTime, clubInstant, type Attendance, type Participant } from '../calendar';
+import { clubDateTime, clubInstant } from '../calendar';
 import {
   CloudGate,
   Modal,
@@ -55,7 +55,7 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
   const { run, busy, error } = useTask();
   const query = useQueryClient();
   return (
-    <Modal title={meeting ? 'Редактировать встречу' : 'Предложить встречу'} onClose={onClose}>
+    <Modal title={meeting ? 'Редактировать встречу' : 'Создать встречу'} onClose={onClose}>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -152,80 +152,12 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
         )}
         <ErrorNote text={error} />
         <button className="primary" disabled={busy}>
-          {meeting ? 'Сохранить встречу' : 'Предложить участникам'}
+          {meeting ? 'Сохранить встречу' : 'Создать встречу'}
         </button>
       </form>
     </Modal>
   );
 }
-function ResponseEditor({
-  meeting,
-  answer,
-  onClose,
-}: {
-  meeting: Meeting;
-  answer?: Attendance;
-  onClose: () => void;
-}) {
-  const [choice, setChoice] = useState(
-    answer?.interested === false ? 'decline' : answer?.response || 'maybe',
-  );
-  const [comment, setComment] = useState(answer?.comment || '');
-  const { run, busy, error } = useTask();
-  const query = useQueryClient();
-  return (
-    <Modal title="Ответ на приглашение" onClose={onClose}>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (
-            await run(async () => {
-              await action('attendance', {
-                meeting_id: meeting.id,
-                schedule_version: meeting.schedule_version || 1,
-                response: choice === 'decline' ? 'no' : choice,
-                interested: choice !== 'decline',
-                comment,
-              });
-              await query.invalidateQueries({ queryKey: ['cloud'] });
-            }, 'Ответ сохранён')
-          )
-            onClose();
-        }}
-      >
-        <h3>{meeting.title}</h3>
-        <p>{meetingDateLabel(meeting.starts_at)}</p>
-        <Field label="Сможете прийти?">
-          <select value={choice} onChange={(e) => setChoice(e.target.value)}>
-            <option value="yes">Приду</option>
-            <option value="no">Хочу, но не смогу</option>
-            <option value="maybe">Пока не знаю</option>
-            <option value="decline">Не планирую участвовать</option>
-          </select>
-        </Field>
-        <Field label="Комментарий к встрече">
-          <textarea
-            rows={3}
-            maxLength={2000}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Пожелания или вопрос к организатору"
-          />
-        </Field>
-        <ErrorNote text={error} />
-        <button className="primary" disabled={busy}>
-          Сохранить ответ
-        </button>
-      </form>
-    </Modal>
-  );
-}
-const answerLabel = (a?: Attendance) =>
-  !a
-    ? 'Нет ответа'
-    : a.interested === false
-      ? 'Не планирует участвовать'
-      : { yes: 'Приду', no: 'Хочу, но не смогу', maybe: 'Пока не знаю' }[a.response];
 export function MeetingCard({
   meeting: m,
   compact = false,
@@ -234,22 +166,11 @@ export function MeetingCard({
   compact?: boolean;
 }) {
   const clock = useClock();
-  const attend = useCloud<Attendance>('meeting_attendance');
-  const people = useCloud<Participant>('meeting_participants');
   const { identity } = useSession();
-  const [respond, setRespond] = useState(false);
   const [edit, setEdit] = useState(false);
   const [discussion, setDiscussion] = useState<'questions' | 'reflections' | null>(null);
   const questions = useCloud<MeetingQuestion>('meeting_questions');
   const reflections = useCloud<MeetingReflection>('meeting_reflections');
-  const answers = (attend.data || []).filter(
-    (a) => a.meeting_id === m.id && a.schedule_version === (m.schedule_version || 1),
-  );
-  const mine = answers.find((a) => a.member_id === identity?.id);
-  const old = attend.data?.find(
-    (a) => a.meeting_id === m.id && a.member_id === identity?.id && !mine,
-  );
-  const upcoming = !m.cancelled && Date.parse(m.starts_at) > clock;
   return (
     <article className={`meeting-card ${m.cancelled ? 'cancelled' : ''}`}>
       <div className="meeting-body">
@@ -284,49 +205,6 @@ export function MeetingCard({
         {m.description && (
           <p className={`prewrap ${compact ? 'clamp-description' : ''}`}>{m.description}</p>
         )}
-        <ErrorNote text={attend.error?.message || people.error?.message} />
-        {upcoming && (
-          <>
-            {attend.isLoading ? (
-              <Loading />
-            ) : (
-              <>
-                <p>
-                  {old
-                    ? 'Время изменилось — ответьте заново.'
-                    : mine
-                      ? `Ваш ответ: ${answerLabel(mine)}`
-                      : 'Сможете прийти на встречу?'}
-                </p>
-                {mine?.comment && <p className="prewrap">{mine.comment}</p>}
-                <button
-                  className="primary"
-                  disabled={!!attend.error}
-                  onClick={() => setRespond(true)}
-                >
-                  {mine ? 'Изменить ответ' : 'Ответить на приглашение'}
-                </button>
-              </>
-            )}
-          </>
-        )}
-        {!compact && (
-          <details className="calendar-details">
-            <summary>
-              Ответы · {answers.length}/{people.data?.length || 0}
-            </summary>
-            {people.data?.map((p) => {
-              const a = answers.find((a) => a.member_id === p.member_id);
-              return (
-                <div className="availability-person" key={p.member_id}>
-                  <b>{p.name}</b>
-                  <span>{answerLabel(a)}</span>
-                  {a?.comment && <p className="prewrap">{a.comment}</p>}
-                </div>
-              );
-            })}
-          </details>
-        )}
         <div className="actions discussion-links">
           <button onClick={() => setDiscussion('questions')}>
             Вопросы к встрече
@@ -354,13 +232,6 @@ export function MeetingCard({
           onClose={() => setDiscussion(null)}
         />
       )}
-      {respond && (
-        <ResponseEditor
-          meeting={m}
-          answer={attend.data?.find((a) => a.meeting_id === m.id && a.member_id === identity?.id)}
-          onClose={() => setRespond(false)}
-        />
-      )}
       {edit && <MeetingEditor meeting={m} onClose={() => setEdit(false)} />}
     </article>
   );
@@ -385,7 +256,7 @@ export function Meetings() {
         {identity?.role === 'admin' && (
           <button className="primary" onClick={() => setEdit(true)}>
             <Plus size={18} />
-            Предложить встречу
+            Создать встречу
           </button>
         )}
       </div>
@@ -404,7 +275,7 @@ export function Meetings() {
         ) : (
           !meetings.error &&
           (!listed.length ? (
-            <Empty title={past ? 'Прошедших встреч нет' : 'Предложенных встреч пока нет'} />
+            <Empty title={past ? 'Прошедших встреч нет' : 'Предстоящих встреч пока нет'} />
           ) : (
             <div className="stack">
               {listed.map((m) => (

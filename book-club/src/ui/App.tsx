@@ -343,11 +343,12 @@ function Bootstrap() {
           setError('Браузер не разрешил локальное хранилище. Проверьте настройки приватности.');
       }
       if (who && active) {
-        try {
-          await accountSync().sync();
-        } catch {
-          /* The local copy remains available; sync status shows the failure. */
-        }
+        // Show the home screen as soon as authentication and local storage are ready.
+        void accountSync()
+          .sync()
+          .catch(() => {
+            /* Sync status exposes errors. */
+          });
       }
       if (active) setReady(true);
     })();
@@ -377,7 +378,8 @@ function Bootstrap() {
   return ready ? (
     <Shell identity={identity} error={error} onRetry={retry} />
   ) : (
-    <main>
+    <main className="startup-screen">
+      <h1>Книжный клуб</h1>
       <Loading />
     </main>
   );

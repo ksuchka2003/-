@@ -9,7 +9,10 @@ async function addBook(page: Page) {
   await dialog.getByText('Моё чтение', { exact: true }).click();
   await dialog.getByLabel('Страниц в моём издании').fill('480');
   await dialog.getByLabel('Прочитано страниц').fill('200');
-  await dialog.getByLabel('Личный статус').selectOption('reading');
+  await dialog
+    .getByRole('group', { name: 'Личный статус' })
+    .getByRole('button', { name: 'Читаю', exact: true })
+    .click();
   await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
   await expect(dialog).not.toBeVisible();
 }

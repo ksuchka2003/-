@@ -36,7 +36,6 @@ import { BookPolls } from './Polls';
 import { MeetingCard } from './Meetings';
 import { BookReaders } from './Readers';
 import { clubBookFinished, clubCounts } from '../collection';
-import { CollectionCounts } from './CollectionCounts';
 import { bookCover } from '../covers';
 import { BookMemory, BookThoughtEditor } from './BookMemory';
 export function MainBooks() {
@@ -273,11 +272,6 @@ export function Club() {
           <>
             {!!all.length && (
               <>
-                <CollectionCounts
-                  counts={clubCounts(all, history)}
-                  selected={filter}
-                  onSelect={setFilter}
-                />
                 <div className="toolbar">
                   <input
                     aria-label="Поиск книг клуба"
@@ -285,15 +279,26 @@ export function Club() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                   />
-                  <select
-                    aria-label="Какие книги показать"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                  >
-                    <option value="all">Все книги клуба</option>
-                    <option value="finished">Прочитанные клубом</option>
-                    <option value="unfinished">Не прочитанные клубом</option>
-                  </select>
+                </div>
+                <div
+                  className="tabs collection-tabs"
+                  role="tablist"
+                  aria-label="Книги клуба по статусу"
+                >
+                  {(['finished', 'unfinished', 'all'] as const).map((key) => (
+                    <button
+                      key={key}
+                      role="tab"
+                      aria-selected={filter === key}
+                      className={filter === key ? 'active' : ''}
+                      onClick={() => setFilter(key)}
+                    >
+                      {{ finished: 'Прочитано', unfinished: 'Не прочитано', all: 'Все' }[key]}
+                      <span className="tab-count">
+                        {clubCounts(all, history)[key === 'all' ? 'total' : key]}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </>
             )}

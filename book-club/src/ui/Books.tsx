@@ -9,6 +9,7 @@ import { saveBook, deleteBook } from '../local';
 import { bookCover } from '../covers';
 import { CoverPicker } from './CoverPicker';
 import { RatingStars } from './RatingStars';
+import { ReadingStatus } from './ReadingStatus';
 import {
   now,
   uid,
@@ -333,11 +334,20 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
         )}
         <CoverPicker
           title={value.title}
+          authors={value.authors}
           cover={bookCover(value, club.data?.find((b) => b.id === value.clubBookId)?.cover)}
-          hasCustom={!!value.coverData}
+          hasCustom={
+            !!value.coverData ||
+            !!(
+              value.clubBookId &&
+              value.cover &&
+              value.cover !== club.data?.find((b) => b.id === value.clubBookId)?.cover
+            )
+          }
           shared={!!value.clubBookId}
           onBusy={setCoverBusy}
           onChange={(data) => setValue((old) => ({ ...old, coverData: data }))}
+          onUrl={(cover) => setValue(({ coverData, ...old }) => ({ ...old, cover }))}
           onReset={() =>
             setValue((old) => {
               const { coverData, ...rest } = old;
@@ -362,18 +372,6 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
                 onChange={(e) => setValue({ ...value, totalPages: Number(e.target.value) })}
               />
             </Field>
-            <Field label="Личный статус">
-              <select
-                value={value.status}
-                onChange={(e) => setValue({ ...value, status: e.target.value as Book['status'] })}
-              >
-                {Object.entries(personalStatuses).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="Прочитано страниц">
               <input
                 type="number"
@@ -385,6 +383,12 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
               />
             </Field>
           </div>
+          <ReadingStatus
+            value={value.status}
+            onChange={(status) => {
+              if (status !== 'all' && status !== 'unfinished') setValue({ ...value, status });
+            }}
+          />
           <Field label="Текущая глава">
             <input
               maxLength={300}
@@ -535,19 +539,6 @@ export function MyBooks() {
               onChange={(e) => setQ(e.target.value)}
             />
           </label>
-          <select
-            aria-label="Фильтр статуса"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="all">Все статусы</option>
-            <option value="unfinished">Не прочитано</option>
-            {Object.entries(personalStatuses).map(([k, v]) => (
-              <option value={k} key={k}>
-                {v}
-              </option>
-            ))}
-          </select>
           <label className="sort">
             <SlidersHorizontal size={16} />
             <select aria-label="Сортировка" value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -557,6 +548,7 @@ export function MyBooks() {
           </label>
         </div>
       )}
+      {books.length > 0 && <ReadingStatus filter value={status} onChange={setStatus} />}
       {!filtered.length ? (
         <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'} />
       ) : (

@@ -119,6 +119,7 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
     meeting_availability: ['day', 'member_id'],
     meeting_participants: ['member_id'],
     club_settings: ['key'],
+    notification_chat: ['singleton'],
     private_library_records: ['kind', 'entity_id'],
     visible_member_invites: ['id'],
     visible_book_polls: ['id'],

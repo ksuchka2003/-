@@ -253,6 +253,7 @@ export function Admin() {
   const jobs = useCloud<{ id: string; status: string; kind: string; last_error: string }>(
     'notification_jobs',
   );
+  const group = useCloud<{ title: string; active: boolean }>('notification_chat');
   const [tab, setTab] = useState('books');
   const [book, setBook] = useState<ClubBook | true | null>(null);
   const [reading, setReading] = useState<Reading | true | null>(null);
@@ -498,6 +499,26 @@ export function Admin() {
       )}
       {tab === 'notifications' && (
         <>
+          <div className="soft-panel">
+            <div>
+              <h2>Уведомления в группу</h2>
+              <p>
+                {group.data?.[0]?.active
+                  ? `Подключена группа «${group.data[0].title}»`
+                  : 'Группа ещё не подключена'}
+              </p>
+              <p>
+                Добавьте бота в группу и назначьте администратором. Со своего аккаунта
+                администратора клуба отправьте в группе <code>/connect_club</code>. Для отключения —{' '}
+                <code>/disconnect_club</code>.
+              </p>
+              <small>
+                Выбранные книги, встречи и напоминание за сутки. Отвечать о посещении в приложении
+                не нужно.
+              </small>
+              <ErrorNote text={group.error?.message} />
+            </div>
+          </div>
           <p>
             Последние задания. Доставка может задерживаться при остановке проекта или недоступности
             Telegram.
@@ -523,6 +544,7 @@ export function Admin() {
                     cancelled: 'Отмена',
                     '24h': 'За 24 часа',
                     '1h': 'За час',
+                    selected_book: 'Выбранная книга',
                   } as Record<string, string>
                 )[j.kind] || 'Уведомление'}{' '}
                 ·{' '}

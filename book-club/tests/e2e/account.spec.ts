@@ -369,7 +369,96 @@ test('ошибка авторизации видна, локальный реж�
   await expect(page.locator('.connection-bar')).toContainText('Только на этом устройстве');
 });
 
-test('встреча администратора видна на главной, содержит место и ссылку, принимает ответ', async ({
+test('главная открывается до завершения синхронизации личной библиотеки', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  let release!: () => void;
+  const hold = new Promise<void>((r) => {
+    release = r;
+  });
+  await context.route('**/functions/v1/club-api', async (route) => {
+    if (
+      route.request().method() === 'POST' &&
+      route.request().postDataJSON().action === 'private.sync'
+    )
+      await hold;
+    await route.fallback();
+  });
+  try {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Читаем сейчас', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Следующая встреча', exact: true }),
+    ).toBeVisible();
+  } finally {
+    release();
+  }
+});
+
+test('обложка из интернета меняет только личную картинку, ошибка поиска допускает ссылку', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  let fail = false;
+  await context.route('**/functions/v1/club-api', async (route) => {
+    if (
+      route.request().method() === 'POST' &&
+      route.request().postDataJSON().action === 'book.search'
+    )
+      return route.fulfill({
+        status: fail ? 503 : 200,
+        headers: { 'access-control-allow-origin': '*' },
+        json: fail
+          ? { error: 'Поиск временно недоступен' }
+          : [
+              {
+                title: 'Другое издание',
+                authors: 'Станислав Лем',
+                cover: 'https://covers.example/solaris.jpg',
+                totalPages: 999,
+              },
+            ],
+      });
+    await route.fallback();
+  });
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Название', { exact: true }).fill('Солярис');
+  await dialog.getByRole('button', { name: 'Из интернета', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Найти обложки', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: 'Выбрать: Другое издание, Станислав Лем', exact: true })
+    .click();
+  await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Солярис');
+  await dialog.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await expect
+    .poll(() => [...api.records.values()].find((r) => r.kind === 'book')?.payload?.cover)
+    .toBe('https://covers.example/solaris.jpg');
+  expect([...api.records.values()].find((r) => r.kind === 'book')?.payload?.totalPages).toBe(0);
+  await page.getByRole('heading', { name: 'Солярис', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Из интернета', exact: true }).click();
+  fail = true;
+  await dialog.getByLabel('Поиск обложки').fill('Неизвестное издание');
+  await dialog.getByRole('button', { name: 'Найти обложки', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Поиск временно недоступен');
+  await dialog.getByLabel('Ссылка на картинку').fill('http://covers.example/unsafe.jpg');
+  await dialog.getByRole('button', { name: 'Использовать ссылку', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('HTTPS');
+  await dialog.getByLabel('Ссылка на картинку').fill('https://covers.example/my.jpg');
+  await dialog.getByRole('button', { name: 'Использовать ссылку', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await expect
+    .poll(() => [...api.records.values()].find((r) => r.kind === 'book')?.payload?.cover)
+    .toBe('https://covers.example/my.jpg');
+});
+
+test('встреча администратора видна на главной, содержит место и ссылку без голосования о посещении', async ({
   page,
   context,
 }) => {
@@ -377,14 +466,14 @@ test('встреча администратора видна на главной
   await api.connect(context);
   await page.goto('/#/meetings');
   await expect(page.getByRole('button', { name: 'Календарь', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Предложить встречу', exact: true }).click();
+  await page.getByRole('button', { name: 'Создать встречу', exact: true }).click();
   await page.getByLabel('Название встречи').fill('Обсуждаем финал');
   const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   await page.getByLabel('Дата и время · МСК').fill(date + 'T18:00');
   await page.getByLabel('Место', { exact: true }).fill('Кафе на углу');
   await page.getByLabel('Ссылка на место или созвон').fill('https://maps.example/place');
   await page.getByLabel('Описание', { exact: true }).fill('Приносите любимые цитаты');
-  await page.getByRole('button', { name: 'Предложить участникам' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Создать встречу' }).click();
   await expect.poll(() => api.meetings.length).toBe(1);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Обсуждаем финал' })).toBeVisible();
@@ -393,12 +482,9 @@ test('встреча администратора видна на главной
     'href',
     'https://maps.example/place',
   );
-  await page.getByRole('button', { name: 'Ответить на приглашение' }).click();
-  await page.getByLabel('Сможете прийти?').selectOption('yes');
-  await page.getByLabel('Комментарий к встрече').fill('Приду с книгой');
-  await page.getByRole('button', { name: 'Сохранить ответ' }).click();
-  await expect(page.getByText('Ваш ответ: Приду', { exact: true })).toBeVisible();
-  expect(api.attendance).toHaveLength(1);
+  await expect(page.getByRole('button', { name: 'Ответить на приглашение' })).toHaveCount(0);
+  await expect(page.getByText('Сможете прийти на встречу?')).toHaveCount(0);
+  expect(api.attendance).toHaveLength(0);
   await page.setViewportSize({ width: 320, height: 760 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/simple-meeting-mobile.png', fullPage: true });
@@ -705,11 +791,11 @@ test('все книги: поиск, фильтр прочитанного, ре
   await api.connect(context);
   await page.goto('/#/club');
   await page.getByRole('button', { name: /^Все книги/ }).click();
-  await expect(page.getByRole('button', { name: '3 В коллекции', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '1 Прочитано', exact: true }).click();
+  await expect(page.getByRole('tab', { name: /^Все.*3/ })).toBeVisible();
+  await page.getByRole('tab', { name: /^Прочитано.*1/ }).click();
   await expect(page.getByRole('heading', { name: 'Давняя книга', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Будущая книга', exact: true })).not.toBeVisible();
-  await page.getByRole('button', { name: '3 В коллекции', exact: true }).click();
+  await page.getByRole('tab', { name: /^Все.*3/ }).click();
   await page.getByLabel('Поиск книг клуба').fill('Будущая');
   await expect(page.getByRole('heading', { name: 'Будущая книга', exact: true })).toBeVisible();
   await page.getByLabel('Поиск книг клуба').fill('');
@@ -927,11 +1013,15 @@ test('личная обложка и звёзды синхронизируютс
     await a.getByRole('button', { name: /^Все книги/ }).click();
     await a.getByLabel('Поиск книг клуба').fill('Соля');
     await a.screenshot({ path: '../../work/club-compact-counts.png', fullPage: true });
-    const counters = await a
-      .locator('.club-counts button')
-      .evaluateAll((nodes) => nodes.map((n) => Math.round(n.getBoundingClientRect().height)));
-    expect(new Set(counters).size).toBe(1);
-    expect(counters[0]).toBeLessThanOrEqual(64);
+    const filters = a.getByRole('tablist', { name: 'Книги клуба по статусу' });
+    await expect(filters.getByRole('tab')).toHaveCount(3);
+    await filters.getByRole('tab', { name: /^Прочитано/ }).click();
+    await expect(filters.getByRole('tab', { name: /^Прочитано/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await filters.getByRole('tab', { name: /^Все/ }).click();
+    await expect(a.getByLabel('Какие книги показать')).toHaveCount(0);
     await a.getByRole('heading', { name: 'Солярис', exact: true }).click();
     await a.getByRole('button', { name: /В мои книги/ }).click();
     await a.getByRole('button', { name: 'Назад', exact: true }).click();

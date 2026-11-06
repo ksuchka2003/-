@@ -10,6 +10,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
+    "paths": {
+      "npm:@supabase/supabase-js@2": ["./node_modules/@supabase/supabase-js/dist/index.d.mts"]
+    },
     "noEmit": true,
     "types": ["vite/client", "vitest/globals", "node"]
   },

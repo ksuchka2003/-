@@ -6,7 +6,7 @@
 
 1. Создайте проект на бесплатном тарифе Supabase. Сохраните пароль БД в менеджере паролей.
 2. В Authentication → Providers отключите публичную регистрацию и ненужные провайдеры. Email-провайдер нужен для внутреннего обмена серверного одноразового токена; реальные письма приложение не отправляет. В Auth Settings задайте JWT expiry **600 секунд**. Конфигурация `supabase/config.toml` применяется локальным CLI и не заменяет ручную проверку настроек Hosted Dashboard.
-3. В новом проекте последовательно примените через SQL Editor миграции `202610250001_club.sql`, `202610250002_private_library.sql`, `202610310003_polls_and_invites.sql`, `202610310004_meeting_calendar.sql`, `202611060005_simple_club.sql` из `supabase/migrations`. Для существующего клуба применяйте только недостающие миграции — см. [UPDATE.md](UPDATE.md). Альтернатива с установленным Supabase CLI:
+3. В новом проекте последовательно примените через SQL Editor миграции `202610250001_club.sql`, `202610250002_private_library.sql`, `202610310003_polls_and_invites.sql`, `202610310004_meeting_calendar.sql`, `202611060005_simple_club.sql`, `202611060006_club_memory.sql` из `supabase/migrations`. Для существующего клуба применяйте только недостающие миграции — см. [UPDATE.md](UPDATE.md). Альтернатива с установленным Supabase CLI:
 
 ```sh
 npx supabase login

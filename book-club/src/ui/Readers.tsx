@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Participant } from '../calendar';
 import { Link } from 'react-router-dom';
 import { type Profile, type PublicProgress, percent, personalStatuses } from '../domain';
 import { Avatar, PublicContent } from './Social';
@@ -6,56 +7,69 @@ import { useCloud, Modal, ErrorNote, Loading } from './shared';
 export function BookReaders({ bookId, title }: { bookId: string; title: string }) {
   const progress = useCloud<PublicProgress>('visible_progress');
   const people = useCloud<Profile>('member_profiles');
+  const members = useCloud<Participant>('meeting_participants');
   const [selected, setSelected] = useState<Profile | null>(null);
   const [tab, setTab] = useState<'quotes' | 'reviews'>('quotes');
-  const readers = (progress.data || [])
-    .filter((p) => p.book_id === bookId)
-    .sort((a, b) =>
-      (people.data?.find((p) => p.member_id === a.member_id)?.name || '').localeCompare(
-        people.data?.find((p) => p.member_id === b.member_id)?.name || '',
-        'ru',
-      ),
-    );
+  const profiles = members.data?.length
+    ? members.data.map(
+        (m) =>
+          people.data?.find((p) => p.member_id === m.member_id) || {
+            member_id: m.member_id,
+            name: m.name,
+            username: null,
+            avatar_url: null,
+            bio: '',
+            genres: '',
+            joined_at: '',
+          },
+      )
+    : people.data || [];
+  const readers = [...profiles].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   return (
     <section className="book-readers" aria-label={`Прогресс участников: ${title}`}>
-      <h3>Читают участники</h3>
-      <ErrorNote text={progress.error?.message || people.error?.message} />
-      {progress.isLoading || people.isLoading ? (
+      <h3>Как читаем</h3>
+      <ErrorNote
+        text={progress.error?.message || people.error?.message || members.error?.message}
+      />
+      {progress.isLoading || people.isLoading || members.isLoading ? (
         <Loading />
       ) : (
         !progress.error &&
         !people.error &&
         (!readers.length ? (
-          <p className="muted">Пока никто не добавил книгу на свою полку.</p>
+          <p className="muted">Пока нет участников.</p>
         ) : (
-          readers.map((p) => {
-            const person = people.data?.find((x) => x.member_id === p.member_id);
+          readers.map((person) => {
+            const p = progress.data?.find(
+              (p) => p.book_id === bookId && p.member_id === person.member_id,
+            );
+            const known = Number.isFinite(p?.pages) && !!p?.total_pages;
             return (
               <button
-                key={p.id}
+                key={person.member_id}
                 className="reader-row"
-                disabled={!person}
                 onClick={() => {
-                  setSelected(person || null);
+                  setSelected(person);
                   setTab('quotes');
                 }}
-                aria-label={`Чтение ${person?.name || 'участника'}: ${title}`}
+                aria-label={`Чтение ${person.name}: ${title}`}
               >
-                {person && <Avatar profile={person} />}
+                <Avatar profile={person} />
                 <span className="reader-body">
-                  <b>{person?.name || 'Участник'}</b>
-                  <small>{personalStatuses[p.status]}</small>
-                  {p.total_pages && p.pages !== null ? (
+                  <b>{person.name}</b>
+                  <small>{p ? personalStatuses[p.status] : 'Нет отметки о чтении'}</small>
+                  {p && <small>{p.chapter ? `Глава: ${p.chapter}` : 'Глава не указана'}</small>}
+                  {known && p ? (
                     <>
                       <span className="progress">
-                        <i style={{ width: percent(p.pages, p.total_pages) + '%' }} />
+                        <i style={{ width: percent(p.pages!, p.total_pages!) + '%' }} />
                       </span>
                       <small>
-                        {p.pages} / {p.total_pages} стр. · {percent(p.pages, p.total_pages)}%
+                        {p.pages} / {p.total_pages} стр. · {percent(p.pages!, p.total_pages!)}%
                       </small>
                     </>
                   ) : (
-                    <small>Объём издания не указан</small>
+                    <small>Страницы не указаны</small>
                   )}
                 </span>
               </button>
@@ -77,10 +91,15 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
               Цитаты
             </button>
             <button className={tab === 'reviews' ? 'active' : ''} onClick={() => setTab('reviews')}>
-              Комментарии и отзывы
+              Мысли по прочитанному
             </button>
           </div>
-          <PublicContent type={tab} memberId={selected.member_id} bookId={bookId} />
+          <PublicContent
+            type={tab}
+            memberId={selected.member_id}
+            bookId={bookId}
+            sort={tab === 'quotes' ? 'likes' : 'newest'}
+          />
         </Modal>
       )}
     </section>

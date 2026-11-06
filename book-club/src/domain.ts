@@ -37,11 +37,19 @@ export const bookSchema = metadataSchema.extend({
   createdAt: date,
   updatedAt: date,
 });
-export const progressSchema = z.object({
-  bookId: id,
-  pages: z.number().int().min(0).max(1000000),
-  updatedAt: date,
-});
+export const progressSchema = z
+  .object({
+    bookId: id,
+    pages: z.number().int().min(0).max(1000000),
+    updatedAt: date,
+    chapter: z.string().max(300).optional(),
+    startedOn: z.iso.date().optional(),
+    finishedOn: z.iso.date().optional(),
+  })
+  .refine(
+    (p) => !p.startedOn || !p.finishedOn || p.startedOn <= p.finishedOn,
+    'Окончание чтения не может быть раньше начала',
+  );
 export const reviewSchema = z.object({
   bookId: id,
   rating: z.number().int().min(1).max(10).nullable(),
@@ -136,6 +144,9 @@ export type PublicProgress = {
   pages: number | null;
   total_pages: number | null;
   updated_at: string;
+  chapter?: string;
+  started_on?: string | null;
+  finished_on?: string | null;
 };
 export type PublicReview = {
   id: string;
@@ -156,6 +167,38 @@ export type PublicQuote = {
   page: number | null;
   chapter: string;
   comment: string;
+  updated_at: string;
+  source_id?: string | null;
+  source_author?: string | null;
+};
+export type BookStats = {
+  book_id: string;
+  average_rating: number | null;
+  rating_count: number;
+  finished_readers: number;
+  pace_count: number;
+  average_days: number | null;
+  pages_per_day: number | null;
+};
+export type MeetingQuestion = {
+  id: string;
+  meeting_id: string;
+  member_id: string;
+  text: string;
+  answered: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+export type MeetingReflection = {
+  id: string;
+  meeting_id: string;
+  member_id: string;
+  favorite_thought: string;
+  debate: string;
+  impression: string;
+  version: number;
+  created_at: string;
   updated_at: string;
 };
 export type Meeting = {

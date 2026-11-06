@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Heart, BookmarkPlus, Users, ChevronRight } from 'lucide-react';
@@ -11,6 +11,7 @@ import {
   percent,
 } from '../domain';
 import { action } from '../cloud';
+import { quoteBookKey } from '../collection';
 import { copyPublicQuote } from '../local';
 import {
   useCloud,
@@ -45,14 +46,24 @@ export function PublicContent({
   memberId,
   bookId,
   currentOnly = false,
+  sort = 'newest',
+  limit,
+  search = '',
+  quoteBook = 'all',
+  likedOnly = false,
 }: {
   type: 'quotes' | 'reviews' | 'progress';
   memberId?: string;
   bookId?: string;
   currentOnly?: boolean;
+  sort?: 'newest' | 'likes';
+  limit?: number;
+  search?: string;
+  quoteBook?: string;
+  likedOnly?: boolean;
 }) {
-  const quotes = useCloud<PublicQuote>('public_quotes');
-  const reviews = useCloud<PublicReview>('visible_reviews');
+  const quotes = useCloud<PublicQuote>('club_quotes');
+  const reviews = useCloud<PublicReview>('club_reviews');
   const progress = useCloud<PublicProgress>('visible_progress');
   const profiles = useCloud<Profile>('member_profiles');
   const likes = useCloud<{ quote_id: string; member_id: string }>('quote_likes');
@@ -60,25 +71,54 @@ export function PublicContent({
   const { run, error, busy } = useTask();
   const query = useQueryClient();
   const source = type === 'quotes' ? quotes : type === 'reviews' ? reviews : progress;
+  const [pageSize, setPageSize] = useState(24);
+  useEffect(() => setPageSize(24), [type, memberId, bookId, search, quoteBook, likedOnly, sort]);
+  const likeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const l of likes.data || []) counts.set(l.quote_id, (counts.get(l.quote_id) || 0) + 1);
+    return counts;
+  }, [likes.data]);
+  const myLikes = useMemo(
+    () =>
+      new Set(
+        (likes.data || []).filter((l) => l.member_id === identity?.id).map((l) => l.quote_id),
+      ),
+    [likes.data, identity?.id],
+  );
+
   const list = (source.data || [])
     .filter(
       (x) =>
         (!memberId || x.member_id === memberId) &&
         (!bookId || x.book_id === bookId) &&
-        (!currentOnly || ('status' in x && x.status === 'reading')),
+        (!currentOnly || ('status' in x && x.status === 'reading')) &&
+        (!search ||
+          `${x.title} ${'text' in x ? x.text : ''} ${'comment' in x ? x.comment : ''}`
+            .toLowerCase()
+            .includes(search.trim().toLowerCase())) &&
+        (quoteBook === 'all' || quoteBookKey(x) === quoteBook) &&
+        (!likedOnly || (x.member_id !== identity?.id && myLikes.has(x.id))),
     )
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    .sort(
+      (a, b) =>
+        (sort === 'likes' ? (likeCounts.get(b.id) || 0) - (likeCounts.get(a.id) || 0) : 0) ||
+        b.updated_at.localeCompare(a.updated_at) ||
+        a.id.localeCompare(b.id),
+    );
   const author = (id: string) =>
     profiles.data?.find((x) => x.member_id === id)?.name || 'Участник клуба';
-  if (source.isLoading) return <Loading />;
+  if (source.isLoading || (type === 'quotes' && likes.isLoading)) return <Loading />;
+  if (type === 'quotes' && likes.error) return <ErrorNote text={likes.error.message} />;
   return (
     <>
-      <ErrorNote text={source.error?.message || error} />
+      <ErrorNote
+        text={source.error?.message || (type === 'quotes' ? likes.error?.message : '') || error}
+      />
       {!list.length ? (
         <Empty title="Пока нет публикаций" />
       ) : (
         <div className="quote-grid">
-          {list.map((item) => (
+          {list.slice(0, limit ?? pageSize).map((item) => (
             <article key={item.id} className="quote-card">
               <Link className="author" to={`/members/${item.member_id}`}>
                 {author(item.member_id)}
@@ -102,7 +142,8 @@ export function PublicContent({
                         <p className="muted">
                           {q.page !== null ? `Страница ${q.page}` : ''} {q.chapter}
                         </p>
-                        {q.comment && <p>{q.comment}</p>}
+                        {q.comment && <p className="prewrap">{q.comment}</p>}
+                        {q.source_author && <small>Источник: {q.source_author}</small>}
                         <div className="actions">
                           <button
                             className={liked ? 'liked' : ''}
@@ -115,7 +156,7 @@ export function PublicContent({
                             }
                           >
                             <Heart size={17} fill={liked ? 'currentColor' : 'none'} />{' '}
-                            {likes.data?.filter((l) => l.quote_id === q.id).length || 0}
+                            {likeCounts.get(q.id) || 0}
                           </button>
                           <button
                             disabled={busy}
@@ -175,6 +216,11 @@ export function PublicContent({
           ))}
         </div>
       )}
+      {!limit && list.length > pageSize && (
+        <button className="load-more" onClick={() => setPageSize(pageSize + 24)}>
+          Показать ещё · {list.length - pageSize}
+        </button>
+      )}
     </>
   );
 }
@@ -229,8 +275,8 @@ export function Members() {
 export function MemberDetail() {
   const { id } = useParams();
   const profiles = useCloud<Profile>('member_profiles');
-  const quotes = useCloud<PublicQuote>('public_quotes');
-  const reviews = useCloud<PublicReview>('visible_reviews');
+  const quotes = useCloud<PublicQuote>('club_quotes');
+  const reviews = useCloud<PublicReview>('club_reviews');
   const progress = useCloud<PublicProgress>('visible_progress');
   const [tab, setTab] = useState('progress');
   const p = profiles.data?.find((x) => x.member_id === id);

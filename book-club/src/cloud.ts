@@ -91,6 +91,11 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
     'public_quotes',
     'quote_likes',
     'visible_book_polls',
+    'meeting_questions',
+    'meeting_reflections',
+    'club_quotes',
+    'club_reviews',
+    'club_book_stats',
   ];
   const cacheable = cachedTables.includes(table);
   if (
@@ -117,6 +122,7 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
     private_library_records: ['kind', 'entity_id'],
     visible_member_invites: ['id'],
     visible_book_polls: ['id'],
+    club_book_stats: ['book_id'],
   };
   const data: unknown[] = [];
   for (let start = 0; ; start += 500) {

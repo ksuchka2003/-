@@ -86,6 +86,49 @@ function backend() {
             records.set(key, record);
             return { status: 'applied', record };
           });
+        } else if (input.action.startsWith('meeting.question')) {
+          const rows = (extra.meeting_questions ||= []) as any[];
+          const index = rows.findIndex((q) => q.id === input.data.id);
+          const old = rows[index];
+          if (input.action === 'meeting.question.delete') {
+            if (index >= 0) rows.splice(index, 1);
+          } else if (input.action === 'meeting.question.answered') {
+            rows[index] = { ...old, answered: input.data.answered, version: old.version + 1 };
+          } else {
+            const record = {
+              ...input.data,
+              member_id: owner,
+              answered: old?.answered || false,
+              version: (old?.version || 0) + 1,
+              created_at: old?.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            if (index >= 0) rows[index] = record;
+            else rows.push(record);
+          }
+          body = { ok: true };
+        } else if (input.action.startsWith('meeting.reflection')) {
+          const rows = (extra.meeting_reflections ||= []) as any[];
+          const index = rows.findIndex((q) =>
+            input.action.endsWith('.delete')
+              ? q.id === input.data.id
+              : q.meeting_id === input.data.meeting_id && q.member_id === owner,
+          );
+          const old = rows[index];
+          if (input.action.endsWith('.delete')) {
+            if (index >= 0) rows.splice(index, 1);
+          } else {
+            const record = {
+              ...input.data,
+              member_id: owner,
+              version: (old?.version || 0) + 1,
+              created_at: old?.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            if (index >= 0) rows[index] = record;
+            else rows.push(record);
+          }
+          body = { ok: true };
         } else if (input.action === 'availability') {
           if (failAvailability)
             return route.fulfill({
@@ -118,6 +161,14 @@ function backend() {
           if (index >= 0) attendance.splice(index, 1);
           attendance.push({ ...input.data, member_id: owner });
           body = { ok: true };
+        } else if (input.action === 'like') {
+          const rows = (extra.quote_likes ||= []) as any[];
+          const index = rows.findIndex(
+            (l) => l.quote_id === input.data.quote_id && l.member_id === owner,
+          );
+          if (index >= 0) rows.splice(index, 1);
+          if (input.data.liked) rows.push({ quote_id: input.data.quote_id, member_id: owner });
+          body = { ok: true };
         } else if (input.action === 'profile') {
           profile = { ...profile, ...input.data };
           body = { ok: true };
@@ -142,7 +193,16 @@ function backend() {
                       ? [profile, ...(extra.member_profiles || [])]
                       : table === 'member_privacy_settings'
                         ? [privacy]
-                        : extra[table || ''] || [];
+                        : extra[table || ''] ||
+                          extra[
+                            (
+                              {
+                                club_quotes: 'public_quotes',
+                                club_reviews: 'visible_reviews',
+                              } as Record<string, string>
+                            )[table || '']
+                          ] ||
+                          [];
       }
       await route.fulfill({ headers, json: body });
     });
@@ -396,6 +456,7 @@ test('прогресс текущей книги открывает публик
   ];
   await api.connect(context);
   await page.goto('/#/club');
+  await page.getByRole('button', { name: 'Открыть прогресс: Солярис' }).click();
   await expect(page.getByText('150 / 300 стр. · 50%', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 760 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -403,7 +464,7 @@ test('прогресс текущей книги открывает публик
   await page.getByRole('button', { name: 'Чтение Борис: Солярис' }).click();
   await expect(page.getByText('Цитата к обсуждаемой книге', { exact: true })).toBeVisible();
   await expect(page.getByText('Цитата к другой книге', { exact: true })).not.toBeVisible();
-  await page.getByRole('button', { name: 'Комментарии и отзывы', exact: true }).click();
+  await page.getByRole('button', { name: 'Мысли по прочитанному', exact: true }).click();
   await expect(page.getByText('Хочется обсудить океан', { exact: true })).toBeVisible();
 });
 test('цитата личной книги приватна по умолчанию, делится отдельно и отзывается', async ({
@@ -444,4 +505,304 @@ test('цитата личной книги приватна по умолчан�
         ).length,
     )
     .toBe(1);
+});
+
+test('вопросы к встрече и итоги сохраняются на сервере и видны на втором устройстве', async ({
+  browser,
+  baseURL,
+}) => {
+  const api = backend();
+  const upcoming = '40000000-0000-4000-8000-000000000001',
+    past = '40000000-0000-4000-8000-000000000002';
+  api.meetings.push(
+    {
+      id: upcoming,
+      title: 'Будущая встреча',
+      starts_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+      place: 'Кафе',
+      description: 'Поговорим о книге',
+      cancelled: false,
+      version: 1,
+      duration_minutes: 120,
+    },
+    {
+      id: past,
+      title: 'Прошедшая встреча',
+      starts_at: new Date(Date.now() - 3 * 86400000).toISOString(),
+      place: 'Клуб',
+      description: '',
+      cancelled: false,
+      version: 1,
+      duration_minutes: 120,
+    },
+  );
+  const first = await browser.newContext({ baseURL }),
+    second = await browser.newContext({ baseURL });
+  try {
+    await api.connect(first);
+    await api.connect(second);
+    const a = await first.newPage(),
+      b = await second.newPage();
+    await a.goto('/#/meetings');
+    await expect(a.getByText(/До встречи/)).toBeVisible();
+    await a.getByRole('button', { name: 'Вопросы к встрече', exact: true }).click();
+    let dialog = a.getByRole('dialog');
+    await dialog.getByLabel('Что хочется обсудить?').fill('Можно ли доверять рассказчику?');
+    await dialog.getByRole('button', { name: 'Добавить вопрос', exact: true }).click();
+    await expect(
+      dialog
+        .locator('.discussion-note')
+        .getByText('Можно ли доверять рассказчику?', { exact: true }),
+    ).toBeVisible();
+    await dialog.getByRole('button', { name: 'Отметить обсуждённым', exact: true }).click();
+    await expect(dialog.getByText('Обсудили', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await a.getByRole('button', { name: 'Прошедшие и отменённые', exact: true }).click();
+    await a.getByRole('button', { name: 'Итоги встречи', exact: true }).click();
+    dialog = a.getByRole('dialog');
+    await dialog
+      .getByLabel('Любимые мысли', { exact: true })
+      .fill('Человек меняется вместе с памятью');
+    await dialog
+      .getByLabel('Спорные моменты', { exact: true })
+      .fill('Обсуждали надёжность рассказчика');
+    await dialog
+      .getByLabel('Впечатление от встречи', { exact: true })
+      .fill('Хочется перечитать финал');
+    await dialog.getByRole('button', { name: 'Поделиться итогами', exact: true }).click();
+    await expect(
+      dialog.locator('.discussion-note').getByText('Хочется перечитать финал', { exact: true }),
+    ).toBeVisible();
+    await b.goto('/#/meetings');
+    await b.getByRole('button', { name: 'Прошедшие и отменённые', exact: true }).click();
+    await b.getByRole('button', { name: /^Итоги встречи/ }).click();
+    await expect(
+      b
+        .getByRole('dialog')
+        .locator('.discussion-note')
+        .getByText('Человек меняется вместе с памятью', { exact: true }),
+    ).toBeVisible();
+    await b.screenshot({ path: '../../work/meeting-reflections.png', fullPage: true });
+    expect(api.extra.meeting_reflections).toHaveLength(1);
+  } finally {
+    await first.close();
+    await second.close();
+  }
+});
+test('все книги: поиск, фильтр прочитанного, рейтинг, популярные цитаты и впечатление о давней книге', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  const reading = '20000000-0000-4000-8000-000000000001',
+    past = '20000000-0000-4000-8000-000000000002',
+    planned = '20000000-0000-4000-8000-000000000003',
+    reader = '10000000-0000-4000-8000-000000000002',
+    quote = '70000000-0000-4000-8000-000000000001';
+  const meta = {
+    authors: 'Автор',
+    description: '',
+    genre: '',
+    year: 2019,
+    isbn: '',
+    cover: '',
+    default_pages: 300,
+  };
+  api.extra.club_books = [
+    { ...meta, id: reading, title: 'Текущая книга', status: 'reading' },
+    { ...meta, id: past, title: 'Давняя книга', status: 'finished' },
+    { ...meta, id: planned, title: 'Будущая книга', status: 'planned' },
+  ];
+  api.extra.club_book_stats = [
+    {
+      book_id: past,
+      average_rating: 8,
+      rating_count: 2,
+      finished_readers: 2,
+      pace_count: 1,
+      average_days: 3,
+      pages_per_day: 100,
+    },
+  ];
+  api.extra.member_profiles = [
+    {
+      member_id: reader,
+      name: 'Борис',
+      avatar_url: null,
+      bio: '',
+      genres: '',
+      joined_at: new Date().toISOString(),
+    },
+  ];
+  api.extra.club_quotes = [
+    {
+      id: quote,
+      member_id: reader,
+      book_id: past,
+      title: 'Давняя книга',
+      text: 'Самая любимая цитата',
+      page: 15,
+      chapter: '',
+      comment: '',
+      updated_at: '2019-01-01T12:00:00Z',
+    },
+    {
+      id: '70000000-0000-4000-8000-000000000002',
+      member_id: reader,
+      book_id: past,
+      title: 'Давняя книга',
+      text: 'Самая новая цитата',
+      page: 20,
+      chapter: '',
+      comment: '',
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  api.extra.quote_likes = [
+    { quote_id: quote, member_id: reader },
+    { quote_id: quote, member_id: owner },
+  ];
+  api.extra.club_reviews = [
+    {
+      id: reader,
+      member_id: reader,
+      book_id: past,
+      title: 'Давняя книга',
+      rating: 8,
+      text: 'Спорный герой',
+      spoilers: false,
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  await api.connect(context);
+  await page.goto('/#/club');
+  await page.getByRole('button', { name: /^Все книги/ }).click();
+  await expect(page.getByRole('button', { name: '3 В коллекции', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '1 Прочитано', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Давняя книга', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Будущая книга', exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: '3 В коллекции', exact: true }).click();
+  await page.getByLabel('Поиск книг клуба').fill('Будущая');
+  await expect(page.getByRole('heading', { name: 'Будущая книга', exact: true })).toBeVisible();
+  await page.getByLabel('Поиск книг клуба').fill('');
+  await page.getByRole('heading', { name: 'Давняя книга', exact: true }).click();
+  await expect(page.getByText('8 / 10', { exact: true })).toBeVisible();
+  await expect(page.getByText('100 стр./день', { exact: true })).toBeVisible();
+  await expect(page.locator('blockquote').first()).toHaveText('Самая любимая цитата');
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/book-memory-mobile.png', fullPage: true });
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  await expect
+    .poll(() =>
+      page
+        .getByRole('button', { name: 'Все цитаты', exact: true })
+        .evaluate((el) => getComputedStyle(el).backgroundColor),
+    )
+    .toBe('rgb(38, 45, 39)');
+  await page.screenshot({ path: '../../work/book-memory-dark.png', fullPage: true });
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
+  await page.getByRole('button', { name: 'Оставить впечатление', exact: true }).click();
+  await page.getByLabel('Что осталось после книги?').fill('Мой взгляд спустя годы');
+  await page.getByLabel('Моя оценка', { exact: true }).selectOption('9');
+  await page.getByLabel('Я прочитал(а) эту книгу').check();
+  await page.getByRole('button', { name: 'Сохранить впечатление', exact: true }).click();
+  await expect
+    .poll(() =>
+      api.publications.some(
+        (p) =>
+          p.action === 'sync' &&
+          p.data.kind === 'review' &&
+          p.data.payload?.text === 'Мой взгляд спустя годы',
+      ),
+    )
+    .toBe(true);
+  await page.goto('/#/books');
+  await expect(page.getByRole('button', { name: '1 Прочитано', exact: true })).toBeVisible();
+  await page.screenshot({ path: '../../work/personal-counts-mobile.png', fullPage: true });
+  await page.getByRole('heading', { name: 'Давняя книга', exact: true }).click();
+  await page.getByLabel('Текущая глава').fill('Эпилог');
+  await page.getByText('Когда читал(а) — необязательно', { exact: true }).click();
+  await page.getByLabel('Начал(а) читать').fill('2019-01-01');
+  await page.getByLabel('Закончил(а) читать').fill('2019-01-03');
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await expect
+    .poll(() =>
+      [...api.records.values()].some(
+        (r) =>
+          r.kind === 'progress' &&
+          r.payload?.chapter === 'Эпилог' &&
+          r.payload?.startedOn === '2019-01-01',
+      ),
+    )
+    .toBe(true);
+});
+test('цитаты: понравившиеся и сохранённые отделены от своих, есть поиск по книге и публикация галочкой', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    reader = '10000000-0000-4000-8000-000000000002',
+    quote = '70000000-0000-4000-8000-000000000001';
+  api.extra.member_profiles = [
+    {
+      member_id: reader,
+      name: 'Борис',
+      avatar_url: null,
+      bio: '',
+      genres: '',
+      joined_at: new Date().toISOString(),
+    },
+  ];
+  api.extra.club_quotes = [
+    {
+      id: quote,
+      member_id: reader,
+      book_id: null,
+      title: 'Книга-источник',
+      text: 'Цитата другого участника',
+      page: 10,
+      chapter: 'Глава 2',
+      comment: '',
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  api.extra.quote_likes = [{ quote_id: quote, member_id: owner }];
+  await api.connect(context);
+  await page.goto('/#/quotes');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByLabel('Название книги', { exact: true }).fill('Моя книга');
+  await page.getByLabel('Текст цитаты').fill('Собственная мысль');
+  await page.getByRole('button', { name: 'Сохранить цитату', exact: true }).click();
+  await page.getByLabel('Опубликовать в клубе', { exact: true }).check();
+  await expect
+    .poll(() =>
+      api.publications.some(
+        (p) =>
+          p.action === 'sync' &&
+          p.data.kind === 'quote' &&
+          p.data.payload?.text === 'Собственная мысль',
+      ),
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Понравились', exact: true }).click();
+  await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Себе', exact: true }).click();
+  await page.getByRole('button', { name: 'Сохранённые', exact: true }).click();
+  await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+  await expect(page.getByText('Собственная мысль', { exact: true })).not.toBeVisible();
+  await page.getByLabel('Фильтр по книге').selectOption({ label: 'Книга-источник' });
+  await page.getByLabel('Поиск цитат').fill('Книга-источник');
+  await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+  await expect(page.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Нравится цитата', exact: true })).toContainText(
+    '1',
+  );
+  await page.getByLabel('Поиск цитат').fill('');
+  await page.getByRole('button', { name: 'Мои', exact: true }).click();
+  await expect(page.getByText('Собственная мысль', { exact: true })).toBeVisible();
+  await expect(page.getByText('Цитата другого участника', { exact: true })).not.toBeVisible();
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/quotes-organized.png', fullPage: true });
 });

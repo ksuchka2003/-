@@ -177,3 +177,31 @@ it('сохранение цитаты из личной книги другог�
   await expect(copyPublicQuote(q, 'Анна')).rejects.toThrow('уже сохранена');
   expect(await getDB().sync_queue.count()).toBe(0);
 });
+
+it('сохраняет главу и даты, быстрые обновления страниц их не стирают; неверные даты откатывают книгу', async () => {
+  const b = book(),
+    r = { bookId: b.id, rating: null, text: '', spoilers: false, updatedAt: now() };
+  await saveBook(b, 10, r, false, {
+    chapter: 'Глава 2',
+    startedOn: '2019-01-01',
+    finishedOn: '2019-01-03',
+  });
+  await saveBook(b, 20, r);
+  expect(await getDB().reading_progress.get(b.id)).toMatchObject({
+    pages: 20,
+    chapter: 'Глава 2',
+    startedOn: '2019-01-01',
+    finishedOn: '2019-01-03',
+  });
+  await expect(
+    saveBook({ ...b, title: 'Не должно сохраниться' }, 30, r, false, {
+      startedOn: '2019-01-05',
+      finishedOn: '2019-01-03',
+    }),
+  ).rejects.toThrow();
+  expect((await getDB().personal_books.get(b.id))?.title).toBe(b.title);
+  await saveBook(b, 20, r, false, { chapter: '', startedOn: undefined, finishedOn: undefined });
+  const p = await getDB().reading_progress.get(b.id);
+  expect(p).not.toHaveProperty('startedOn');
+  expect(p).not.toHaveProperty('finishedOn');
+});

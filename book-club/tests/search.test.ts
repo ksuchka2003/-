@@ -33,21 +33,19 @@ it('предлагает ручной ввод, если оба API недост
 it('нормализует ISBN с кириллической Х и использует точный поиск без языкового фильтра', async () => {
   expect(normalizedIsbn('ISBN: 5-367-00198-Х')).toBe('536700198X');
   expect(validIsbn('536700198X')).toBe(true);
-  const fetcher = vi
-    .fn()
-    .mockImplementation(async (url: string) => ({
-      ok: true,
-      json: async () =>
-        url.includes('googleapis')
-          ? { items: [] }
-          : {
-              'ISBN:536700198X': {
-                title: 'Издание',
-                authors: [{ name: 'Автор' }],
-                number_of_pages: 250,
-              },
+  const fetcher = vi.fn().mockImplementation(async (url: string) => ({
+    ok: true,
+    json: async () =>
+      url.includes('googleapis')
+        ? { items: [] }
+        : {
+            'ISBN:536700198X': {
+              title: 'Издание',
+              authors: [{ name: 'Автор' }],
+              number_of_pages: 250,
             },
-    }));
+          },
+  }));
   vi.stubGlobal('fetch', fetcher);
   const found = await searchBooks('536700198Х');
   expect(found[0].isbn).toBe('536700198X');

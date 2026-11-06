@@ -97,7 +97,7 @@ test('цитаты: создание, избранное, корзина и во
   await page.getByRole('button', { name: 'Корзина', exact: true }).click();
   await expect(page.getByText('Страх убивает разум', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Восстановить' }).click();
-  await page.getByRole('button', { name: 'Все цитаты', exact: true }).click();
+  await page.getByRole('button', { name: 'Мои', exact: true }).click();
   await expect(page.getByText('Страх убивает разум', { exact: true })).toBeVisible();
 });
 test('локальная библиотека работает без сети после загрузки', async ({ page, context }) => {
@@ -189,13 +189,11 @@ test('новая книга сохраняется только с назван�
     )
       thirdParty.push(r.url());
   });
-  await page
-    .getByLabel('Выбрать фото цитаты')
-    .setInputFiles({
-      name: 'quote.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(png, 'base64'),
-    });
+  await page.getByLabel('Выбрать фото цитаты').setInputFiles({
+    name: 'quote.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(png, 'base64'),
+  });
   await page.getByRole('button', { name: 'Распознать текст', exact: true }).click();
   await expect(page.getByLabel('Текст цитаты')).toHaveValue(/Книжный клуб читает вместе/, {
     timeout: 90000,

@@ -200,3 +200,12 @@ export function submit(handler: () => void) {
     handler();
   };
 }
+
+export function useClock() {
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  return clock;
+}

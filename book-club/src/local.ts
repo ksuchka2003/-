@@ -3,6 +3,8 @@ import {
   bookSchema,
   quoteSchema,
   reviewSchema,
+  progressSchema,
+  type Progress,
   now,
   uid,
   validProgress,
@@ -84,7 +86,13 @@ export async function enqueueBook(
       );
   }
 }
-export async function saveBook(book: Book, pages: number, review: Review, explicitShare = false) {
+export async function saveBook(
+  book: Book,
+  pages: number,
+  review: Review,
+  explicitShare = false,
+  details?: Pick<Progress, 'chapter' | 'startedOn' | 'finishedOn'>,
+) {
   const parsed = bookSchema.parse(book);
   const parsedReview = reviewSchema.parse(review);
   if (parsedReview.bookId !== parsed.id) throw new Error('Отзыв относится к другой книге');
@@ -105,7 +113,19 @@ export async function saveBook(book: Book, pages: number, review: Review, explic
     async () => {
       const previous = await db.personal_books.get(parsed.id);
       await db.personal_books.put(parsed);
-      await db.reading_progress.put({ bookId: book.id, pages, updatedAt: now() });
+      const previousProgress = await db.reading_progress.get(book.id);
+      const parsedProgress = progressSchema.parse({
+        ...previousProgress,
+        ...details,
+        bookId: book.id,
+        pages,
+        updatedAt: now(),
+      });
+      await db.reading_progress.put(
+        Object.fromEntries(
+          Object.entries(parsedProgress).filter(([, value]) => value !== undefined),
+        ) as Progress,
+      );
       await db.personal_reviews.put(parsedReview);
       await enqueueBook(parsed, parsedReview, previous, explicitShare);
     },
@@ -156,6 +176,8 @@ export async function saveQuote(quote: Quote, explicitShare = false) {
               chapter: q.chapter,
               comment: q.comment,
               explicit_share: explicitShare,
+              source_id: q.sourceId,
+              source_author: q.sourceAuthor,
             }
           : null,
       );

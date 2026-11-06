@@ -1,3 +1,4 @@
+import { meetingEnd } from './collection';
 import type { ClubBook, Reading, Meeting } from './domain';
 export function currentClubBooks(books: ClubBook[], readings: Reading[]) {
   const active = readings
@@ -21,6 +22,6 @@ export function currentClubBooks(books: ClubBook[], readings: Reading[]) {
 }
 export function nextClubMeeting(meetings: Meeting[], at = Date.now()) {
   return meetings
-    .filter((m) => !m.cancelled && Date.parse(m.starts_at) > at)
+    .filter((m) => !m.cancelled && meetingEnd(m) > at)
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
 }

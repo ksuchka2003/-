@@ -43,9 +43,11 @@ afterAll(async () => {
   await db?.close();
 });
 describe.sequential('Голосования и приглашения', () => {
-  it('не раскрывает административный список обычному участнику',async()=>{
-    await actor(alice);expect((await db.query('select * from public.visible_club_members')).rows).toHaveLength(0);
-    await actor(admin);expect((await db.query('select * from public.visible_club_members')).rows).toHaveLength(2);
+  it('не раскрывает административный список обычному участнику', async () => {
+    await actor(alice);
+    expect((await db.query('select * from public.visible_club_members')).rows).toHaveLength(0);
+    await actor(admin);
+    expect((await db.query('select * from public.visible_club_members')).rows).toHaveLength(2);
   });
   it('создаёт общее голосование только для отправленной заявки, скрывает черновик', async () => {
     await actor(alice);
@@ -146,10 +148,22 @@ describe.sequential('Голосования и приглашения', () => {
     );
     await expect(redeem('c'.repeat(64), 4)).rejects.toThrow('недействительно');
   });
-  it('атомарно ограничивает приглашения двадцатью участниками',async()=>{
-    await actor(admin);await action('admin.create_invite',{id:'20000000-0000-4000-8000-000000000004',token_hash:'d'.repeat(64)});
-    await db.exec('reset role;insert into public.club_members(telegram_id) select 1000+n from generate_series(1,17) n;');
-    await expect(redeem('d'.repeat(64),4)).rejects.toThrow('20 участников');
-    await actor(admin);const invite=(await db.query<any>("select uses from public.visible_member_invites where id='20000000-0000-4000-8000-000000000004'")).rows[0];expect(Number(invite.uses)).toBe(0);
+  it('атомарно ограничивает приглашения двадцатью участниками', async () => {
+    await actor(admin);
+    await action('admin.create_invite', {
+      id: '20000000-0000-4000-8000-000000000004',
+      token_hash: 'd'.repeat(64),
+    });
+    await db.exec(
+      'reset role;insert into public.club_members(telegram_id) select 1000+n from generate_series(1,17) n;',
+    );
+    await expect(redeem('d'.repeat(64), 4)).rejects.toThrow('20 участников');
+    await actor(admin);
+    const invite = (
+      await db.query<any>(
+        "select uses from public.visible_member_invites where id='20000000-0000-4000-8000-000000000004'",
+      )
+    ).rows[0];
+    expect(Number(invite.uses)).toBe(0);
   });
 });

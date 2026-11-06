@@ -29,11 +29,15 @@ import {
   Modal,
   useSession,
   dateLabel,
+  useClock,
 } from './shared';
 import { PublicContent } from './Social';
 import { BookPolls } from './Polls';
 import { MeetingCard } from './Meetings';
 import { BookReaders } from './Readers';
+import { clubBookFinished, clubCounts } from '../collection';
+import { CollectionCounts } from './CollectionCounts';
+import { BookMemory, BookThoughtEditor } from './BookMemory';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -88,8 +92,9 @@ export function MainBooks() {
   );
 }
 export function Home() {
+  const clock = useClock();
   const meetings = useCloud<Meeting>('meetings');
-  const upcoming = nextClubMeeting(meetings.data || []);
+  const upcoming = nextClubMeeting(meetings.data || [], clock);
   return (
     <>
       <div className="page-heading">
@@ -183,89 +188,131 @@ export function Club() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState<ClubBook['status']>('reading');
+  const [tab, setTab] = useState<'reading' | 'all'>('reading');
+  const [filter, setFilter] = useState('all');
+  const [opened, setOpened] = useState<string | null>(null);
   const [proposal, setProposal] = useState(false);
-  const categories = [
-    ['reading', 'Читаем сейчас'],
-    ['planned', 'Будем читать'],
-    ['finished', 'Прочитано'],
-  ] as const;
-  const currentIds = new Set(
-    currentClubBooks(books.data || [], readings.data || []).map(({ book }) => book.id),
-  );
-  const section = (book: ClubBook) => (currentIds.has(book.id) ? 'reading' : book.status);
-  const visible = (books.data || [])
+  const all = books.data || [];
+  const history = readings.data || [];
+  const current = currentClubBooks(all, history);
+  const visible = all
     .filter(
       (b) =>
-        section(b) === status &&
+        (filter === 'all' ||
+          (filter === 'finished' ? clubBookFinished(b, history) : !clubBookFinished(b, history))) &&
         `${b.title} ${b.authors} ${b.genre}`.toLowerCase().includes(q.trim().toLowerCase()),
     )
     .sort((a, b) => a.title.localeCompare(b.title, 'ru'));
   return (
     <>
       <div className="page-heading">
-        <h1>Библиотека клуба</h1>
+        <h1>Клуб</h1>
       </div>
       <CloudGate>
-        {!!books.data?.length && (
-          <div className="toolbar">
-            <input
-              aria-label="Поиск книг клуба"
-              placeholder="Название или автор"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </div>
-        )}
         <div className="tabs" aria-label="Разделы библиотеки">
-          {categories.map(([key, label]) => (
-            <button
-              key={key}
-              className={status === key ? 'active' : ''}
-              onClick={() => setStatus(key)}
-            >
-              {label}
-              {!!(books.data || []).filter((b) => section(b) === key).length && (
-                <span className="tab-count">
-                  {(books.data || []).filter((b) => section(b) === key).length}
-                </span>
-              )}
-            </button>
-          ))}
+          <button className={tab === 'reading' ? 'active' : ''} onClick={() => setTab('reading')}>
+            Читаем{current.length ? ` · ${current.length}` : ''}
+          </button>
+          <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
+            Все книги{all.length ? ` · ${all.length}` : ''}
+          </button>
         </div>
-        {status === 'planned' && (
-          <>
-            <div className="section-actions">
-              {identity && (
-                <button className="primary" onClick={() => setProposal(true)}>
-                  <Plus size={18} /> Предложить книгу
-                </button>
-              )}
-            </div>
-            <BookPolls />
-          </>
-        )}
         <ErrorNote text={books.error?.message || readings.error?.message} />
         {books.isLoading || readings.isLoading ? (
           <Loading />
-        ) : !visible.length ? (
-          <Empty title={q ? 'Книги не найдены' : 'В этом разделе пока нет книг'} />
+        ) : books.error || readings.error ? null : tab === 'reading' ? (
+          !current.length ? (
+            <Empty title="Сейчас нет книг в чтении" />
+          ) : (
+            <div className="stack">
+              {current.map(({ book: b }) => (
+                <article className="reading-accordion" key={b.id}>
+                  <button
+                    className="reading-summary"
+                    aria-expanded={opened === b.id}
+                    aria-label={`Открыть прогресс: ${b.title}`}
+                    onClick={() => setOpened(opened === b.id ? null : b.id)}
+                  >
+                    <Cover title={b.title} cover={b.cover} small />
+                    <span>
+                      <h2>{b.title}</h2>
+                      <small>{b.authors}</small>
+                    </span>
+                    <span aria-hidden="true">{opened === b.id ? '−' : '+'}</span>
+                  </button>
+                  {opened === b.id && (
+                    <>
+                      <BookReaders bookId={b.id} title={b.title} />
+                      <Link className="button reading-more" to={`/club/${b.id}`}>
+                        О книге, цитаты и мысли →
+                      </Link>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
+          )
         ) : (
-          <div className="book-grid">
-            {visible.map((b) => (
-              <article className="club-reading-book" key={b.id}>
-                <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
-                  <Cover title={b.title} cover={b.cover} />
-                  <div>
-                    <h3>{b.title}</h3>
-                    <p>{b.authors}</p>
-                    {b.genre && <small>{b.genre}</small>}
-                  </div>
-                </Link>
-                {status === 'reading' && <BookReaders bookId={b.id} title={b.title} />}
-              </article>
-            ))}
-          </div>
+          <>
+            {!!all.length && (
+              <>
+                <CollectionCounts
+                  counts={clubCounts(all, history)}
+                  selected={filter}
+                  onSelect={setFilter}
+                />
+                <div className="toolbar">
+                  <input
+                    aria-label="Поиск книг клуба"
+                    placeholder="Название или автор"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                  <select
+                    aria-label="Какие книги показать"
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                  >
+                    <option value="all">Все книги клуба</option>
+                    <option value="finished">Прочитанные клубом</option>
+                    <option value="unfinished">Не прочитанные клубом</option>
+                  </select>
+                </div>
+              </>
+            )}
+            {identity && (
+              <details className="book-extra proposals-section">
+                <summary>Предложения и голосования</summary>
+                <button className="primary" onClick={() => setProposal(true)}>
+                  <Plus size={18} />
+                  Предложить книгу
+                </button>
+                <BookPolls />
+              </details>
+            )}
+            {!visible.length ? (
+              <Empty title={q || all.length ? 'Книги не найдены' : 'В коллекции пока нет книг'} />
+            ) : (
+              <div className="book-list">
+                {visible.map((b) => (
+                  <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
+                    <Cover title={b.title} cover={b.cover} />
+                    <div>
+                      <span className="badge">
+                        {clubBookFinished(b, history)
+                          ? 'Прочитано клубом'
+                          : current.some((x) => x.book.id === b.id)
+                            ? 'Читаем'
+                            : 'Не прочитано'}
+                      </span>
+                      <h3>{b.title}</h3>
+                      <p>{b.authors}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </CloudGate>
       {proposal && <ProposalEditor onClose={() => setProposal(false)} />}
@@ -277,7 +324,8 @@ export function ClubDetail() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
   const { run, error, busy } = useTask();
-  const [tab, setTab] = useState('quotes');
+  const [tab, setTab] = useState('overview');
+  const [thought, setThought] = useState(false);
   const b = books.data?.find((x) => x.id === id);
   const personal = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const own = personal.find((x) => x.clubBookId === id);
@@ -298,7 +346,9 @@ export function ClubDetail() {
           <h1>{b.title}</h1>
           <h3>{b.authors}</h3>
           <p className="muted">
-            {b.genre} · {b.year || 'Год не указан'} · {b.default_pages} стр.
+            {[b.genre, b.year, b.default_pages ? `${b.default_pages} стр.` : '']
+              .filter(Boolean)
+              .join(' · ')}
           </p>
           <p className="prewrap">{b.description}</p>
           {own ? (
@@ -343,37 +393,49 @@ export function ClubDetail() {
               <Plus size={17} /> В мои книги
             </button>
           )}
+          <button className="button" onClick={() => setThought(true)}>
+            Оставить впечатление
+          </button>
           <ErrorNote text={error} />
         </div>
       </section>
       <div className="tabs">
         {[
+          ['overview', 'После чтения'],
           ['quotes', 'Цитаты'],
-          ['reviews', 'Отзывы'],
-          ['progress', 'Кто читает'],
-          ['history', 'История клуба'],
+          ['reviews', 'Мысли'],
+          ['progress', 'Читатели'],
         ].map(([k, v]) => (
           <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
             {v}
           </button>
         ))}
       </div>
-      {tab === 'progress' ? (
+      {tab === 'overview' ? (
+        <>
+          <BookMemory bookId={b.id} onTab={setTab} />
+          <details className="book-extra">
+            <summary>История чтения клубом</summary>
+            {readings.data
+              ?.filter((r) => r.book_id === id)
+              .map((r) => (
+                <p key={r.id}>
+                  {r.starts_on} — {r.ends_on || 'без даты окончания'} ·{' '}
+                  {{ active: 'Читаем', finished: 'Завершено', cancelled: 'Отменено' }[r.status]}
+                </p>
+              ))}
+          </details>
+        </>
+      ) : tab === 'progress' ? (
         <BookReaders bookId={id!} title={b.title} />
-      ) : tab === 'history' ? (
-        <div className="stack">
-          {readings.data
-            ?.filter((r) => r.book_id === id)
-            .map((r) => (
-              <div className="panel" key={r.id}>
-                {r.starts_on} — {r.ends_on || 'без даты окончания'} ·{' '}
-                {{ active: 'Читаем', finished: 'Завершено', cancelled: 'Отменено' }[r.status]}
-              </div>
-            ))}
-        </div>
       ) : (
-        <PublicContent type={tab as 'quotes' | 'reviews' | 'progress'} bookId={id} />
+        <PublicContent
+          type={tab as 'quotes' | 'reviews' | 'progress'}
+          bookId={id}
+          sort={tab === 'quotes' ? 'likes' : 'newest'}
+        />
       )}
+      {thought && <BookThoughtEditor book={b} onClose={() => setThought(false)} />}
     </CloudGate>
   );
 }

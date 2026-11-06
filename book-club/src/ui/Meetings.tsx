@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { meetingCountdown, meetingEnd } from '../collection';
+import { MeetingDiscussion } from './MeetingDiscussion';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, MapPin, Pencil, ExternalLink } from 'lucide-react';
-import { type Meeting, type ClubBook, uid } from '../domain';
+import {
+  type Meeting,
+  type ClubBook,
+  type MeetingQuestion,
+  type MeetingReflection,
+  uid,
+} from '../domain';
 import { action } from '../cloud';
 import { clubDateTime, clubInstant, type Attendance, type Participant } from '../calendar';
 import {
@@ -15,6 +23,7 @@ import {
   Empty,
   Loading,
   ErrorNote,
+  useClock,
 } from './shared';
 export const meetingDateLabel = (date: string) =>
   new Date(date).toLocaleString('ru-RU', {
@@ -224,11 +233,15 @@ export function MeetingCard({
   meeting: Meeting;
   compact?: boolean;
 }) {
+  const clock = useClock();
   const attend = useCloud<Attendance>('meeting_attendance');
   const people = useCloud<Participant>('meeting_participants');
   const { identity } = useSession();
   const [respond, setRespond] = useState(false);
   const [edit, setEdit] = useState(false);
+  const [discussion, setDiscussion] = useState<'questions' | 'reflections' | null>(null);
+  const questions = useCloud<MeetingQuestion>('meeting_questions');
+  const reflections = useCloud<MeetingReflection>('meeting_reflections');
   const answers = (attend.data || []).filter(
     (a) => a.meeting_id === m.id && a.schedule_version === (m.schedule_version || 1),
   );
@@ -236,7 +249,7 @@ export function MeetingCard({
   const old = attend.data?.find(
     (a) => a.meeting_id === m.id && a.member_id === identity?.id && !mine,
   );
-  const upcoming = !m.cancelled && Date.parse(m.starts_at) > Date.now();
+  const upcoming = !m.cancelled && Date.parse(m.starts_at) > clock;
   return (
     <article className={`meeting-card ${m.cancelled ? 'cancelled' : ''}`}>
       <div className="meeting-body">
@@ -254,6 +267,9 @@ export function MeetingCard({
         </div>
         <p>
           {meetingDateLabel(m.starts_at)} {m.cancelled && <span className="badge">Отменена</span>}
+        </p>
+        <p className="countdown" aria-live="off">
+          {meetingCountdown(m, clock)}
         </p>
         {m.place && (
           <p>
@@ -311,12 +327,33 @@ export function MeetingCard({
             })}
           </details>
         )}
+        <div className="actions discussion-links">
+          <button onClick={() => setDiscussion('questions')}>
+            Вопросы к встрече
+            {questions.data?.filter((q) => q.meeting_id === m.id).length
+              ? ` · ${questions.data.filter((q) => q.meeting_id === m.id).length}`
+              : ''}
+          </button>
+          <button onClick={() => setDiscussion('reflections')}>
+            Итоги встречи
+            {reflections.data?.filter((r) => r.meeting_id === m.id).length
+              ? ` · ${reflections.data.filter((r) => r.meeting_id === m.id).length}`
+              : ''}
+          </button>
+        </div>
         {compact && (
           <Link className="meeting-more" to="/meetings">
             Подробнее о встрече →
           </Link>
         )}
       </div>
+      {discussion && (
+        <MeetingDiscussion
+          meeting={m}
+          initialTab={discussion}
+          onClose={() => setDiscussion(null)}
+        />
+      )}
       {respond && (
         <ResponseEditor
           meeting={m}
@@ -329,15 +366,14 @@ export function MeetingCard({
   );
 }
 export function Meetings() {
+  const clock = useClock();
   const meetings = useCloud<Meeting>('meetings');
   const { identity } = useSession();
   const [edit, setEdit] = useState(false);
   const [past, setPast] = useState(false);
   const listed = (meetings.data || [])
     .filter((m) =>
-      past
-        ? m.cancelled || Date.parse(m.starts_at) <= Date.now()
-        : !m.cancelled && Date.parse(m.starts_at) > Date.now(),
+      past ? m.cancelled || meetingEnd(m) <= clock : !m.cancelled && meetingEnd(m) > clock,
     )
     .sort((a, b) =>
       past ? b.starts_at.localeCompare(a.starts_at) : a.starts_at.localeCompare(b.starts_at),

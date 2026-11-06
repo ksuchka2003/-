@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { getDB } from '../db';
+import { personalCounts } from '../collection';
+import { clubDay } from '../calendar';
+import { CollectionCounts } from './CollectionCounts';
 import { saveBook, deleteBook } from '../local';
 import {
   now,
@@ -233,6 +236,9 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
       },
   );
   const [pages, setPages] = useState(0);
+  const [chapter, setChapter] = useState('');
+  const [startedOn, setStartedOn] = useState('');
+  const [finishedOn, setFinishedOn] = useState('');
   const [review, setReview] = useState<Review>({
     bookId: value.id,
     rating: null,
@@ -247,7 +253,12 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
     if (book) {
       void getDB()
         .reading_progress.get(book.id)
-        .then((p) => setPages(p?.pages || 0));
+        .then((p) => {
+          setPages(p?.pages || 0);
+          setChapter(p?.chapter || '');
+          setStartedOn(p?.startedOn || '');
+          setFinishedOn(p?.finishedOn || '');
+        });
       void getDB()
         .personal_reviews.get(book.id)
         .then((r) => {
@@ -268,6 +279,11 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
                   pages,
                   { ...review, updatedAt: now() },
                   true,
+                  {
+                    chapter,
+                    startedOn: startedOn || undefined,
+                    finishedOn: finishedOn || undefined,
+                  },
                 ),
               'Книга сохранена',
             )
@@ -348,6 +364,39 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
               />
             </Field>
           </div>
+          <Field label="Текущая глава">
+            <input
+              maxLength={300}
+              value={chapter}
+              onChange={(e) => setChapter(e.target.value)}
+              placeholder="Например, глава 7"
+            />
+          </Field>
+          <details className="book-extra">
+            <summary>Когда читал(а) — необязательно</summary>
+            <div className="form-grid">
+              <Field label="Начал(а) читать">
+                <input
+                  type="date"
+                  max={clubDay()}
+                  value={startedOn}
+                  onChange={(e) => setStartedOn(e.target.value)}
+                />
+              </Field>
+              <Field label="Закончил(а) читать">
+                <input
+                  type="date"
+                  min={startedOn || undefined}
+                  max={clubDay()}
+                  value={finishedOn}
+                  onChange={(e) => setFinishedOn(e.target.value)}
+                />
+              </Field>
+            </div>
+            {value.clubBookId && (
+              <p className="muted">Эти даты используются в статистике чтения клуба.</p>
+            )}
+          </details>
           {identity && value.clubBookId && (
             <p className="muted">Прогресс этой книги виден участникам клуба.</p>
           )}
@@ -440,7 +489,8 @@ export function MyBooks() {
   const filtered = books
     .filter(
       (b) =>
-        (status === 'all' || b.status === status) &&
+        (status === 'all' ||
+          (status === 'unfinished' ? b.status !== 'finished' : b.status === status)) &&
         `${b.title} ${b.authors}`.toLowerCase().includes(q.toLowerCase()),
     )
     .sort((a, b) =>
@@ -459,7 +509,10 @@ export function MyBooks() {
         </button>
       </div>
       {books.length > 0 && (
-        <div className="toolbar">
+        <CollectionCounts counts={personalCounts(books)} selected={status} onSelect={setStatus} />
+      )}
+      {books.length > 0 && (
+        <div className="toolbar books-toolbar">
           <label className="search">
             <Search size={18} />
             <input
@@ -475,6 +528,7 @@ export function MyBooks() {
             onChange={(e) => setStatus(e.target.value)}
           >
             <option value="all">Все статусы</option>
+            <option value="unfinished">Не прочитано</option>
             {Object.entries(personalStatuses).map(([k, v]) => (
               <option value={k} key={k}>
                 {v}
@@ -491,9 +545,9 @@ export function MyBooks() {
         </div>
       )}
       {!filtered.length ? (
-        <Empty title={q ? 'Ничего не найдено' : 'Пока нет книг'} />
+        <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'} />
       ) : (
-        <div className="book-grid">
+        <div className="book-list">
           {filtered.map((b) => {
             const p = progress.find((x) => x.bookId === b.id)?.pages || 0;
             return (

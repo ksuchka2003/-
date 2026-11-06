@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Home, Club } from '../src/ui/Club';
 import { Profile } from '../src/ui/Profile';
-import { Members } from '../src/ui/Social';
+import { Members, PublicContent } from '../src/ui/Social';
 import { MyBooks } from '../src/ui/Books';
 import { Quotes } from '../src/ui/Quotes';
 import { Session } from '../src/ui/shared';
@@ -43,8 +43,25 @@ function view(
     'visible_reviews',
     'quote_likes',
     'visible_book_polls',
+    'club_quotes',
+    'club_reviews',
+    'club_book_stats',
+    'meeting_questions',
+    'meeting_reflections',
   ])
-    q.setQueryData(['cloud', owner, table], data[table] || []);
+    q.setQueryData(
+      ['cloud', owner, table],
+      data[table] ||
+        data[
+          (
+            { club_quotes: 'public_quotes', club_reviews: 'visible_reviews' } as Record<
+              string,
+              string
+            >
+          )[table]
+        ] ||
+        [],
+    );
   return render(
     <QueryClientProvider client={q}>
       <MemoryRouter>
@@ -58,14 +75,53 @@ function view(
   );
 }
 afterEach(cleanup);
-it('предложение книги доступно только во вкладке будущего чтения', () => {
+it('популярные цитаты сортируются по лайкам и раскрываются частями без потери фильтра книги', () => {
+  const b = book('Солярис', 'finished');
+  const rows = Array.from({ length: 26 }, (_, i) => ({
+    id: uid(),
+    member_id: owner,
+    book_id: b.id,
+    title: b.title,
+    text: `Мысль ${i}`,
+    page: null,
+    chapter: '',
+    comment: '',
+    updated_at: new Date(2026, 0, i + 1).toISOString(),
+  }));
+  const other = { ...rows[0], id: uid(), book_id: uid(), text: 'Из другой книги' };
+  view(<PublicContent type="quotes" bookId={b.id} sort="likes" />, {
+    club_quotes: [...rows, other],
+    quote_likes: [0, 1, 2].map(() => ({ quote_id: rows[0].id, member_id: uid() })),
+  });
+  expect(document.querySelector('blockquote')?.textContent).toBe('Мысль 0');
+  expect(document.querySelectorAll('blockquote')).toHaveLength(24);
+  expect(screen.queryByText('Из другой книги')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Показать ещё · 2' }));
+  expect(document.querySelectorAll('blockquote')).toHaveLength(26);
+  expect(screen.queryByRole('button', { name: /Показать ещё/ })).toBeNull();
+});
+it('в прогрессе видны все действующие участники, отсутствие отметки не превращается в ноль процентов', () => {
+  const b = book('Дюна', 'reading'),
+    reader = uid();
+  view(<Club />, {
+    club_books: [b],
+    meeting_participants: [{ member_id: reader, name: 'Мария' }],
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть прогресс: Дюна' }));
+  expect(screen.getByRole('button', { name: 'Чтение Мария: Дюна' })).toBeVisible();
+  expect(screen.getByText('Нет отметки о чтении')).toBeVisible();
+  expect(screen.queryByText(/0%/)).toBeNull();
+});
+it('предложения находятся во всех книгах, текущий раздел содержит только чтение', () => {
   view(<Club />);
   expect(screen.queryByRole('button', { name: 'Предложить книгу' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Будем читать' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Все книги/ }));
+  fireEvent.click(screen.getByText('Предложения и голосования', { exact: true }));
   expect(screen.getByRole('button', { name: 'Предложить книгу' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Прочитано' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Читаем/ }));
   expect(screen.queryByRole('button', { name: 'Предложить книгу' })).toBeNull();
 });
+
 it('главная показывает текущее чтение, ближайшую встречу и ссылки', () => {
   const current = book('Клубная книга', 'reading');
   view(<Home />, {
@@ -153,7 +209,7 @@ it('каталог разделён на текущие, будущие и пр�
     ],
   });
   expect(screen.getByRole('heading', { name: 'Читаем' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: /Будем читать/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Все книги/ }));
   expect(screen.getByRole('heading', { name: 'Будущая книга' })).toBeVisible();
   fireEvent.change(screen.getByRole('textbox', { name: 'Поиск книг клуба' }), {
     target: { value: 'нет такого' },
@@ -231,6 +287,7 @@ it('читатель в текущей книге открывает тольк�
       },
     ],
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть прогресс: Солярис' }));
   expect(screen.getByText('150 / 300 стр. · 50%')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Чтение Анна: Солярис' }));
   expect(screen.getByRole('dialog')).toBeVisible();

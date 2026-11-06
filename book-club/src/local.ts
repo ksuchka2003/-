@@ -1,4 +1,5 @@
 import { getDB } from './db';
+import { clubDay } from './calendar';
 import {
   bookSchema,
   quoteSchema,
@@ -132,6 +133,37 @@ export async function saveBook(
       );
       await db.personal_reviews.put(parsedReview);
       await enqueueBook(parsed, parsedReview, previous, explicitShare);
+    },
+  );
+}
+export async function changeBookStatus(id: string, status: Book['status']) {
+  const db = getDB();
+  await db.transaction(
+    'rw',
+    [db.personal_books, db.reading_progress, db.personal_reviews, db.sync_queue, db.settings],
+    async () => {
+      const book = await db.personal_books.get(id);
+      if (!book) throw new Error('Книга уже удалена');
+      if (book.status === status) return;
+      const p = await db.reading_progress.get(id),
+        r = (await db.personal_reviews.get(id)) || {
+          bookId: id,
+          rating: null,
+          text: '',
+          spoilers: false,
+          updatedAt: now(),
+        };
+      await saveBook(
+        { ...book, status, updatedAt: now() },
+        status === 'finished' ? book.totalPages : p?.pages || 0,
+        r,
+        false,
+        {
+          chapter: p?.chapter,
+          startedOn: p?.startedOn || (status === 'reading' ? clubDay() : undefined),
+          finishedOn: status === 'finished' ? p?.finishedOn || clubDay() : undefined,
+        },
+      );
     },
   );
 }

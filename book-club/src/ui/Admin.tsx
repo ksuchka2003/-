@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Settings2 } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
+import { currentClubBooks } from '../clubSelectors';
 import {
   type ClubBook,
   type Proposal,
@@ -10,7 +11,17 @@ import {
   clubStatuses,
 } from '../domain';
 import { action } from '../cloud';
-import { CloudGate, Field, Modal, useCloud, useSession, useTask, ErrorNote, Empty } from './shared';
+import {
+  CloudGate,
+  Field,
+  Modal,
+  useCloud,
+  useSession,
+  useTask,
+  ErrorNote,
+  Empty,
+  Cover,
+} from './shared';
 import { MetadataFields, BookLookup } from './Books';
 import type { BookPoll } from './Polls';
 function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) {
@@ -253,8 +264,9 @@ export function Admin() {
   const jobs = useCloud<{ id: string; status: string; kind: string; last_error: string }>(
     'notification_jobs',
   );
-  const group = useCloud<{ title: string; active: boolean }>('notification_chat');
   const [tab, setTab] = useState('books');
+  const [search, setSearch] = useState('');
+  const [pendingSelection, setPendingSelection] = useState<Record<string, boolean>>({});
   const [book, setBook] = useState<ClubBook | true | null>(null);
   const [reading, setReading] = useState<Reading | true | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -263,6 +275,34 @@ export function Admin() {
   const [bot, setBot] = useState<{ username: string; hasMainApp: boolean } | null>(null);
   const { run, busy, error } = useTask();
   const q = useQueryClient();
+  const current = new Set(
+    currentClubBooks(books.data || [], readings.data || []).map((x) => x.book.id),
+  );
+  const listed = (books.data || [])
+    .filter((b) =>
+      `${b.title} ${b.authors}`
+        .toLocaleLowerCase('ru')
+        .includes(search.trim().toLocaleLowerCase('ru')),
+    )
+    .sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+  const selectCurrent = async (bookId: string, active: boolean) => {
+    setPendingSelection((old) => ({ ...old, [bookId]: active }));
+    try {
+      return await run(
+        async () => {
+          await action('admin.current_book', { book_id: bookId, active });
+          await q.invalidateQueries({ queryKey: ['cloud'] });
+        },
+        active ? 'Книгу читаем сейчас' : 'Книга снята с главной',
+      );
+    } finally {
+      setPendingSelection((old) => {
+        const next = { ...old };
+        delete next[bookId];
+        return next;
+      });
+    }
+  };
   if (identity?.role !== 'admin')
     return (
       <CloudGate>
@@ -276,7 +316,6 @@ export function Admin() {
           <p className="eyebrow">УПРАВЛЕНИЕ КЛУБОМ</p>
           <h1>Панель администратора</h1>
         </div>
-        <Settings2 size={25} />
       </div>
       <div className="tabs">
         {[
@@ -300,14 +339,26 @@ export function Admin() {
           jobs.error?.message
         }
       />
+      {(tab === 'books' || tab === 'readings') && (
+        <label className="search admin-search">
+          <Search size={18} />
+          <input
+            aria-label="Поиск книг в управлении"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Название или автор"
+          />
+        </label>
+      )}
       {tab === 'books' && (
         <>
           <button className="primary" onClick={() => setBook(true)}>
             <Plus size={17} /> Добавить книгу
           </button>
           <div className="stack">
-            {books.data?.map((b) => (
-              <div className="proposal-row" key={b.id}>
+            {listed.map((b) => (
+              <div className="proposal-row admin-book-row" key={b.id}>
+                <Cover title={b.title} cover={b.cover} small />
                 <div>
                   <h3>{b.title}</h3>
                   <small>
@@ -322,32 +373,65 @@ export function Admin() {
       )}
       {tab === 'readings' && (
         <>
-          <p className="muted">
-            Можно выбрать несколько книг. Завершённые чтения сохраняются в истории.
-          </p>
-          <button className="primary" onClick={() => setReading(true)}>
-            Назначить главную книгу
-          </button>
-          <div className="stack">
-            {[...(readings.data || [])]
-              .sort((a, b) => a.position - b.position)
-              .map((r) => (
-                <div className="proposal-row" key={r.id}>
-                  <div>
-                    <h3>{books.data?.find((b) => b.id === r.book_id)?.title}</h3>
-                    <p>
-                      № {r.position} · {r.starts_on} → {r.ends_on || 'без даты'} ·{' '}
-                      {
-                        { active: 'Активна', finished: 'Завершена', cancelled: 'Отменена' }[
-                          r.status
-                        ]
+          <p className="muted">Отметьте книги, которые читаем сейчас. Можно выбрать несколько.</p>
+          <div className="stack admin-current-books">
+            {listed.map((b) => (
+              <article className="admin-current-book" key={b.id}>
+                <label className="current-book-choice">
+                  <input
+                    type="checkbox"
+                    aria-label={`Читаем сейчас: ${b.title}`}
+                    checked={pendingSelection[b.id] ?? current.has(b.id)}
+                    disabled={busy}
+                    onChange={(e) => void selectCurrent(b.id, e.target.checked)}
+                  />
+                  <Cover title={b.title} cover={b.cover} small />
+                  <span>
+                    <b>{b.title}</b>
+                    <small>{b.authors}</small>
+                    {b.id in pendingSelection && <small role="status">Сохраняем…</small>}
+                  </span>
+                </label>
+                {current.has(b.id) &&
+                  readings.data?.find((r) => r.book_id === b.id && r.status === 'active') && (
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        setReading(
+                          readings.data!.find((r) => r.book_id === b.id && r.status === 'active')!,
+                        )
                       }
-                    </p>
-                  </div>
-                  <button onClick={() => setReading(r)}>Изменить</button>
-                </div>
-              ))}
+                    >
+                      Даты и порядок
+                    </button>
+                  )}
+              </article>
+            ))}
           </div>
+          <details className="book-extra">
+            <summary>История чтения</summary>
+            <div className="stack">
+              {[...(readings.data || [])]
+                .filter((r) => r.status !== 'active')
+                .sort((a, b) => a.position - b.position)
+                .map((r) => (
+                  <div className="proposal-row" key={r.id}>
+                    <div>
+                      <h3>{books.data?.find((b) => b.id === r.book_id)?.title}</h3>
+                      <p>
+                        № {r.position} · {r.starts_on} → {r.ends_on || 'без даты'} ·{' '}
+                        {
+                          { active: 'Активна', finished: 'Завершена', cancelled: 'Отменена' }[
+                            r.status
+                          ]
+                        }
+                      </p>
+                    </div>
+                    <button onClick={() => setReading(r)}>Изменить</button>
+                  </div>
+                ))}
+            </div>
+          </details>
         </>
       )}
       {tab === 'proposals' && (
@@ -436,29 +520,7 @@ export function Admin() {
                 ))}
             </div>
           </section>
-          <section className="panel invitation-panel">
-            <h2>Клуб в Telegram-группе</h2>
-            <p className="muted">
-              Добавьте бота в группу. Команда /club покажет кнопку входа в приложение.
-            </p>
-            {bot ? (
-              <a
-                className="button"
-                href={`https://t.me/${bot.username}?startgroup=club`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Добавить бота в группу
-              </a>
-            ) : (
-              <button
-                disabled={busy}
-                onClick={() => void run(async () => setBot(await action('admin.telegram', {})), '')}
-              >
-                Получить ссылку для группы
-              </button>
-            )}
-          </section>
+
           <div className="stack">
             {members.data?.map((m) => (
               <div className="proposal-row" key={m.id}>
@@ -501,22 +563,15 @@ export function Admin() {
         <>
           <div className="soft-panel">
             <div>
-              <h2>Уведомления в группу</h2>
+              <h2>Уведомления в боте</h2>
               <p>
-                {group.data?.[0]?.active
-                  ? `Подключена группа «${group.data[0].title}»`
-                  : 'Группа ещё не подключена'}
-              </p>
-              <p>
-                Добавьте бота в группу и назначьте администратором. Со своего аккаунта
-                администратора клуба отправьте в группе <code>/connect_club</code>. Для отключения —{' '}
-                <code>/disconnect_club</code>.
+                Каждый участник получает сообщения в личном чате с ботом. Чтобы получать их, нужно
+                один раз открыть бота и нажать «Начать» или отправить <code>/start</code>.
               </p>
               <small>
                 Выбранные книги, встречи и напоминание за сутки. Отвечать о посещении в приложении
                 не нужно.
               </small>
-              <ErrorNote text={group.error?.message} />
             </div>
           </div>
           <p>

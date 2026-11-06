@@ -2,6 +2,94 @@ import { it, expect, vi, afterEach } from 'vitest';
 import { searchBooks } from '../src/bookSearch';
 import { normalizedIsbn, validIsbn } from '../supabase/functions/_shared/book-search';
 afterEach(() => vi.unstubAllGlobals());
+it('резервная статья о книге даёт название и обложку даже без издания Open Library', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockImplementation(async (url: string) => ({
+        ok: !url.includes('googleapis'),
+        json: async () =>
+          url.includes('wikipedia')
+            ? {
+                query: {
+                  pages: {
+                    '1': {
+                      title: 'Резервная книга',
+                      extract: '«Резервная книга» — роман писателя Ивана Петрова.',
+                      thumbnail: { source: 'https://upload.wikimedia.org/book.jpg' },
+                      langlinks: [{ lang: 'en', '*': 'Backup Novel' }],
+                    },
+                  },
+                },
+              }
+            : { docs: [] },
+      })),
+  );
+  const found = await searchBooks('Резервная книга');
+  expect(found[0]).toMatchObject({
+    title: 'Резервная книга',
+    authors: 'Ивана Петрова',
+    cover: 'https://upload.wikimedia.org/book.jpg',
+    description: '',
+  });
+});
+it('не предлагает портрет писателя как книгу из резервного поиска', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockImplementation(async (url: string) => ({
+        ok: !url.includes('googleapis'),
+        json: async () =>
+          url.includes('wikipedia')
+            ? {
+                query: {
+                  pages: {
+                    '1': {
+                      title: 'Писатель',
+                      extract: 'Иван Петров — писатель и переводчик.',
+                      thumbnail: { source: 'https://upload.wikimedia.org/portrait.jpg' },
+                      langlinks: [{ lang: 'en', '*': 'Ivan Petrov' }],
+                    },
+                  },
+                },
+              }
+            : { docs: [] },
+      })),
+  );
+  await expect(searchBooks('Писатель Петров тест')).rejects.toThrow('совпадений нет');
+});
+it('находит русскую книгу по оригинальному названию, если основной поиск пуст и Google ограничен', async () => {
+  const fetcher = vi.fn().mockImplementation(async (url: string) => ({
+    ok: !url.includes('googleapis'),
+    json: async () =>
+      url.includes('wikipedia')
+        ? {
+            query: {
+              pages: {
+                '1': {
+                  title: 'Повелитель мух',
+                  index: 1,
+                  langlinks: [{ lang: 'en', '*': 'Lord of the Flies' }],
+                },
+              },
+            },
+          }
+        : url.includes('Lord+of+the+Flies')
+          ? {
+              docs: [
+                { title: 'Lord of the Flies', author_name: ['William Golding'], cover_i: 123 },
+              ],
+            }
+          : { docs: [] },
+  }));
+  vi.stubGlobal('fetch', fetcher);
+  const found = await searchBooks('Повелитель мух');
+  expect(found[0].title).toBe('Повелитель мух');
+  expect(found[0].cover).toContain('/123-L.jpg');
+  expect(fetcher.mock.calls.some(([url]) => url.includes('wikipedia'))).toBe(true);
+});
 it('позволяет продолжить поиск при отказе одного API и кеширует результат', async () => {
   const fetcher = vi
     .fn()

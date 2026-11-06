@@ -1,6 +1,13 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { getDB, openLibrary, purgeTrash } from '../src/db';
-import { saveBook, saveQuote, trashQuote, restoreQuote, copyPublicQuote } from '../src/local';
+import {
+  saveBook,
+  saveQuote,
+  trashQuote,
+  restoreQuote,
+  copyPublicQuote,
+  changeBookStatus,
+} from '../src/local';
 import { exportBackup, importBackup } from '../src/backup';
 import { now, uid, percent, type Book } from '../src/domain';
 const book = (): Book => ({
@@ -40,6 +47,32 @@ it('личная обложка входит в резервную копию, �
   expect((await getDB().personal_books.get(b.id))?.coverData).toBe(b.coverData);
 });
 describe('личные данные', () => {
+  it('быстрая смена статуса сохраняет заметки, оценку и главу, завершение ставит полный прогресс', async () => {
+    const b = book(),
+      review = {
+        bookId: b.id,
+        rating: 9,
+        text: 'Приватный отзыв',
+        spoilers: true,
+        updatedAt: now(),
+      };
+    await saveBook(b, 200, review, false, { chapter: 'Глава 7', startedOn: '2026-01-01' });
+    await changeBookStatus(b.id, 'finished');
+    expect(await getDB().personal_books.get(b.id)).toMatchObject({
+      status: 'finished',
+      notes: b.notes,
+      publishReview: false,
+    });
+    expect(await getDB().reading_progress.get(b.id)).toMatchObject({
+      pages: 480,
+      chapter: 'Глава 7',
+      startedOn: '2026-01-01',
+    });
+    expect(await getDB().personal_reviews.get(b.id)).toEqual(review);
+    await changeBookStatus(b.id, 'paused');
+    expect((await getDB().reading_progress.get(b.id))?.finishedOn).toBeUndefined();
+    expect((await getDB().reading_progress.get(b.id))?.pages).toBe(480);
+  });
   it('сохраняет издание и считает прогресс', async () => {
     const b = book();
     await saveBook(b, 200, {

@@ -14,6 +14,7 @@ import { action } from '../cloud';
 import { quoteBookKey } from '../collection';
 import { copyPublicQuote } from '../local';
 import { RatingStars } from './RatingStars';
+import { ReadingAwards } from './ReadingAwards';
 import {
   useCloud,
   CloudGate,
@@ -265,6 +266,7 @@ export function Members() {
                 <Avatar profile={p} />
                 <div className="member-summary">
                   <h3>{p.name}</h3>
+                  <ReadingAwards memberId={p.member_id} />
                   {p.username && <small>@{p.username}</small>}
                   {p.bio && <p>{p.bio}</p>}
                 </div>
@@ -307,6 +309,7 @@ export function MemberDetail() {
         <Avatar profile={p} />
         <div>
           <h1>{p.name}</h1>
+          <ReadingAwards memberId={p.member_id} />
           {p.username && <p>@{p.username}</p>}
           {p.bio && <p>{p.bio}</p>}
           {p.genres && <p className="muted">{p.genres}</p>}

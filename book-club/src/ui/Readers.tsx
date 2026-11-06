@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { type Profile, type PublicProgress, percent, personalStatuses } from '../domain';
 import { Avatar, PublicContent } from './Social';
 import { useCloud, Modal, ErrorNote, Loading, Cover } from './shared';
+import { ReadingAwards } from './ReadingAwards';
 export function BookReaders({ bookId, title }: { bookId: string; title: string }) {
   const progress = useCloud<PublicProgress>('visible_progress');
   const people = useCloud<Profile>('member_profiles');
@@ -58,6 +59,7 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
                 {p?.cover && <Cover small title={title} cover={p.cover} />}
                 <span className="reader-body">
                   <b>{person.name}</b>
+                  <ReadingAwards memberId={person.member_id} bookId={bookId} />
                   <small>{p ? personalStatuses[p.status] : 'Нет отметки о чтении'}</small>
                   {p && <small>{p.chapter ? `Глава: ${p.chapter}` : 'Глава не указана'}</small>}
                   {known && p ? (

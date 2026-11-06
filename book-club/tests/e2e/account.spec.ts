@@ -156,6 +156,23 @@ function backend() {
             else rows.push(record);
           }
           body = { ok: true };
+        } else if (input.action === 'admin.current_book') {
+          const b = (extra.club_books as any[])?.find((b) => b.id === input.data.book_id);
+          if (b) b.status = input.data.active ? 'reading' : 'planned';
+          const rs = (extra.club_readings ||= []) as any[];
+          const active = rs.find((r) => r.book_id === input.data.book_id && r.status === 'active');
+          if (input.data.active && !active)
+            rs.push({
+              id: crypto.randomUUID(),
+              book_id: input.data.book_id,
+              starts_on: clubDay(),
+              ends_on: null,
+              position: rs.length,
+              status: 'active',
+            });
+          if (!input.data.active && active) active.status = 'cancelled';
+          publications.push(input);
+          body = { ok: true };
         } else if (input.action === 'availability') {
           if (failAvailability)
             return route.fulfill({
@@ -369,6 +386,90 @@ test('ошибка авторизации видна, локальный реж�
   await expect(page.locator('.connection-bar')).toContainText('Только на этом устройстве');
 });
 
+test('экран загрузки рассказывает о клубе и уступает место главной после входа', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  let release!: () => void;
+  const hold = new Promise<void>((r) => (release = r));
+  await context.route('**/functions/v1/telegram-auth', async (route) => {
+    if (route.request().method() === 'POST') await hold;
+    await route.fallback();
+  });
+  try {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Между строк', exact: true })).toBeVisible();
+    await expect(page.getByText(/который зародился в Санкт-Петербурге/)).toBeVisible();
+    await page.screenshot({ path: '../../work/club-intro-mobile.png', fullPage: true });
+  } finally {
+    release();
+  }
+  await expect(page.getByRole('heading', { name: 'Читаем сейчас', exact: true })).toBeVisible();
+  await expect(page.locator('.club-intro')).toHaveCount(0);
+});
+
+test('администратор ищет книги и выбирает несколько главных галочками на узком экране', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    a = '20000000-0000-4000-8000-000000000011',
+    b = '20000000-0000-4000-8000-000000000012';
+  api.extra.club_books = [
+    {
+      id: a,
+      title: 'Длинное название книги для проверки аккуратной мобильной вёрстки',
+      authors: 'Автор с длинным именем',
+      cover: '',
+      status: 'planned',
+      default_pages: 200,
+    },
+    {
+      id: b,
+      title: 'Вторая книга',
+      authors: 'Другой автор',
+      cover: '',
+      status: 'planned',
+      default_pages: 300,
+    },
+  ];
+  await api.connect(context);
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto('/#/admin');
+  await page.getByRole('button', { name: 'Главные книги', exact: true }).click();
+  await page.getByLabel('Поиск книг в управлении').fill('Длинное');
+  await expect(page.locator('.current-book-choice')).toHaveCount(1);
+  await page.getByRole('checkbox', { name: /Читаем сейчас: Длинное/ }).check();
+  await expect(page.getByRole('checkbox', { name: /Читаем сейчас: Длинное/ })).toBeChecked();
+  await page.getByLabel('Поиск книг в управлении').fill('');
+  await page.getByRole('checkbox', { name: 'Читаем сейчас: Вторая книга', exact: true }).check();
+  await expect(page.locator('.current-book-choice input:checked')).toHaveCount(2);
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.screenshot({ path: '../../work/admin-book-checkboxes.png', fullPage: true });
+  await page.getByRole('checkbox', { name: 'Читаем сейчас: Вторая книга', exact: true }).uncheck();
+  await expect(
+    page.getByRole('checkbox', { name: 'Читаем сейчас: Вторая книга', exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole('button', { name: 'Каталог', exact: true }).click();
+  await page.getByLabel('Поиск книг в управлении').fill('Длинное');
+  await expect(page.locator('.admin-book-row')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Изменить', exact: true }).click();
+  const form = page.getByRole('dialog');
+  await expect(form.getByLabel('ISBN', { exact: true })).toHaveCount(0);
+  await expect(form.getByLabel('Обложка (HTTPS-ссылка)')).toHaveCount(0);
+  expect(await form.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await form.getByRole('button', { name: 'Назад', exact: true }).click();
+  expect(api.publications.filter((p) => p.action === 'admin.current_book')).toHaveLength(3);
+});
+
 test('главная открывается до завершения синхронизации личной библиотеки', async ({
   page,
   context,
@@ -398,10 +499,7 @@ test('главная открывается до завершения синхр
   }
 });
 
-test('обложка из интернета меняет только личную картинку, ошибка поиска допускает ссылку', async ({
-  page,
-  context,
-}) => {
+test('поиск обложки сохраняет только картинку, ошибки поиска видны', async ({ page, context }) => {
   const api = backend();
   await api.connect(context);
   let fail = false;
@@ -447,15 +545,7 @@ test('обложка из интернета меняет только личн�
   await dialog.getByLabel('Поиск обложки').fill('Неизвестное издание');
   await dialog.getByRole('button', { name: 'Найти обложки', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('Поиск временно недоступен');
-  await dialog.getByLabel('Ссылка на картинку').fill('http://covers.example/unsafe.jpg');
-  await dialog.getByRole('button', { name: 'Использовать ссылку', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('HTTPS');
-  await dialog.getByLabel('Ссылка на картинку').fill('https://covers.example/my.jpg');
-  await dialog.getByRole('button', { name: 'Использовать ссылку', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
-  await expect
-    .poll(() => [...api.records.values()].find((r) => r.kind === 'book')?.payload?.cover)
-    .toBe('https://covers.example/my.jpg');
+  await expect(dialog.getByLabel('Ссылка на картинку')).toHaveCount(0);
 });
 
 test('встреча администратора видна на главной, содержит место и ссылку без голосования о посещении', async ({
@@ -529,8 +619,8 @@ test('прогресс текущей книги открывает публик
       book_id: id,
       member_id: reader,
       title: 'Солярис',
-      status: 'reading',
-      pages: 150,
+      status: 'finished',
+      pages: 300,
       total_pages: 300,
       updated_at: new Date().toISOString(),
     },
@@ -568,10 +658,14 @@ test('прогресс текущей книги открывает публик
       updated_at: new Date().toISOString(),
     },
   ];
+  api.extra.club_reading_awards = [
+    { id: 'award-first', book_id: id, member_id: reader, kind: 'first' },
+  ];
   await api.connect(context);
   await page.goto('/#/club');
   await page.getByRole('button', { name: 'Открыть прогресс: Солярис' }).click();
-  await expect(page.getByText('150 / 300 стр. · 50%', { exact: true })).toBeVisible();
+  await expect(page.getByText('300 / 300 стр. · 100%', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Первый финиш: Солярис', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 760 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/club-readers-mobile.png', fullPage: true });

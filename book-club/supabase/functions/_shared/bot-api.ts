@@ -24,15 +24,13 @@ export async function installBot() {
   await telegram('setWebhook', {
     url: ownUrl,
     secret_token: secret,
-    allowed_updates: ['message', 'my_chat_member'],
+    allowed_updates: ['message'],
     drop_pending_updates: false,
   });
   await telegram('setMyCommands', {
     commands: [
       { command: 'club', description: 'Открыть книжный клуб' },
       { command: 'start', description: 'Начать' },
-      { command: 'connect_club', description: 'Подключить уведомления в этой группе' },
-      { command: 'disconnect_club', description: 'Отключить уведомления в этой группе' },
     ],
   });
   const appUrl = new URL(Deno.env.get('TELEGRAM_APP_URL')!);

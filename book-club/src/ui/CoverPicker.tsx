@@ -4,7 +4,7 @@ import { prepareCover } from '../covers';
 import { message, type Metadata } from '../domain';
 import { searchBooks } from '../bookSearch';
 import { Cover, ErrorNote, Field } from './shared';
-function InternetCover({
+export function InternetCover({
   title,
   authors,
   onSelect,
@@ -14,7 +14,6 @@ function InternetCover({
   onSelect: (url: string) => void;
 }) {
   const [q, setQ] = useState(title),
-    [url, setUrl] = useState(''),
     [items, setItems] = useState<Metadata[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -82,34 +81,9 @@ function InternetCover({
       </div>
       {searched && !items.length && (
         <p className="muted">
-          Обложки не найдены. Попробуйте другое название или вставьте ссылку на картинку.
+          Обложки не найдены. Попробуйте другое название или выберите картинку с устройства.
         </p>
       )}
-      <Field label="Ссылка на картинку">
-        <input
-          type="url"
-          value={url}
-          placeholder="https://…"
-          maxLength={2048}
-          onChange={(e) => setUrl(e.target.value)}
-        />
-      </Field>
-      <button
-        type="button"
-        disabled={!url.trim()}
-        onClick={() => {
-          try {
-            const parsed = new URL(url.trim());
-            if (parsed.protocol !== 'https:') throw new Error();
-            onSelect(parsed.href);
-            setError('');
-          } catch {
-            setError('Нужна полная HTTPS-ссылка на картинку.');
-          }
-        }}
-      >
-        Использовать ссылку
-      </button>
       <ErrorNote text={error} />
     </div>
   );

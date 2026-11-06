@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal, Trash2, ChevronDown } from 'lucide-react';
 import { getDB } from '../db';
 import { personalCounts } from '../collection';
 import { clubDay } from '../calendar';
 import { CollectionCounts } from './CollectionCounts';
-import { saveBook, deleteBook } from '../local';
+import { saveBook, deleteBook, changeBookStatus } from '../local';
 import { bookCover } from '../covers';
-import { CoverPicker } from './CoverPicker';
+import { CoverPicker, InternetCover } from './CoverPicker';
 import { RatingStars } from './RatingStars';
 import { ReadingStatus } from './ReadingStatus';
 import {
@@ -20,7 +20,7 @@ import {
   type Review,
   type ClubBook,
 } from '../domain';
-import { searchBooks, normalizedIsbn } from '../bookSearch';
+import { searchBooks } from '../bookSearch';
 import { Modal, Field, Empty, Cover, useTask, ErrorNote, useSession, useCloud } from './shared';
 const blank = (): Metadata => ({
   title: '',
@@ -73,23 +73,20 @@ export function MetadataFields({
             onChange={(e) => set('year', e.target.value ? Number(e.target.value) : null)}
           />
         </Field>
-        <Field label="ISBN">
-          <input
-            maxLength={30}
-            value={value.isbn}
-            onChange={(e) => set('isbn', e.target.value)}
-            onBlur={() => set('isbn', normalizedIsbn(value.isbn) || value.isbn.trim())}
-          />
-        </Field>
       </div>
-      <Field label="Обложка (HTTPS-ссылка)">
-        <input
-          type="url"
-          pattern="https://.*"
-          value={value.cover}
-          onChange={(e) => set('cover', e.target.value)}
-        />
-      </Field>
+      {!compact && (
+        <div className="edition-cover">
+          <Cover title={value.title || 'Книга'} cover={value.cover} small />
+          <details>
+            <summary>Обложки из интернета</summary>
+            <InternetCover
+              title={value.title}
+              authors={value.authors}
+              onSelect={(url) => set('cover', url)}
+            />
+          </details>
+        </div>
+      )}
       <Field label="Описание">
         <textarea
           rows={3}
@@ -169,10 +166,10 @@ export function BookLookup({ onSelect }: { onSelect: (b: Metadata) => void }) {
   }, [q, retry]);
   return (
     <section className="lookup">
-      <Field label="Поиск книги по названию, автору или ISBN">
+      <Field label="Поиск книги в интернете">
         <input
           value={q}
-          placeholder="Название, автор или ISBN"
+          placeholder="Название или автор"
           maxLength={200}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -193,11 +190,11 @@ export function BookLookup({ onSelect }: { onSelect: (b: Metadata) => void }) {
         Найти
       </button>
       <ErrorNote text={error} />
-      {busy && <p className="muted">Ищем в Google Books и Open Library…</p>}
+      {busy && <p className="muted">Ищем книги…</p>}
       {searched && !busy && !results.length && (
         <p className="hint" role="status">
-          В доступных каталогах книга не найдена. Попробуйте название или заполните поля ниже — ISBN
-          можно сохранить вручную.
+          Книга не найдена. Попробуйте другое название или автора. Можно добавить книгу вручную
+          ниже.
         </p>
       )}
       <div className="lookup-results">
@@ -495,6 +492,26 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
     </Modal>
   );
 }
+function QuickReadingStatus({ book, onClose }: { book: Book; onClose: () => void }) {
+  const { run, busy, error } = useTask();
+  return (
+    <Modal title="Статус чтения" onClose={onClose}>
+      <h3>{book.title}</h3>
+      <fieldset disabled={busy} className="status-fieldset">
+        <ReadingStatus
+          value={book.status}
+          onChange={(status) => {
+            if (status !== 'all' && status !== 'unfinished')
+              void run(() => changeBookStatus(book.id, status), 'Статус сохранён').then((ok) => {
+                if (ok) onClose();
+              });
+          }}
+        />
+      </fieldset>
+      <ErrorNote text={error} />
+    </Modal>
+  );
+}
 export function MyBooks() {
   const catalog = useCloud<ClubBook>('club_books');
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
@@ -503,6 +520,7 @@ export function MyBooks() {
   const [status, setStatus] = useState('all');
   const [sort, setSort] = useState('updated');
   const [edit, setEdit] = useState<Book | true | null>(null);
+  const [quick, setQuick] = useState<Book | null>(null);
   const filtered = books
     .filter(
       (b) =>
@@ -556,36 +574,52 @@ export function MyBooks() {
           {filtered.map((b) => {
             const p = progress.find((x) => x.bookId === b.id)?.pages || 0;
             return (
-              <button className="book-card" key={b.id} onClick={() => setEdit(b)}>
-                <Cover
-                  cover={bookCover(b, catalog.data?.find((c) => c.id === b.clubBookId)?.cover)}
-                  title={b.title}
-                />
+              <article className="book-card personal-book-card" key={b.id}>
+                <button
+                  className="cover-open"
+                  aria-label={`Открыть книгу: ${b.title}`}
+                  onClick={() => setEdit(b)}
+                >
+                  <Cover
+                    cover={bookCover(b, catalog.data?.find((c) => c.id === b.clubBookId)?.cover)}
+                    title={b.title}
+                  />
+                </button>
                 <div>
-                  <span className={`badge ${b.status}`}>{personalStatuses[b.status]}</span>
-                  <h3>{b.title}</h3>
-                  <p>{b.authors || 'Автор не указан'}</p>
-                  {b.totalPages > 0 && (
-                    <div className="progress">
-                      <i style={{ width: `${percent(p, b.totalPages)}%` }} />
-                    </div>
-                  )}
-                  <small>
-                    {b.totalPages > 0 ? (
-                      <>
-                        {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
-                      </>
-                    ) : (
-                      'Количество страниц не указано'
+                  <button
+                    className={`badge quick-status ${b.status}`}
+                    aria-label={`Изменить статус: ${b.title}`}
+                    onClick={() => setQuick(b)}
+                  >
+                    {personalStatuses[b.status]}
+                    <ChevronDown size={14} />
+                  </button>
+                  <button className="personal-book-open" onClick={() => setEdit(b)}>
+                    <h3>{b.title}</h3>
+                    <p>{b.authors || 'Автор не указан'}</p>
+                    {b.totalPages > 0 && (
+                      <div className="progress">
+                        <i style={{ width: `${percent(p, b.totalPages)}%` }} />
+                      </div>
                     )}
-                  </small>
+                    <small>
+                      {b.totalPages > 0 ? (
+                        <>
+                          {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
+                        </>
+                      ) : (
+                        'Количество страниц не указано'
+                      )}
+                    </small>
+                  </button>
                 </div>
-              </button>
+              </article>
             );
           })}
         </div>
       )}
       {edit && <BookEditor book={edit === true ? undefined : edit} onClose={() => setEdit(null)} />}
+      {quick && <QuickReadingStatus book={quick} onClose={() => setQuick(null)} />}
     </>
   );
 }

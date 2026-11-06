@@ -34,15 +34,20 @@ Deno.serve(
             .eq('status', 'processing'),
         );
       try {
-        const group = checked(
-          await db.from('notification_chat').select('*').eq('active', true).maybeSingle(),
+        // Group jobs remain historical and are never sent by this worker.
+        if (job.chat_id || !job.member_id) {
+          await finish({ status: 'skipped' });
+          continue;
+        }
+        const member = checked(
+          await db
+            .from('club_members')
+            .select('telegram_id,active')
+            .eq('id', job.member_id)
+            .maybeSingle(),
         );
-        if (
-          !job.chat_id ||
-          !group ||
-          group.chat_id !== job.chat_id ||
-          group.generation !== job.chat_generation
-        ) {
+        const chatId = Number(member?.telegram_id);
+        if (!member?.active || !Number.isSafeInteger(chatId) || chatId <= 0) {
           await finish({ status: 'skipped' });
           continue;
         }
@@ -78,7 +83,7 @@ Deno.serve(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              chat_id: job.chat_id,
+              chat_id: chatId,
               text,
               link_preview_options: { is_disabled: true },
             }),
@@ -87,20 +92,10 @@ Deno.serve(
         );
         const result = await response.json();
         if (!response.ok || !result.ok) {
-          if (result.parameters?.migrate_to_chat_id) {
-            checked(
-              await db.rpc('migrate_notification_chat', {
-                p_old: job.chat_id,
-                p_new: result.parameters.migrate_to_chat_id,
-              }),
-            );
-            await finish({ status: 'pending', run_at: new Date().toISOString() });
-            continue;
-          }
           if (response.status === 403) {
             await finish({
               status: 'failed',
-              last_error: 'Бот удалён из группы или ему запрещена отправка сообщений',
+              last_error: 'Участник ещё не нажал /start у бота или заблокировал его',
             });
             continue;
           }

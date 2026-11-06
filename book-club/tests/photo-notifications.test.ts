@@ -1,22 +1,9 @@
 import { it, expect } from 'vitest';
-import { cleanOcrText, validatePhoto } from '../src/ocr';
 import {
   shouldNotify,
   meetingNotificationText,
   selectedBookText,
 } from '../supabase/functions/_shared/meeting-notifications';
-it('проверяет размер и формат фотографии, убирает переносы строк внутри слова', () => {
-  expect(() => validatePhoto(new File(['a'], 'photo.heic', { type: 'image/heic' }))).toThrow('JPG');
-  expect(() => validatePhoto(new File([], 'empty.jpg', { type: 'image/jpeg' }))).toThrow('пуста');
-  expect(() =>
-    validatePhoto(
-      new File([new Uint8Array(16 * 1024 * 1024)], 'large.jpg', { type: 'image/jpeg' }),
-    ),
-  ).toThrow('15 МБ');
-  expect(cleanOcrText('  Тихая биб-\nлиотека\n\n\nждёт читателей. ')).toBe(
-    'Тихая библиотека\n\nждёт читателей.',
-  );
-});
 const now = Date.parse('2030-04-10T10:00:00Z');
 const m = {
   title: 'Встреча',

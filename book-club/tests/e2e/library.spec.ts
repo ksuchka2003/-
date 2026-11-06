@@ -19,7 +19,7 @@ async function addBook(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.route('https://telegram.org/**', (route) => route.abort());
 });
-test('узкий экран: поиск ISBN по Enter, форма без переполнения и меню разделов', async ({
+test('узкий экран: поиск названия по Enter, форма без переполнения и меню разделов', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
@@ -43,14 +43,15 @@ test('узкий экран: поиск ISBN по Enter, форма без пе�
   await page.goto('/#/books');
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  const lookup = dialog.getByLabel('Поиск книги по названию, автору или ISBN');
-  await lookup.fill('536700198Х');
+  const lookup = dialog.getByLabel('Поиск книги в интернете');
+  await lookup.fill('Найденное издание');
   await lookup.press('Enter');
   await expect(dialog.locator('.lookup-results button')).toHaveCount(1);
   await dialog.locator('.lookup-results button').click();
   await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Найденное издание');
   await dialog.getByText('Данные издания — необязательно', { exact: true }).click();
-  await expect(dialog.getByLabel('ISBN', { exact: true })).toHaveValue('536700198X');
+  await expect(dialog.getByLabel('ISBN', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('Обложка (HTTPS-ссылка)')).toHaveCount(0);
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
   await page.getByRole('button', { name: 'Ещё', exact: true }).click();
@@ -80,6 +81,25 @@ test('книга: добавление, редактирование, сохра
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: 'Удалить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Пока нет книг' })).toBeVisible();
+});
+
+test('статус меняется с карточки без полной формы, завершение обновляет страницы', async ({
+  page,
+}) => {
+  await addBook(page);
+  await page.getByRole('button', { name: 'Изменить статус: Дюна', exact: true }).click();
+  const menu = page.getByRole('dialog', { name: 'Статус чтения', exact: true });
+  await expect(menu.getByLabel('Название', { exact: true })).toHaveCount(0);
+  await menu.getByRole('button', { name: 'Прочитано', exact: true }).click();
+  await expect(menu).not.toBeVisible();
+  await expect(page.locator('.personal-book-card')).toContainText('480 из 480');
+  await expect(page.locator('.personal-book-card')).toContainText('100%');
+  await page.reload();
+  await expect(page.locator('.quick-status')).toHaveText(/Прочитано/);
+  await page.getByRole('button', { name: 'Изменить статус: Дюна', exact: true }).click();
+  await menu.getByRole('button', { name: 'Отложено', exact: true }).click();
+  await expect(menu).not.toBeVisible();
+  await expect(page.locator('.quick-status')).toHaveText(/Отложено/);
 });
 test('цитаты: создание, избранное, корзина и восстановление', async ({ page }) => {
   await addBook(page);
@@ -156,57 +176,18 @@ test('светлая и тёмная темы, мобильная ширина �
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
-test('новая книга сохраняется только с названием; цитата создаётся с фото без предварительного добавления книги', async ({
-  page,
-}) => {
-  test.setTimeout(120000);
+test('книга с одним названием и обычная текстовая цитата без фото', async ({ page }) => {
   await page.goto('/#/books');
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
-  await expect(page.getByLabel('Страниц в моём издании')).not.toBeVisible();
-  await expect(page.getByLabel('Мой отзыв')).not.toBeVisible();
   await page.getByLabel('Название', { exact: true }).fill('Минимальная книга');
-  await page.screenshot({ path: '../../work/simple-book-form.png', fullPage: true });
   await page.getByRole('button', { name: 'Сохранить книгу' }).click();
   await expect(page.getByRole('heading', { name: 'Минимальная книга' })).toBeVisible();
   await page.goto('/#/quotes');
+  await expect(page.getByRole('button', { name: /С фото|Добавить цитату с фото/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
-  await page.getByLabel('Название книги', { exact: true }).fill('Книга с фотографии');
-  const png = await page.evaluate(() => {
-    const c = document.createElement('canvas');
-    c.width = 3000;
-    c.height = 560;
-    const ctx = c.getContext('2d')!;
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = 'black';
-    ctx.font = '96px Georgia';
-    ctx.fillText('Книжный клуб читает вместе.', 120, 200);
-    ctx.fillText('Истории объединяют людей.', 120, 360);
-    return c.toDataURL('image/png').split(',')[1];
-  });
-  const thirdParty: string[] = [];
-  page.on('request', (r) => {
-    if (
-      r.url().startsWith('http') &&
-      !r.url().startsWith('http://127.0.0.1') &&
-      !r.url().includes('telegram.org')
-    )
-      thirdParty.push(r.url());
-  });
-  await page.getByLabel('Выбрать фото цитаты').setInputFiles({
-    name: 'quote.png',
-    mimeType: 'image/png',
-    buffer: Buffer.from(png, 'base64'),
-  });
-  await page.getByRole('button', { name: 'Распознать текст', exact: true }).click();
-  await expect(page.getByLabel('Текст цитаты')).toHaveValue(/Книжный клуб читает вместе/, {
-    timeout: 90000,
-  });
-  await expect(page.getByLabel('Текст цитаты')).toHaveValue(/Истории объединяют людей/);
+  await page.getByLabel('Название книги', { exact: true }).fill('Текстовая книга');
+  await expect(page.getByRole('dialog').locator('input[type=file]')).toHaveCount(0);
+  await page.getByLabel('Текст цитаты').fill('Истории объединяют людей.');
   await page.getByRole('button', { name: 'Сохранить цитату' }).click();
-  await expect(
-    page.locator('.quote-source').filter({ hasText: 'Книга с фотографии' }),
-  ).toBeVisible();
-  await expect(page.getByText('Книжный клуб читает вместе.', { exact: false })).toBeVisible();
-  expect(thirdParty).toEqual([]);
+  await expect(page.getByText('Истории объединяют людей.', { exact: true })).toBeVisible();
 });

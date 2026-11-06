@@ -1,9 +1,15 @@
 import type { Book } from './domain';
-import { validatePhoto } from './ocr';
+export function validateCover(file: File) {
+  if (!/^image\/(jpeg|png|webp|bmp)$/i.test(file.type))
+    throw new Error('Выберите обложку JPG, PNG или WebP.');
+  if (!file.size) throw new Error('Картинка пуста');
+  if (file.size > 15 * 1024 * 1024)
+    throw new Error('Картинка больше 15 МБ. Выберите меньший файл.');
+}
 export const bookCover = (book: Pick<Book, 'cover' | 'coverData'> | undefined, fallback = '') =>
   book?.coverData || book?.cover || fallback;
 export async function prepareCover(file: File): Promise<string> {
-  validatePhoto(file);
+  validateCover(file);
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();

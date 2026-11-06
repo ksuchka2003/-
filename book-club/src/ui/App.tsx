@@ -23,7 +23,8 @@ import { setSyncScope } from '../local';
 import { accountSync } from '../accountSync';
 import type { LibrarySyncState } from '../privateTypes';
 import { message } from '../domain';
-import { Session, Loading, Modal, BackLink } from './shared';
+import { Session, Modal, BackLink } from './shared';
+import { ClubIntro } from './ClubIntro';
 import { Home, Club, ClubDetail } from './Club';
 import { MyBooks } from './Books';
 import { Quotes } from './Quotes';
@@ -375,14 +376,7 @@ function Bootstrap() {
         <small>В локальном режиме данные доступны только на этом устройстве.</small>
       </main>
     );
-  return ready ? (
-    <Shell identity={identity} error={error} onRetry={retry} />
-  ) : (
-    <main className="startup-screen">
-      <h1>Книжный клуб</h1>
-      <Loading />
-    </main>
-  );
+  return ready ? <Shell identity={identity} error={error} onRetry={retry} /> : <ClubIntro />;
 }
 export function App() {
   return (

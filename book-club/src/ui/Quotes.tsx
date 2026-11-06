@@ -5,7 +5,6 @@ import { resolveQuoteBook } from '../quoteBooks';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Plus,
-  Camera,
   Heart,
   Star,
   Copy,
@@ -29,17 +28,8 @@ import {
   useCloud,
 } from './shared';
 import { PublicContent } from './Social';
-import { PhotoQuote } from './PhotoQuote';
 import { QuoteBookPicker } from './QuoteBookPicker';
-function QuoteEditor({
-  quote,
-  onClose,
-  startWithCamera = false,
-}: {
-  quote?: Quote;
-  onClose: () => void;
-  startWithCamera?: boolean;
-}) {
+function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void }) {
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const { identity } = useSession();
   const catalog = useCloud<ClubBook>('club_books');
@@ -62,7 +52,6 @@ function QuoteEditor({
     },
   );
   const { run, busy, error } = useTask();
-  const [recognizing, setRecognizing] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newBookId] = useState(uid);
   useEffect(() => {
@@ -76,7 +65,6 @@ function QuoteEditor({
       <form
         onSubmit={async (e) => {
           e.preventDefault();
-          if (recognizing) return;
           if (
             await run(async () => {
               const db = getDB();
@@ -120,13 +108,6 @@ function QuoteEditor({
             setV((old) => ({ ...old, bookId: choice.personal?.id || '' }));
             setClubChoice(choice.club || null);
           }}
-        />
-        <PhotoQuote
-          startWithCamera={startWithCamera}
-          onBusy={setRecognizing}
-          onText={(text) =>
-            setV((old) => ({ ...old, text: old.text ? old.text + '\n\n' + text : text }))
-          }
         />
         <Field label="Текст цитаты">
           <textarea
@@ -180,7 +161,7 @@ function QuoteEditor({
           </label>
         )}
         <ErrorNote text={error} />
-        <button className="primary" disabled={busy || recognizing || catalog.isLoading}>
+        <button className="primary" disabled={busy || catalog.isLoading}>
           Сохранить цитату
         </button>
       </form>
@@ -229,7 +210,7 @@ export function Quotes() {
   const [tab, setTab] = useState('mine');
   const [favorite, setFavorite] = useState(false);
   const [sort, setSort] = useState<'newest' | 'likes'>('newest');
-  const [edit, setEdit] = useState<Quote | true | 'photo' | null>(null);
+  const [edit, setEdit] = useState<Quote | true | null>(null);
   const { run, error, busy } = useTask();
   const publicTab = tab === 'club' || tab === 'liked';
   const counts = useMemo(() => {
@@ -263,9 +244,6 @@ export function Quotes() {
       <div className="page-heading">
         <h1>Цитаты</h1>
         <div className="quote-create-actions">
-          <button onClick={() => setEdit('photo')} aria-label="Добавить цитату с фото">
-            <Camera size={18} />С фото
-          </button>
           <button className="primary" onClick={() => setEdit(true)}>
             <Plus size={18} />
             Добавить
@@ -509,7 +487,6 @@ export function Quotes() {
       {edit && (
         <QuoteEditor
           quote={typeof edit === 'object' ? edit : undefined}
-          startWithCamera={edit === 'photo'}
           onClose={() => setEdit(null)}
         />
       )}

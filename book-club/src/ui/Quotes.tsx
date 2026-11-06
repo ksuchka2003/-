@@ -5,6 +5,7 @@ import { quoteBookKey } from '../collection';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Plus,
+  Camera,
   Heart,
   Star,
   Copy,
@@ -29,7 +30,15 @@ import {
 } from './shared';
 import { PublicContent } from './Social';
 import { PhotoQuote } from './PhotoQuote';
-function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void }) {
+function QuoteEditor({
+  quote,
+  onClose,
+  startWithCamera = false,
+}: {
+  quote?: Quote;
+  onClose: () => void;
+  startWithCamera?: boolean;
+}) {
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const { identity } = useSession();
   const [v, setV] = useState<Quote>(
@@ -131,6 +140,7 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
           </Field>
         )}
         <PhotoQuote
+          startWithCamera={startWithCamera}
           onBusy={setRecognizing}
           onText={(text) =>
             setV((old) => ({ ...old, text: old.text ? old.text + '\n\n' + text : text }))
@@ -238,7 +248,7 @@ export function Quotes() {
   const [tab, setTab] = useState('mine');
   const [favorite, setFavorite] = useState(false);
   const [sort, setSort] = useState<'newest' | 'likes'>('newest');
-  const [edit, setEdit] = useState<Quote | true | null>(null);
+  const [edit, setEdit] = useState<Quote | true | 'photo' | null>(null);
   const { run, error, busy } = useTask();
   const publicTab = tab === 'club' || tab === 'liked';
   const counts = useMemo(() => {
@@ -282,10 +292,15 @@ export function Quotes() {
     <>
       <div className="page-heading">
         <h1>Цитаты</h1>
-        <button className="primary" onClick={() => setEdit(true)}>
-          <Plus size={18} />
-          Добавить
-        </button>
+        <div className="quote-create-actions">
+          <button onClick={() => setEdit('photo')} aria-label="Добавить цитату с фото">
+            <Camera size={18} />С фото
+          </button>
+          <button className="primary" onClick={() => setEdit(true)}>
+            <Plus size={18} />
+            Добавить
+          </button>
+        </div>
       </div>
       <div className="tabs">
         {[
@@ -532,7 +547,11 @@ export function Quotes() {
         </div>
       )}
       {edit && (
-        <QuoteEditor quote={edit === true ? undefined : edit} onClose={() => setEdit(null)} />
+        <QuoteEditor
+          quote={typeof edit === 'object' ? edit : undefined}
+          startWithCamera={edit === 'photo'}
+          onClose={() => setEdit(null)}
+        />
       )}
     </>
   );

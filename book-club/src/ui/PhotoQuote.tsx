@@ -3,22 +3,31 @@ import { Camera, ImagePlus } from 'lucide-react';
 import { createPhotoReader, validatePhoto } from '../ocr';
 import { message } from '../domain';
 import { ErrorNote } from './shared';
+import { CameraCapture } from './CameraCapture';
 export function PhotoQuote({
   onText,
   onBusy,
+  startWithCamera = false,
 }: {
   onText: (text: string) => void;
   onBusy: (busy: boolean) => void;
+  startWithCamera?: boolean;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
   const [busy, setBusy] = useState(false);
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState('');
+  const [camera, setCamera] = useState(startWithCamera);
+  const nativeInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
   const job = useRef<ReturnType<typeof createPhotoReader> | null>(null);
   const generation = useRef(0);
   const status = useRef(onBusy);
   status.current = onBusy;
+  useEffect(() => {
+    status.current(busy || camera);
+  }, [busy, camera]);
   useEffect(
     () => () => {
       generation.current++;
@@ -90,39 +99,67 @@ export function PhotoQuote({
   };
   return (
     <section className="photo-quote" aria-label="Цитата с фотографии">
-      <div className="actions">
-        <label className={`button ${busy ? 'disabled' : ''}`}>
-          <Camera size={17} />
-          Сфотографировать
-          <input
-            className="file-input"
-            aria-label="Сфотографировать цитату"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
+      {!camera && (
+        <div className="actions">
+          <button
+            type="button"
             disabled={busy}
-            onChange={(e) => {
-              select(e.target.files?.[0]);
-              e.target.value = '';
+            onClick={() => {
+              setError('');
+              setCamera(true);
             }}
-          />
-        </label>
-        <label className={`button ${busy ? 'disabled' : ''}`}>
-          <ImagePlus size={17} />
-          Из галереи
-          <input
-            className="file-input"
-            aria-label="Выбрать фото цитаты"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={busy}
-            onChange={(e) => {
-              select(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-        </label>
-      </div>
+          >
+            <Camera size={17} />
+            Сфотографировать
+          </button>
+          <button type="button" disabled={busy} onClick={() => galleryInput.current?.click()}>
+            <ImagePlus size={17} />
+            Из галереи
+          </button>
+        </div>
+      )}
+      <input
+        ref={nativeInput}
+        className="file-input"
+        aria-label="Сфотографировать цитату"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        disabled={busy}
+        onChange={(e) => {
+          select(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={galleryInput}
+        className="file-input"
+        aria-label="Выбрать фото цитаты"
+        type="file"
+        accept="image/*"
+        disabled={busy}
+        onChange={(e) => {
+          select(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      {camera && (
+        <CameraCapture
+          onClose={() => setCamera(false)}
+          onPhoto={(file) => {
+            select(file);
+            setCamera(false);
+          }}
+          onNative={() => {
+            setCamera(false);
+            nativeInput.current?.click();
+          }}
+          onGallery={() => {
+            setCamera(false);
+            galleryInput.current?.click();
+          }}
+        />
+      )}
       {preview && (
         <>
           <img
@@ -141,10 +178,10 @@ export function PhotoQuote({
             </>
           ) : (
             <div className="actions">
-              <button type="button" onClick={() => void recognize()}>
+              <button type="button" disabled={camera} onClick={() => void recognize()}>
                 Распознать текст
               </button>
-              <button type="button" onClick={() => setFile(null)}>
+              <button type="button" disabled={camera} onClick={() => setFile(null)}>
                 Убрать фото
               </button>
             </div>

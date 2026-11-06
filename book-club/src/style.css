@@ -2390,6 +2390,27 @@ summary {
 .photo-quote .disabled {
   opacity: 0.5;
 }
+.camera-capture {
+  border: 1px solid var(--line);
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--surface);
+}
+.camera-capture video {
+  width: 100%;
+  max-height: min(38dvh, 320px);
+  object-fit: contain;
+  background: #161a17;
+  border-radius: 8px;
+}
+.camera-capture .actions {
+  margin-top: 12px;
+}
+.quote-create-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .book-extra {
   margin: 16px 0;
 }

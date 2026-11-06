@@ -163,6 +163,7 @@ export function PublicContent({
                           </button>
                           <button
                             disabled={busy}
+                            title="Копия останется у вас после удаления оригинала"
                             onClick={() =>
                               void run(
                                 () => copyPublicQuote(q, author(q.member_id)),
@@ -170,7 +171,7 @@ export function PublicContent({
                               )
                             }
                           >
-                            <BookmarkPlus size={17} /> Себе
+                            <BookmarkPlus size={17} /> Сохранить себе
                           </button>
                         </div>
                       </>

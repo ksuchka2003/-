@@ -223,6 +223,55 @@ it('сохранение цитаты из личной книги другог�
   expect(await getDB().sync_queue.count()).toBe(0);
 });
 
+it('повторные одновременные сохранения не создают лишние книги и цитаты', async () => {
+  const q = {
+    id: uid(),
+    book_id: null,
+    title: 'Источник',
+    text: 'Цитата',
+    page: null,
+    chapter: '',
+    comment: '',
+  };
+  const results = await Promise.allSettled([
+    copyPublicQuote(q, 'Анна'),
+    copyPublicQuote(q, 'Анна'),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(await getDB().quotes.count()).toBe(1);
+  expect(await getDB().personal_books.count()).toBe(1);
+});
+
+it('неудачное сохранение цитаты откатывает новую книгу, а резервная копия не требует оригинала', async () => {
+  const q = {
+    id: uid(),
+    book_id: null,
+    title: 'Источник',
+    text: 'Цитата навсегда',
+    page: 12,
+    chapter: 'Глава 3',
+    comment: 'Моя мысль',
+  };
+  await expect(copyPublicQuote({ ...q, text: '' }, 'Анна')).rejects.toThrow();
+  expect(await getDB().personal_books.count()).toBe(0);
+  await copyPublicQuote(q, 'Анна');
+  const saved = (await getDB().quotes.toArray())[0];
+  expect(saved.id).not.toBe(q.id);
+  const backup = JSON.stringify(await exportBackup());
+  await getDB().quotes.clear();
+  await getDB().personal_books.clear();
+  await importBackup(backup, 'replace');
+  expect(await getDB().quotes.get(saved.id)).toMatchObject({
+    text: q.text,
+    page: 12,
+    chapter: 'Глава 3',
+    comment: 'Моя мысль',
+    sourceId: q.id,
+    sourceAuthor: 'Анна',
+    published: false,
+  });
+});
+
 it('сохраняет главу и даты, быстрые обновления страниц их не стирают; неверные даты откатывают книгу', async () => {
   const b = book(),
     r = { bookId: b.id, rating: null, text: '', spoilers: false, updatedAt: now() };

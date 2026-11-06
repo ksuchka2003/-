@@ -247,46 +247,52 @@ export async function copyPublicQuote(
   author: string,
 ) {
   const db = getDB();
-  if (await db.quotes.where('sourceId').equals(q.id).first())
-    throw new Error('Цитата уже сохранена');
-  let book = q.book_id
-    ? await db.personal_books.where('clubBookId').equals(q.book_id).first()
-    : undefined;
-  if (!book) {
-    const club = q.book_id ? await db.club_catalog_cache.get(q.book_id) : undefined;
-    book = {
-      id: uid(),
-      clubBookId: q.book_id,
-      title: q.title,
-      authors: club?.authors || '',
-      description: club?.description || '',
-      genre: club?.genre || '',
-      year: club?.year || null,
-      isbn: club?.isbn || '',
-      cover: club?.cover || '',
-      totalPages: club?.default_pages || 0,
-      status: 'planned',
-      notes: '',
-      publishProgress: false,
-      publishReview: false,
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    await db.personal_books.add(book);
-  }
-  await saveQuote({
-    id: uid(),
-    bookId: book.id,
-    text: q.text,
-    page: q.page,
-    chapter: q.chapter,
-    comment: q.comment,
-    favorite: false,
-    deletedAt: null,
-    sourceId: q.id,
-    sourceAuthor: author,
-    published: false,
-    createdAt: now(),
-    updatedAt: now(),
-  });
+  await db.transaction(
+    'rw',
+    [db.personal_books, db.club_catalog_cache, db.quotes, db.sync_queue, db.settings],
+    async () => {
+      if (await db.quotes.where('sourceId').equals(q.id).first())
+        throw new Error('Цитата уже сохранена');
+      let book = q.book_id
+        ? await db.personal_books.where('clubBookId').equals(q.book_id).first()
+        : undefined;
+      if (!book) {
+        const club = q.book_id ? await db.club_catalog_cache.get(q.book_id) : undefined;
+        book = {
+          id: uid(),
+          clubBookId: q.book_id,
+          title: q.title,
+          authors: club?.authors || '',
+          description: club?.description || '',
+          genre: club?.genre || '',
+          year: club?.year || null,
+          isbn: club?.isbn || '',
+          cover: club?.cover || '',
+          totalPages: club?.default_pages || 0,
+          status: 'planned',
+          notes: '',
+          publishProgress: false,
+          publishReview: false,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        await db.personal_books.add(book);
+      }
+      await saveQuote({
+        id: uid(),
+        bookId: book.id,
+        text: q.text,
+        page: q.page,
+        chapter: q.chapter,
+        comment: q.comment,
+        favorite: false,
+        deletedAt: null,
+        sourceId: q.id,
+        sourceAuthor: author,
+        published: false,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+    },
+  );
 }

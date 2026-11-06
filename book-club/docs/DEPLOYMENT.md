@@ -99,6 +99,10 @@ Worker обрабатывает до 20 заданий за запуск и до
 
 ## Ограничения и источники
 
+Актуально на 6 ноября 2026 года: [Supabase Free](https://supabase.com/pricing) приостанавливает проекты после недели неактивности. Пауза сама по себе не удаляет данные, но останавливает облачную работу приложения и напоминаний. Согласно [правилам восстановления](https://supabase.com/docs/guides/platform/upgrading#time-limits), восстановление одной кнопкой доступно в течение года после паузы; затем документация предлагает скачать резервную копию в Dashboard и восстановить её в новом проекте или локально. Это не гарантия бессрочного хранения: сохраняйте собственные копии вне Supabase.
+
+Ежедневные автоматические резервные копии в Free не включены. Supabase [рекомендует бесплатным проектам регулярный экспорт через CLI](https://supabase.com/docs/guides/platform/backups) и хранение копий отдельно. В приложении «Профиль → Экспорт JSON» сохраняет личные книги, прогресс, отзывы, заметки, свои и сохранённые цитаты, избранное, корзину и настройки. Храните файл на компьютере или в собственном хранилище; IndexedDB и синхронизация не заменяют независимый файл. Этот экспорт не является копией всей базы клуба: каталог, участники и встречи требуют отдельного резервирования PostgreSQL владельцем проекта.
+
 - [GitHub Pages: статический хостинг](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages), [лимиты](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
 - [Supabase Free: приостановка проектов](https://supabase.com/docs/guides/platform/free-project-pausing). Маленькая активность клуба не гарантирует исключение из паузы. Не пытайтесь считать Cron гарантией круглосуточной работы.
 - [Supabase Cron](https://supabase.com/docs/guides/cron), [планирование Edge Functions и Vault](https://supabase.com/docs/guides/functions/schedule-functions).

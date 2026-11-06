@@ -949,6 +949,8 @@ test('все книги: поиск, фильтр прочитанного, ре
 test('цитаты: понравившиеся и сохранённые отделены от своих, есть поиск по книге и публикация галочкой', async ({
   page,
   context,
+  browser,
+  baseURL,
 }) => {
   const api = backend(),
     reader = '10000000-0000-4000-8000-000000000002',
@@ -996,7 +998,7 @@ test('цитаты: понравившиеся и сохранённые отд�
     .toBe(true);
   await page.getByRole('button', { name: 'Мои лайки', exact: true }).click();
   await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Себе', exact: true }).click();
+  await page.getByRole('button', { name: 'Сохранить себе', exact: true }).click();
   await page.getByRole('button', { name: 'Сохранено себе', exact: true }).click();
   await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
   await expect(page.getByText('Собственная мысль', { exact: true })).not.toBeVisible();
@@ -1014,6 +1016,34 @@ test('цитаты: понравившиеся и сохранённые отд�
   await page.setViewportSize({ width: 320, height: 760 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/quotes-organized.png', fullPage: true });
+  await expect
+    .poll(() =>
+      [...api.records.values()].some((r) => r.kind === 'quote' && r.payload?.sourceId === quote),
+    )
+    .toBe(true);
+  // Автор убрал публикацию и профиль: личная копия продолжает жить на обоих устройствах.
+  api.extra.club_quotes = [];
+  api.extra.quote_likes = [];
+  api.extra.member_profiles = [];
+  await page.reload();
+  await page.getByRole('button', { name: 'Сохранено себе', exact: true }).click();
+  await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+  await expect(page.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
+  const second = await browser.newContext({ baseURL });
+  try {
+    await api.connect(second);
+    const other = await second.newPage();
+    await other.goto('/#/quotes');
+    await other.getByRole('button', { name: 'Сохранено себе', exact: true }).click();
+    await expect(other.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+    await expect(other.getByText('Книга-источник', { exact: false })).toBeVisible();
+    await expect(other.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
+    await expect(other.getByRole('button', { name: 'Нравится цитата', exact: true })).toHaveCount(
+      0,
+    );
+  } finally {
+    await second.close();
+  }
 });
 
 test('подсказки цитаты выбирают личную или клубную книгу без дубликатов, поиск над вкладками', async ({

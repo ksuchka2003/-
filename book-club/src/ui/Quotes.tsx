@@ -289,7 +289,9 @@ export function Quotes() {
         </p>
       )}
       {tab === 'liked' && (
-        <p className="tab-explanation">Публикации клуба, которым вы поставили сердечко.</p>
+        <p className="tab-explanation">
+          Лайк отмечает публикацию автора. Нажмите «Сохранить себе», чтобы оставить личную копию.
+        </p>
       )}
       {(quotes.length > 0 || publicTab) && (
         <div className="toolbar quotes-toolbar">

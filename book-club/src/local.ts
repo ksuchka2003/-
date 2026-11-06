@@ -94,6 +94,10 @@ export async function saveBook(
   details?: Pick<Progress, 'chapter' | 'startedOn' | 'finishedOn'>,
 ) {
   const parsed = bookSchema.parse(book);
+  if (parsed.coverData && new TextEncoder().encode(JSON.stringify(parsed)).byteLength > 240000)
+    throw new Error(
+      'Обложка и текст книги слишком большие. Сократите заметки или выберите другую обложку.',
+    );
   const parsedReview = reviewSchema.parse(review);
   if (parsedReview.bookId !== parsed.id) throw new Error('Отзыв относится к другой книге');
   validProgress(pages, book.totalPages);

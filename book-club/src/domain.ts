@@ -36,6 +36,11 @@ export const bookSchema = metadataSchema.extend({
   publishReview: z.boolean(),
   createdAt: date,
   updatedAt: date,
+  coverData: z
+    .string()
+    .max(60000)
+    .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/)
+    .optional(),
 });
 export const progressSchema = z
   .object({
@@ -147,6 +152,7 @@ export type PublicProgress = {
   chapter?: string;
   started_on?: string | null;
   finished_on?: string | null;
+  cover?: string;
 };
 export type PublicReview = {
   id: string;

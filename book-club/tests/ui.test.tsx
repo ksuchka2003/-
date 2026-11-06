@@ -1,10 +1,17 @@
 import { afterEach, it, expect, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemberDetail } from '../src/ui/Social';
-import { CloudGate, Session } from '../src/ui/shared';
+import { CloudGate, Session, Cover } from '../src/ui/shared';
 afterEach(cleanup);
+it('новая обложка отображается после ошибки загрузки предыдущей', () => {
+  const { rerender } = render(<Cover title="Книга" cover="https://example.com/broken.jpg" />);
+  fireEvent.error(screen.getByAltText('Обложка: Книга'));
+  expect(screen.getByAltText('Обложка: Книга')).not.toBeVisible();
+  rerender(<Cover title="Книга" cover="https://example.com/new.jpg" />);
+  expect(screen.getByAltText('Обложка: Книга')).toBeVisible();
+});
 it('показывает ограничение клуба без ложных профилей', () => {
   render(
     <Session.Provider

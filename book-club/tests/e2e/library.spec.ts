@@ -84,7 +84,8 @@ test('цитаты: создание, избранное, корзина и во
   await expect(page.getByRole('heading', { name: 'Цитаты', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Книга', { exact: true }).selectOption({ label: 'Дюна' });
+  await dialog.getByLabel('Название книги', { exact: true }).fill('Дюн');
+  await dialog.getByRole('option', { name: /Дюна/ }).click();
   await dialog.getByLabel('Текст цитаты').fill('Страх убивает разум');
   await dialog.getByLabel('Страница', { exact: true }).fill('15');
   await dialog.getByRole('button', { name: 'Сохранить цитату' }).click();

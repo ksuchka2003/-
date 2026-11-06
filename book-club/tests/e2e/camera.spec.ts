@@ -57,7 +57,7 @@ test('камера: снимок превращается в цитату, ка�
   await expect(page.locator('.quote-source').filter({ hasText: 'Книга с камеры' })).toBeVisible();
   await page.getByRole('button', { name: 'Добавить цитату с фото', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Сделать снимок', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await expect
     .poll(() =>
       page.evaluate(() => {

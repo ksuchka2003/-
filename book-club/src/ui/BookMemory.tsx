@@ -4,6 +4,7 @@ import { decimal } from '../collection';
 import { getDB } from '../db';
 import { saveBook } from '../local';
 import { PublicContent } from './Social';
+import { RatingStars } from './RatingStars';
 import { Modal, Field, useCloud, useTask, ErrorNote, Loading } from './shared';
 export function BookStatistics({ bookId }: { bookId: string }) {
   const all = useCloud<BookStats>('club_book_stats');
@@ -18,7 +19,7 @@ export function BookStatistics({ bookId }: { bookId: string }) {
           <>
             {stats.average_rating !== null && Number(stats.rating_count) > 0 ? (
               <div>
-                <b>{decimal(stats.average_rating)} / 10</b>
+                <RatingStars value={Number(stats.average_rating)} label="Средняя оценка" />
                 <span>Средняя оценка · оценок: {stats.rating_count}</span>
               </div>
             ) : (
@@ -159,17 +160,7 @@ export function BookThoughtEditor({ book, onClose }: { book: ClubBook; onClose: 
               placeholder="Любимые мысли, с чем спорите, что увидели по-своему…"
             />
           </Field>
-          <Field label="Моя оценка">
-            <select
-              value={rating || ''}
-              onChange={(e) => setRating(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">Без оценки</option>
-              {Array.from({ length: 10 }, (_, i) => (
-                <option key={i + 1}>{i + 1}</option>
-              ))}
-            </select>
-          </Field>
+          <RatingStars value={rating} onChange={setRating} />
           <label className="check">
             <input
               type="checkbox"

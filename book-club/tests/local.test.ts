@@ -27,6 +27,18 @@ beforeEach(() => {
 afterEach(async () => {
   await getDB().delete();
 });
+it('личная обложка входит в резервную копию, а неподдерживаемое изображение не сохраняется', async () => {
+  const b = { ...book(), coverData: 'data:image/jpeg;base64,/9j/AA==' };
+  const review = { bookId: b.id, rating: 9, text: 'Отзыв', spoilers: false, updatedAt: now() };
+  await saveBook(b, 10, review);
+  const data = JSON.stringify(await exportBackup());
+  await importBackup(data, 'replace');
+  expect((await getDB().personal_books.get(b.id))?.coverData).toBe(b.coverData);
+  await expect(
+    saveBook({ ...b, coverData: 'data:image/svg+xml;base64,AAAA' }, 10, review),
+  ).rejects.toThrow();
+  expect((await getDB().personal_books.get(b.id))?.coverData).toBe(b.coverData);
+});
 describe('личные данные', () => {
   it('сохраняет издание и считает прогресс', async () => {
     const b = book();

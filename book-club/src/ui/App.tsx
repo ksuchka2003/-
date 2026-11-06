@@ -23,7 +23,7 @@ import { setSyncScope } from '../local';
 import { accountSync } from '../accountSync';
 import type { LibrarySyncState } from '../privateTypes';
 import { message } from '../domain';
-import { Session, Loading, Modal } from './shared';
+import { Session, Loading, Modal, BackLink } from './shared';
 import { Home, Club, ClubDetail } from './Club';
 import { MyBooks } from './Books';
 import { Quotes } from './Quotes';
@@ -229,6 +229,17 @@ function Shell({
             </p>
           )}
           <main>
+            {(/^\/(club|members)\//.test(location.pathname) || location.pathname === '/admin') && (
+              <BackLink
+                fallback={
+                  location.pathname.startsWith('/club/')
+                    ? '/club'
+                    : location.pathname.startsWith('/members/')
+                      ? '/members'
+                      : '/profile'
+                }
+              />
+            )}
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/club" element={<Club />} />

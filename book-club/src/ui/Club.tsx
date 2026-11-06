@@ -1,6 +1,6 @@
 import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, ArrowUpRight, BookOpen, CalendarDays } from 'lucide-react';
@@ -37,6 +37,7 @@ import { MeetingCard } from './Meetings';
 import { BookReaders } from './Readers';
 import { clubBookFinished, clubCounts } from '../collection';
 import { CollectionCounts } from './CollectionCounts';
+import { bookCover } from '../covers';
 import { BookMemory, BookThoughtEditor } from './BookMemory';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
@@ -62,7 +63,7 @@ export function MainBooks() {
                 aria-label={`Открыть книгу «${b.title}»`}
                 to={`/club/${b.id}`}
               >
-                <Cover title={b.title} cover={b.cover} />
+                <Cover title={b.title} cover={bookCover(own, b.cover)} />
                 <div>
                   <h2>{b.title}</h2>
                   <p>{b.authors}</p>
@@ -187,9 +188,25 @@ export function Club() {
   const { identity } = useSession();
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
-  const [q, setQ] = useState('');
-  const [tab, setTab] = useState<'reading' | 'all'>('reading');
-  const [filter, setFilter] = useState('all');
+  const [params, setParams] = useSearchParams();
+  const q = params.get('q') || '',
+    tab = params.get('tab') === 'all' ? 'all' : 'reading',
+    filter = ['finished', 'unfinished'].includes(params.get('filter') || '')
+      ? params.get('filter')!
+      : 'all';
+  const changeParam = (name: string, value: string) =>
+    setParams(
+      (old) => {
+        const next = new URLSearchParams(old);
+        if (value) next.set(name, value);
+        else next.delete(name);
+        return next;
+      },
+      { replace: true },
+    );
+  const setQ = (value: string) => changeParam('q', value),
+    setTab = (value: string) => changeParam('tab', value),
+    setFilter = (value: string) => changeParam('filter', value);
   const [opened, setOpened] = useState<string | null>(null);
   const [proposal, setProposal] = useState(false);
   const all = books.data || [];
@@ -340,7 +357,7 @@ export function ClubDetail() {
   return (
     <CloudGate>
       <section className="book-detail">
-        <Cover title={b.title} cover={b.cover} />
+        <Cover title={b.title} cover={bookCover(own, b.cover)} />
         <div>
           <span className="badge">{clubStatuses[b.status]}</span>
           <h1>{b.title}</h1>

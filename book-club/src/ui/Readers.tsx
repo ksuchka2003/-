@@ -3,7 +3,7 @@ import type { Participant } from '../calendar';
 import { Link } from 'react-router-dom';
 import { type Profile, type PublicProgress, percent, personalStatuses } from '../domain';
 import { Avatar, PublicContent } from './Social';
-import { useCloud, Modal, ErrorNote, Loading } from './shared';
+import { useCloud, Modal, ErrorNote, Loading, Cover } from './shared';
 export function BookReaders({ bookId, title }: { bookId: string; title: string }) {
   const progress = useCloud<PublicProgress>('visible_progress');
   const people = useCloud<Profile>('member_profiles');
@@ -55,6 +55,7 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
                 aria-label={`Чтение ${person.name}: ${title}`}
               >
                 <Avatar profile={person} />
+                {p?.cover && <Cover small title={title} cover={p.cover} />}
                 <span className="reader-body">
                   <b>{person.name}</b>
                   <small>{p ? personalStatuses[p.status] : 'Нет отметки о чтении'}</small>

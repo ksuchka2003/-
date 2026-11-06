@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../cloud';
-import { quoteBookKey } from '../collection';
+import { resolveQuoteBook } from '../quoteBooks';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Plus,
@@ -15,8 +15,8 @@ import {
   Quote as QuoteIcon,
 } from 'lucide-react';
 import { getDB } from '../db';
-import { now, uid, type Quote, type Book, type PublicQuote } from '../domain';
-import { saveBook, saveQuote, trashQuote, restoreQuote, eraseQuote } from '../local';
+import { now, uid, type Quote, type ClubBook, type PublicQuote } from '../domain';
+import { saveQuote, trashQuote, restoreQuote, eraseQuote } from '../local';
 import {
   Modal,
   Field,
@@ -30,6 +30,7 @@ import {
 } from './shared';
 import { PublicContent } from './Social';
 import { PhotoQuote } from './PhotoQuote';
+import { QuoteBookPicker } from './QuoteBookPicker';
 function QuoteEditor({
   quote,
   onClose,
@@ -41,6 +42,8 @@ function QuoteEditor({
 }) {
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const { identity } = useSession();
+  const catalog = useCloud<ClubBook>('club_books');
+  const [clubChoice, setClubChoice] = useState<ClubBook | null>(null);
   const [v, setV] = useState<Quote>(
     quote || {
       id: uid(),
@@ -62,6 +65,12 @@ function QuoteEditor({
   const [recognizing, setRecognizing] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newBookId] = useState(uid);
+  useEffect(() => {
+    if (v.bookId && !newTitle) {
+      const book = books.find((b) => b.id === v.bookId);
+      if (book) setNewTitle(book.title);
+    }
+  }, [books, v.bookId, newTitle]);
   return (
     <Modal title={quote ? 'Редактировать цитату' : 'Новая цитата'} onClose={onClose}>
       <form
@@ -82,35 +91,13 @@ function QuoteEditor({
                   db.settings,
                 ],
                 async () => {
-                  let bookId = v.bookId;
-                  if (!bookId) {
-                    const fresh: Book = {
-                      id: newBookId,
-                      clubBookId: null,
-                      title: newTitle.trim(),
-                      authors: '',
-                      description: '',
-                      genre: '',
-                      year: null,
-                      isbn: '',
-                      cover: '',
-                      totalPages: 0,
-                      status: 'planned',
-                      notes: '',
-                      publishProgress: false,
-                      publishReview: false,
-                      createdAt: now(),
-                      updatedAt: now(),
-                    };
-                    await saveBook(fresh, 0, {
-                      bookId: fresh.id,
-                      rating: null,
-                      text: '',
-                      spoilers: false,
-                      updatedAt: now(),
-                    });
-                    bookId = fresh.id;
-                  }
+                  const bookId = await resolveQuoteBook({
+                    title: newTitle,
+                    personalId: v.bookId,
+                    club: clubChoice,
+                    catalog: catalog.data || [],
+                    newId: newBookId,
+                  });
                   await saveQuote({ ...v, bookId, updatedAt: now() }, true);
                 },
               );
@@ -119,26 +106,21 @@ function QuoteEditor({
             onClose();
         }}
       >
-        <Field label="Книга">
-          <select value={v.bookId} onChange={(e) => setV({ ...v, bookId: e.target.value })}>
-            <option value="">Указать другую книгу</option>
-            {books.map((b) => (
-              <option value={b.id} key={b.id}>
-                {b.title}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {!v.bookId && (
-          <Field label="Название книги">
-            <input
-              required
-              maxLength={300}
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-            />
-          </Field>
-        )}
+        <QuoteBookPicker
+          value={newTitle}
+          books={books}
+          catalog={catalog.data || []}
+          onChange={(text) => {
+            setNewTitle(text);
+            setV((old) => ({ ...old, bookId: '' }));
+            setClubChoice(null);
+          }}
+          onSelect={(choice) => {
+            setNewTitle(choice.title);
+            setV((old) => ({ ...old, bookId: choice.personal?.id || '' }));
+            setClubChoice(choice.club || null);
+          }}
+        />
         <PhotoQuote
           startWithCamera={startWithCamera}
           onBusy={setRecognizing}
@@ -198,7 +180,7 @@ function QuoteEditor({
           </label>
         )}
         <ErrorNote text={error} />
-        <button className="primary" disabled={busy || recognizing}>
+        <button className="primary" disabled={busy || recognizing || catalog.isLoading}>
           Сохранить цитату
         </button>
       </form>
@@ -244,7 +226,6 @@ export function Quotes() {
   const shared = useCloud<PublicQuote>('club_quotes');
   const likes = useCloud<{ quote_id: string; member_id: string }>('quote_likes');
   const [q, setQ] = useState('');
-  const [book, setBook] = useState('all');
   const [tab, setTab] = useState('mine');
   const [favorite, setFavorite] = useState(false);
   const [sort, setSort] = useState<'newest' | 'likes'>('newest');
@@ -267,7 +248,6 @@ export function Quotes() {
         (tab === 'trash' ? !!x.deletedAt : !x.deletedAt) &&
         (tab === 'trash' || (tab === 'saved' ? !!x.sourceId : !x.sourceId)) &&
         (!favorite || tab === 'trash' || x.favorite) &&
-        (book === 'all' || x.bookId === book) &&
         `${bookMap.get(x.bookId)?.title || ''} ${bookMap.get(x.bookId)?.authors || ''} ${x.text} ${x.comment} ${x.chapter}`
           .toLowerCase()
           .includes(q.trim().toLowerCase()),
@@ -278,16 +258,6 @@ export function Quotes() {
           ? likedCount(likeTarget(b) || b.id) - likedCount(likeTarget(a) || a.id)
           : 0) || b.createdAt.localeCompare(a.createdAt),
     );
-  const options = publicTab
-    ? [
-        ...new Map(
-          (shared.data || []).map((x) => [
-            quoteBookKey(x),
-            { id: quoteBookKey(x), title: x.title },
-          ]),
-        ).values(),
-      ]
-    : books.map((b) => ({ id: b.id, title: b.title }));
   return (
     <>
       <div className="page-heading">
@@ -302,13 +272,22 @@ export function Quotes() {
           </button>
         </div>
       </div>
+      {(quotes.length > 0 || publicTab) && (
+        <input
+          className="quote-search"
+          aria-label="Поиск цитат"
+          placeholder="Книга или слова из цитаты"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      )}
       <div className="tabs">
         {[
           ['mine', 'Мои'],
-          ['saved', 'Сохранённые'],
+          ['saved', 'Сохранено себе'],
           ...(identity
             ? [
-                ['liked', 'Понравились'],
+                ['liked', 'Мои лайки'],
                 ['club', 'В клубе'],
               ]
             : []),
@@ -319,7 +298,6 @@ export function Quotes() {
             className={tab === key ? 'active' : ''}
             onClick={() => {
               setTab(key);
-              setBook('all');
               setFavorite(false);
             }}
           >
@@ -327,28 +305,16 @@ export function Quotes() {
           </button>
         ))}
       </div>
+      {tab === 'saved' && (
+        <p className="tab-explanation">
+          Личные копии чужих цитат — останутся у вас после удаления оригинала.
+        </p>
+      )}
+      {tab === 'liked' && (
+        <p className="tab-explanation">Публикации клуба, которым вы поставили сердечко.</p>
+      )}
       {(quotes.length > 0 || publicTab) && (
         <div className="toolbar quotes-toolbar">
-          <input
-            aria-label="Поиск цитат"
-            placeholder="Книга или слова из цитаты"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <select
-            aria-label="Фильтр по книге"
-            value={book}
-            onChange={(e) => setBook(e.target.value)}
-          >
-            <option value="all">Все книги</option>
-            {[...options]
-              .sort((a, b) => a.title.localeCompare(b.title, 'ru'))
-              .map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.title}
-                </option>
-              ))}
-          </select>
           <select
             aria-label="Сортировка цитат"
             value={sort}
@@ -387,20 +353,14 @@ export function Quotes() {
       <ErrorNote text={error || (!publicTab && identity ? likes.error?.message : '')} />
       {publicTab ? (
         <CloudGate>
-          <PublicContent
-            type="quotes"
-            search={q}
-            quoteBook={book}
-            sort={sort}
-            likedOnly={tab === 'liked'}
-          />
+          <PublicContent type="quotes" search={q} sort={sort} likedOnly={tab === 'liked'} />
         </CloudGate>
       ) : !items.length ? (
         <Empty
           title={
             tab === 'trash'
               ? 'Корзина пуста'
-              : q || book !== 'all' || favorite
+              : q || favorite
                 ? 'Цитаты не найдены'
                 : tab === 'saved'
                   ? 'Сохранённых цитат пока нет'

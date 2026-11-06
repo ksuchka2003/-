@@ -54,6 +54,7 @@ beforeAll(async () => {
     '202610310004_meeting_calendar.sql',
     '202611060005_simple_club.sql',
     '202611060006_club_memory.sql',
+    '202611060007_reader_covers.sql',
   ])
     await db.exec(readFileSync('supabase/migrations/' + file, 'utf8'));
   for (const [id, tg, role] of [
@@ -313,5 +314,57 @@ describe.sequential('Память клуба, вопросы и итоги', () 
     }
     expect((await db.query('select * from public.meeting_questions')).rows).toHaveLength(0);
     expect((await db.query('select * from public.meeting_reflections')).rows).toHaveLength(0);
+  });
+  it('личная обложка видна в прогрессе, не меняет каталог и не раскрывает заметки', async () => {
+    await actor(alice);
+    await sync('book', {
+      id: personal,
+      clubBookId: book,
+      title: 'Книга',
+      totalPages: 300,
+      status: 'reading',
+      cover: 'https://example.com/original.jpg',
+      coverData: 'data:image/jpeg;base64,/9j/AA==',
+      notes: 'Секретная заметка',
+    });
+    await actor(bob);
+    const row = (await db.query<any>('select * from public.visible_progress')).rows[0];
+    expect(row.cover).toBe('data:image/jpeg;base64,/9j/AA==');
+    expect(JSON.stringify(row)).not.toContain('Секретная');
+    expect((await db.query<any>('select cover from public.club_books')).rows[0].cover).toBe('');
+    await expect(
+      db.query("update public.public_reading_progress set cover='https://example.com/evil.jpg'"),
+    ).rejects.toThrow();
+  });
+  it('неверная личная картинка отбрасывается; обложка каталога обновляет прогресс без личной обложки', async () => {
+    await actor(alice);
+    await sync('book', {
+      id: personal,
+      clubBookId: book,
+      title: 'Книга',
+      totalPages: 300,
+      status: 'reading',
+      cover: '',
+      coverData: 'data:image/svg+xml;base64,AAAA',
+    });
+    await db.exec('reset role;');
+    await db.query(
+      "update public.club_books set cover='https://example.com/shared.jpg' where id=$1",
+      [book],
+    );
+    await actor(bob);
+    expect((await db.query<any>('select cover from public.visible_progress')).rows[0].cover).toBe(
+      'https://example.com/shared.jpg',
+    );
+    await db.exec('reset role;');
+    await db.query("update public.club_books set cover='https://example.com/new.jpg' where id=$1", [
+      book,
+    ]);
+    await actor(bob);
+    expect((await db.query<any>('select cover from public.visible_progress')).rows[0].cover).toBe(
+      'https://example.com/new.jpg',
+    );
+    await db.exec('reset role;set role anon;');
+    await expect(db.query('select * from public.visible_progress')).rejects.toThrow();
   });
 });

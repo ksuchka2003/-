@@ -6,6 +6,9 @@ import { personalCounts } from '../collection';
 import { clubDay } from '../calendar';
 import { CollectionCounts } from './CollectionCounts';
 import { saveBook, deleteBook } from '../local';
+import { bookCover } from '../covers';
+import { CoverPicker } from './CoverPicker';
+import { RatingStars } from './RatingStars';
 import {
   now,
   uid,
@@ -249,6 +252,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
   const { busy, error, run } = useTask();
   const { identity } = useSession();
   const club = useCloud<ClubBook>('club_books');
+  const [coverBusy, setCoverBusy] = useState(false);
   useEffect(() => {
     if (book) {
       void getDB()
@@ -327,6 +331,23 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
             <BookLookup onSelect={(b) => setValue({ ...value, ...b, clubBookId: null })} />
           </>
         )}
+        <CoverPicker
+          title={value.title}
+          cover={bookCover(value, club.data?.find((b) => b.id === value.clubBookId)?.cover)}
+          hasCustom={!!value.coverData}
+          shared={!!value.clubBookId}
+          onBusy={setCoverBusy}
+          onChange={(data) => setValue((old) => ({ ...old, coverData: data }))}
+          onReset={() =>
+            setValue((old) => {
+              const { coverData, ...rest } = old;
+              return {
+                ...rest,
+                cover: club.data?.find((b) => b.id === old.clubBookId)?.cover || old.cover,
+              };
+            })
+          }
+        />
         <MetadataFields compact value={value} onChange={(b) => setValue({ ...value, ...b })} />
         <details className="book-extra" open={!!book}>
           <summary>Моё чтение</summary>
@@ -403,19 +424,10 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
         </details>
         <details className="book-extra">
           <summary>Отзыв, оценка и заметки</summary>
-          <Field label="Моя оценка">
-            <select
-              value={review.rating || ''}
-              onChange={(e) =>
-                setReview({ ...review, rating: e.target.value ? Number(e.target.value) : null })
-              }
-            >
-              <option value="">Без оценки</option>
-              {Array.from({ length: 10 }, (_, i) => (
-                <option key={i + 1}>{i + 1}</option>
-              ))}
-            </select>
-          </Field>
+          <RatingStars
+            value={review.rating}
+            onChange={(rating) => setReview({ ...review, rating })}
+          />
           <Field label="Мой отзыв">
             <textarea
               rows={3}
@@ -453,7 +465,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
         </details>
         <ErrorNote text={error} />
         <footer>
-          <button disabled={busy} className="primary">
+          <button disabled={busy || coverBusy} className="primary">
             {busy ? 'Сохраняем…' : 'Сохранить книгу'}
           </button>
           {book && (
@@ -480,6 +492,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
   );
 }
 export function MyBooks() {
+  const catalog = useCloud<ClubBook>('club_books');
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const progress = useLiveQuery(() => getDB().reading_progress.toArray()) || [];
   const [q, setQ] = useState('');
@@ -552,7 +565,10 @@ export function MyBooks() {
             const p = progress.find((x) => x.bookId === b.id)?.pages || 0;
             return (
               <button className="book-card" key={b.id} onClick={() => setEdit(b)}>
-                <Cover cover={b.cover} title={b.title} />
+                <Cover
+                  cover={bookCover(b, catalog.data?.find((c) => c.id === b.clubBookId)?.cover)}
+                  title={b.title}
+                />
                 <div>
                   <span className={`badge ${b.status}`}>{personalStatuses[b.status]}</span>
                   <h3>{b.title}</h3>

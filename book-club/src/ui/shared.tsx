@@ -12,7 +12,8 @@ import {
   type FormEvent,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, BookOpen, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, LoaderCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { type Identity, rows } from '../cloud';
 import { message } from '../domain';
 export const Session = createContext<{
@@ -115,10 +116,10 @@ export function Modal({
         aria-label={title}
       >
         <header>
-          <h2>{title}</h2>
-          <button className="icon" aria-label="Закрыть" onClick={onClose}>
-            <X size={20} />
+          <button type="button" className="icon modal-back" aria-label="Назад" onClick={onClose}>
+            <ArrowLeft size={21} />
           </button>
+          <h2>{title}</h2>
         </header>
         {children}
       </section>
@@ -136,6 +137,22 @@ export function Field({ label, children }: { label: string; children: ReactNode 
           })
         : children}
     </label>
+  );
+}
+export function BackLink({ fallback }: { fallback: string }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      className="detail-back"
+      type="button"
+      aria-label="Назад"
+      onClick={() => {
+        if (Number(window.history.state?.idx) > 0) navigate(-1);
+        else navigate(fallback, { replace: true });
+      }}
+    >
+      <ArrowLeft size={21} />
+    </button>
   );
 }
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
@@ -178,6 +195,7 @@ export function Cover({
     <div className={`cover ${small ? 'small' : ''}`}>
       {cover ? (
         <img
+          key={cover}
           src={cover}
           alt={`Обложка: ${title}`}
           loading="lazy"

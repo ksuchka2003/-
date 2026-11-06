@@ -13,6 +13,7 @@ import {
 import { action } from '../cloud';
 import { quoteBookKey } from '../collection';
 import { copyPublicQuote } from '../local';
+import { RatingStars } from './RatingStars';
 import {
   useCloud,
   CloudGate,
@@ -21,6 +22,7 @@ import {
   ErrorNote,
   useTask,
   useSession,
+  Cover,
   dateLabel,
 } from './shared';
 export function Avatar({ profile }: { profile: Profile }) {
@@ -178,7 +180,9 @@ export function PublicContent({
                       const r = item as PublicReview;
                       return (
                         <>
-                          {r.rating !== null && <span className="rating">{r.rating}/10</span>}
+                          {r.rating !== null && (
+                            <RatingStars value={r.rating} label="Оценка участника" />
+                          )}
                           {r.spoilers ? (
                             <details>
                               <summary>Показать отзыв со спойлерами</summary>
@@ -194,6 +198,7 @@ export function PublicContent({
                       const p = item as PublicProgress;
                       return (
                         <>
+                          {p.cover && <Cover small cover={p.cover} title={p.title} />}
                           <span className="badge">{personalStatuses[p.status]}</span>
                           {p.pages !== null && p.total_pages !== null ? (
                             <>

@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { getDB, openLibrary, purgeTrash } from '../src/db';
-import { saveBook, saveQuote, trashQuote, restoreQuote } from '../src/local';
+import { saveBook, saveQuote, trashQuote, restoreQuote, copyPublicQuote } from '../src/local';
 import { exportBackup, importBackup } from '../src/backup';
 import { now, uid, percent, type Book } from '../src/domain';
 const book = (): Book => ({
@@ -117,9 +117,63 @@ describe('личные данные', () => {
     await saveBook(b, 50, r);
     expect(await getDB().sync_queue.count()).toBe(0);
     await saveBook({ ...b, publishProgress: true }, 50, r);
+    expect(await getDB().sync_queue.count()).toBe(0);
+    await saveBook({ ...b, publishReview: true }, 50, r, true);
     const ops = await getDB().sync_queue.toArray();
     expect(ops).toHaveLength(1);
-    expect(JSON.stringify(ops)).not.toContain(b.notes);
-    expect(JSON.stringify(ops)).not.toContain(r.text);
+    expect(ops[0].kind).toBe('review');
+    expect(ops[0].payload).toMatchObject({ text: 'Приватный отзыв', explicit_share: true });
+    expect(ops[0].payload).not.toHaveProperty('notes');
   });
+});
+
+it('личная цитата делится без каталога; быстрый лайк избранного не теряет согласие на публикацию', async () => {
+  const b = book();
+  await getDB().personal_books.add(b);
+  const q = {
+    id: uid(),
+    bookId: b.id,
+    text: 'Моя цитата',
+    page: null,
+    chapter: '',
+    comment: '',
+    favorite: false,
+    deletedAt: null,
+    sourceId: null,
+    sourceAuthor: null,
+    published: true,
+    createdAt: now(),
+    updatedAt: now(),
+  };
+  await saveQuote(q, true);
+  await saveQuote({ ...q, favorite: true });
+  const pending = await getDB().sync_queue.get('quote:' + q.id);
+  expect(pending?.payload).toMatchObject({
+    book_id: null,
+    explicit_share: true,
+    text: 'Моя цитата',
+  });
+  await saveQuote({ ...q, published: false });
+  expect((await getDB().sync_queue.get('quote:' + q.id))?.payload).toBeNull();
+});
+it('сохранение цитаты из личной книги другого участника создаёт независимую приватную копию', async () => {
+  const q = {
+    id: uid(),
+    book_id: null,
+    title: 'Не в каталоге',
+    text: 'Чужая цитата',
+    page: 5,
+    chapter: '',
+    comment: 'Комментарий',
+  };
+  await copyPublicQuote(q, 'Анна');
+  expect((await getDB().quotes.toArray())[0]).toMatchObject({
+    sourceId: q.id,
+    sourceAuthor: 'Анна',
+    published: false,
+    text: q.text,
+  });
+  expect((await getDB().personal_books.toArray())[0].clubBookId).toBeNull();
+  await expect(copyPublicQuote(q, 'Анна')).rejects.toThrow('уже сохранена');
+  expect(await getDB().sync_queue.count()).toBe(0);
 });

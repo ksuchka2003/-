@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Heart, Copy, Trash2, RotateCcw, Pencil, Quote as QuoteIcon } from 'lucide-react';
 import { getDB } from '../db';
-import { now, uid, type Quote } from '../domain';
-import { saveQuote, trashQuote, restoreQuote, eraseQuote } from '../local';
+import { now, uid, type Quote, type Book } from '../domain';
+import { saveBook, saveQuote, trashQuote, restoreQuote, eraseQuote } from '../local';
 import {
   Modal,
   Field,
@@ -15,6 +15,7 @@ import {
   CloudGate,
 } from './shared';
 import { PublicContent } from './Social';
+import { PhotoQuote } from './PhotoQuote';
 function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void }) {
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const { identity } = useSession();
@@ -36,21 +37,69 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
     },
   );
   const { run, busy, error } = useTask();
+  const [recognizing, setRecognizing] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newBookId] = useState(uid);
   return (
     <Modal title={quote ? 'Редактировать цитату' : 'Новая цитата'} onClose={onClose}>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
-          if (await run(() => saveQuote({ ...v, updatedAt: now() }), 'Цитата сохранена')) onClose();
+          if (recognizing) return;
+          if (
+            await run(async () => {
+              const db = getDB();
+              await db.transaction(
+                'rw',
+                [
+                  db.personal_books,
+                  db.reading_progress,
+                  db.personal_reviews,
+                  db.quotes,
+                  db.sync_queue,
+                  db.settings,
+                ],
+                async () => {
+                  let bookId = v.bookId;
+                  if (!bookId) {
+                    const fresh: Book = {
+                      id: newBookId,
+                      clubBookId: null,
+                      title: newTitle.trim(),
+                      authors: '',
+                      description: '',
+                      genre: '',
+                      year: null,
+                      isbn: '',
+                      cover: '',
+                      totalPages: 0,
+                      status: 'planned',
+                      notes: '',
+                      publishProgress: false,
+                      publishReview: false,
+                      createdAt: now(),
+                      updatedAt: now(),
+                    };
+                    await saveBook(fresh, 0, {
+                      bookId: fresh.id,
+                      rating: null,
+                      text: '',
+                      spoilers: false,
+                      updatedAt: now(),
+                    });
+                    bookId = fresh.id;
+                  }
+                  await saveQuote({ ...v, bookId, updatedAt: now() }, true);
+                },
+              );
+            }, 'Цитата сохранена')
+          )
+            onClose();
         }}
       >
         <Field label="Книга">
-          <select
-            required
-            value={v.bookId}
-            onChange={(e) => setV({ ...v, bookId: e.target.value })}
-          >
-            <option value="">Выберите книгу</option>
+          <select value={v.bookId} onChange={(e) => setV({ ...v, bookId: e.target.value })}>
+            <option value="">Указать другую книгу</option>
             {books.map((b) => (
               <option value={b.id} key={b.id}>
                 {b.title}
@@ -58,7 +107,22 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
             ))}
           </select>
         </Field>
-        {!books.length && <p className="hint">Сначала добавьте книгу в личную библиотеку.</p>}
+        {!v.bookId && (
+          <Field label="Название книги">
+            <input
+              required
+              maxLength={300}
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+            />
+          </Field>
+        )}
+        <PhotoQuote
+          onBusy={setRecognizing}
+          onText={(text) =>
+            setV((old) => ({ ...old, text: old.text ? old.text + '\n\n' + text : text }))
+          }
+        />
         <Field label="Текст цитаты">
           <textarea
             required
@@ -100,18 +164,18 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
           />{' '}
           В избранное
         </label>
-        {identity && books.find((b) => b.id === v.bookId)?.clubBookId && (
+        {identity && (
           <label className="check">
             <input
               type="checkbox"
               checked={v.published}
               onChange={(e) => setV({ ...v, published: e.target.checked })}
             />{' '}
-            Публиковать в клубе (с учётом настроек профиля)
+            Поделиться цитатой с клубом
           </label>
         )}
         <ErrorNote text={error} />
-        <button className="primary" disabled={busy || !books.length}>
+        <button className="primary" disabled={busy || recognizing}>
           Сохранить цитату
         </button>
       </form>
@@ -121,6 +185,7 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
 export function Quotes() {
   const { identity } = useSession();
   const quotes = useLiveQuery(() => getDB().quotes.toArray()) || [];
+  const pending = useLiveQuery(() => getDB().sync_queue.toArray()) || [];
   const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const [q, setQ] = useState('');
   const [book, setBook] = useState('all');
@@ -217,7 +282,13 @@ export function Quotes() {
               {x.sourceAuthor && <small>Сохранено от {x.sourceAuthor}</small>}
               <small className="muted">
                 {dateLabel(x.createdAt)}
-                {x.published ? ' · Публикация включена' : ''}
+                {pending.some((p) => p.kind === 'quote' && p.entityId === x.id)
+                  ? x.published
+                    ? ' · Ожидает публикации'
+                    : ' · Скрытие ожидает синхронизации'
+                  : x.published
+                    ? ' · Опубликовано в клубе'
+                    : ''}
               </small>
               <div className="actions">
                 {x.deletedAt ? (

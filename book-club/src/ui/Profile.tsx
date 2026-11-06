@@ -18,14 +18,6 @@ import type { LibrarySyncState, LibraryConflict, LibraryRecord } from '../privat
 import { downloadBackup, importBackup, parseBackup, exportBackup } from '../backup';
 import { useCloud, useSession, Field, useTask, ErrorNote, Modal, dateLabel } from './shared';
 import { ProposalEditor } from './Club';
-const labels: Record<keyof Privacy, string> = {
-  show_finished: 'Прочитанные книги',
-  show_current: 'Текущие книги',
-  show_progress: 'Прогресс',
-  show_ratings: 'Оценки',
-  show_reviews: 'Отзывы',
-  show_quotes: 'Цитаты',
-};
 function EditProfile({ profile, onClose }: { profile: ProfileData; onClose: () => void }) {
   const [p, setP] = useState(profile);
   const { run, busy, error } = useTask();
@@ -109,7 +101,6 @@ export function Profile() {
     (x) => x.kind === 'privacy' && x.scope === identity?.id,
   )?.payload;
   const confirmed = privacy.data?.[0];
-  const desired = { ...defaultPrivacy, ...confirmed, ...pendingPrivacy };
   useEffect(() => {
     if (confirmed && !pendingPrivacy)
       void getDB().settings.put({ key: 'privacy', value: privacySchema.parse(confirmed) });
@@ -268,32 +259,10 @@ export function Profile() {
         {identity && (
           <section className="panel">
             <h2>Что видно в клубе</h2>
-            {Object.entries(labels).map(([k, label]) => (
-              <label className="toggle" key={k}>
-                <span>{label}</span>
-                <input
-                  type="checkbox"
-                  disabled={busy || privacy.isLoading || !!privacy.error}
-                  checked={Boolean(desired[k as keyof Privacy])}
-                  onChange={(e) =>
-                    void run(async () => {
-                      await getDB().transaction(
-                        'rw',
-                        [getDB().settings, getDB().sync_queue],
-                        async () => {
-                          const previous = await getDB().sync_queue.get(`privacy:${identity.id}`);
-                          await queue('privacy', identity.id, {
-                            ...previous?.payload,
-                            [k]: e.target.checked,
-                          });
-                        },
-                      );
-                    }, '')
-                  }
-                />
-              </label>
-            ))}
-            {pendingPrivacy && <p className="notice">Изменения ещё не подтверждены сервером.</p>}
+            <p>
+              Прогресс книг из каталога клуба виден участникам. Цитатами и отзывами можно поделиться
+              отдельно при редактировании. Личные заметки доступны только вам.
+            </p>
           </section>
         )}
       </div>

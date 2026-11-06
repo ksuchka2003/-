@@ -32,6 +32,8 @@ import {
 } from './shared';
 import { PublicContent } from './Social';
 import { BookPolls } from './Polls';
+import { MeetingCard } from './Meetings';
+import { BookReaders } from './Readers';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -111,17 +113,7 @@ export function Home() {
         {meetings.isLoading ? (
           <Loading />
         ) : upcoming ? (
-          <Link className="meeting-preview" to="/meetings">
-            <CalendarDays size={25} />
-            <div>
-              <h3>{upcoming.title}</h3>
-              <p>
-                {dateLabel(upcoming.starts_at)}
-                {upcoming.place ? ` · ${upcoming.place}` : ''}
-              </p>
-            </div>
-            <ArrowUpRight size={18} />
-          </Link>
+          <MeetingCard compact meeting={upcoming} />
         ) : (
           <Empty title="Пока нет предстоящих встреч" />
         )}
@@ -261,14 +253,17 @@ export function Club() {
         ) : (
           <div className="book-grid">
             {visible.map((b) => (
-              <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
-                <Cover title={b.title} cover={b.cover} />
-                <div>
-                  <h3>{b.title}</h3>
-                  <p>{b.authors}</p>
-                  {b.genre && <small>{b.genre}</small>}
-                </div>
-              </Link>
+              <article className="club-reading-book" key={b.id}>
+                <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
+                  <Cover title={b.title} cover={b.cover} />
+                  <div>
+                    <h3>{b.title}</h3>
+                    <p>{b.authors}</p>
+                    {b.genre && <small>{b.genre}</small>}
+                  </div>
+                </Link>
+                {status === 'reading' && <BookReaders bookId={b.id} title={b.title} />}
+              </article>
             ))}
           </div>
         )}
@@ -363,7 +358,9 @@ export function ClubDetail() {
           </button>
         ))}
       </div>
-      {tab === 'history' ? (
+      {tab === 'progress' ? (
+        <BookReaders bookId={id!} title={b.title} />
+      ) : tab === 'history' ? (
         <div className="stack">
           {readings.data
             ?.filter((r) => r.book_id === id)

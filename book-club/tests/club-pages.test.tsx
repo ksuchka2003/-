@@ -33,6 +33,8 @@ function view(
     'club_books',
     'club_readings',
     'meetings',
+    'meeting_attendance',
+    'meeting_participants',
     'member_profiles',
     'member_privacy_settings',
     'book_proposals',
@@ -181,4 +183,57 @@ it('несколько главных книг сохраняют порядок
     first.id,
   ]);
   expect(nextClubMeeting([], 0)).toBeUndefined();
+});
+
+it('читатель в текущей книге открывает только свои публикации к этой книге', () => {
+  const b = book('Солярис', 'reading');
+  const reader = uid();
+  view(<Club />, {
+    club_books: [b],
+    member_profiles: [
+      {
+        member_id: reader,
+        name: 'Анна',
+        avatar_url: null,
+        bio: '',
+        genres: '',
+        joined_at: new Date().toISOString(),
+      },
+    ],
+    visible_progress: [
+      {
+        id: uid(),
+        member_id: reader,
+        book_id: b.id,
+        title: b.title,
+        status: 'reading',
+        pages: 150,
+        total_pages: 300,
+        updated_at: new Date().toISOString(),
+      },
+    ],
+    public_quotes: [
+      {
+        id: uid(),
+        member_id: reader,
+        book_id: b.id,
+        title: b.title,
+        text: 'Цитата к Солярису',
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: uid(),
+        member_id: reader,
+        book_id: uid(),
+        title: 'Другая книга',
+        text: 'Цитата к другой книге',
+        updated_at: new Date().toISOString(),
+      },
+    ],
+  });
+  expect(screen.getByText('150 / 300 стр. · 50%')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Чтение Анна: Солярис' }));
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(screen.getByText('Цитата к Солярису')).toBeVisible();
+  expect(screen.queryByText('Цитата к другой книге')).toBeNull();
 });

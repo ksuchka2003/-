@@ -2,7 +2,7 @@ import { getDB, type LibraryDB } from './db';
 import { rows, action, currentIdentity } from './cloud';
 import { createLibrarySynchronizer } from './privateSync';
 import type { LibraryRecord, LibraryReply } from './privateTypes';
-import type { PublicProgress, PublicQuote, PublicReview } from './domain';
+import type { PublicQuote, PublicReview } from './domain';
 import { enqueueBook, saveQuote, retract } from './local';
 let owner: LibraryDB | undefined;
 let instance: ReturnType<typeof createLibrarySynchronizer> | undefined;
@@ -10,8 +10,7 @@ async function reconcilePublicCopies(db: LibraryDB, memberId: string) {
   const identity = currentIdentity();
   if (identity?.id !== memberId || db !== getDB())
     throw new Error('Аккаунт изменился. Откройте приложение заново.');
-  const [progress, reviews, quotes] = await Promise.all([
-    rows<PublicProgress>('visible_progress', memberId),
+  const [reviews, quotes] = await Promise.all([
     rows<PublicReview>('visible_reviews', memberId),
     rows<PublicQuote>('public_quotes', memberId),
   ]);
@@ -28,8 +27,8 @@ async function reconcilePublicCopies(db: LibraryDB, memberId: string) {
       db.settings,
     ],
     async () => {
-      for (const p of progress.filter((p) => p.member_id === identity.id))
-        if (!books.some((b) => b.id === p.id)) await retract('progress', p.id, true);
+      for (const op of await db.sync_queue.toArray())
+        if (op.kind === 'progress') await db.sync_queue.delete(op.id);
       for (const r of reviews.filter((r) => r.member_id === identity.id))
         if (!books.some((b) => b.id === r.id)) await retract('review', r.id, true);
       for (const q of quotes.filter((q) => q.member_id === identity.id))
@@ -38,7 +37,7 @@ async function reconcilePublicCopies(db: LibraryDB, memberId: string) {
       for (const b of books)
         await enqueueBook(b, undefined, {
           ...b,
-          publishProgress: progress.some((p) => p.member_id === identity.id && p.id === b.id),
+          publishProgress: false,
           publishReview: reviews.some((r) => r.member_id === identity.id && r.id === b.id),
         });
       for (const q of localQuotes) if (q.published) await saveQuote(q);

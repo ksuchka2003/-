@@ -11,9 +11,10 @@ import {
   type Book,
   type Metadata,
   type Review,
+  type ClubBook,
 } from '../domain';
 import { searchBooks, normalizedIsbn } from '../bookSearch';
-import { Modal, Field, Empty, Cover, useTask, ErrorNote, useSession } from './shared';
+import { Modal, Field, Empty, Cover, useTask, ErrorNote, useSession, useCloud } from './shared';
 const blank = (): Metadata => ({
   title: '',
   authors: '',
@@ -27,39 +28,28 @@ const blank = (): Metadata => ({
 export function MetadataFields({
   value,
   onChange,
+  compact = false,
 }: {
   value: Metadata;
   onChange: (b: Metadata) => void;
+  compact?: boolean;
 }) {
   const set = (key: keyof Metadata, v: unknown) => onChange({ ...value, [key]: v });
-  return (
+  const extra = (
     <>
-      <div className="form-grid metadata-grid">
-        <Field label="Название">
-          <input
-            required
-            maxLength={300}
-            value={value.title}
-            onChange={(e) => set('title', e.target.value)}
-          />
-        </Field>
-        <Field label="Автор">
-          <input
-            maxLength={500}
-            value={value.authors}
-            onChange={(e) => set('authors', e.target.value)}
-          />
-        </Field>
-        <Field label="Страниц в моём издании">
-          <input
-            type="number"
-            min="0"
-            max="1000000"
-            required
-            value={value.totalPages}
-            onChange={(e) => set('totalPages', Number(e.target.value))}
-          />
-        </Field>
+      <div className="form-grid">
+        {!compact && (
+          <Field label="Страниц в моём издании">
+            <input
+              type="number"
+              min={0}
+              max={1000000}
+              value={value.totalPages || ''}
+              placeholder="Можно не указывать"
+              onChange={(e) => set('totalPages', Number(e.target.value))}
+            />
+          </Field>
+        )}
         <Field label="Жанр">
           <input
             maxLength={150}
@@ -70,8 +60,8 @@ export function MetadataFields({
         <Field label="Год">
           <input
             type="number"
-            min="0"
-            max="3000"
+            min={0}
+            max={3000}
             value={value.year ?? ''}
             onChange={(e) => set('year', e.target.value ? Number(e.target.value) : null)}
           />
@@ -85,25 +75,49 @@ export function MetadataFields({
           />
         </Field>
       </div>
-      <details className="book-extra">
-        <summary>Обложка и описание</summary>
-        <Field label="Обложка (HTTPS-ссылка)">
-          <input
-            type="url"
-            pattern="https://.*"
-            value={value.cover}
-            onChange={(e) => set('cover', e.target.value)}
-          />
-        </Field>
-        <Field label="Описание">
-          <textarea
-            maxLength={10000}
-            rows={3}
-            value={value.description}
-            onChange={(e) => set('description', e.target.value)}
-          />
-        </Field>
-      </details>
+      <Field label="Обложка (HTTPS-ссылка)">
+        <input
+          type="url"
+          pattern="https://.*"
+          value={value.cover}
+          onChange={(e) => set('cover', e.target.value)}
+        />
+      </Field>
+      <Field label="Описание">
+        <textarea
+          rows={3}
+          maxLength={10000}
+          value={value.description}
+          onChange={(e) => set('description', e.target.value)}
+        />
+      </Field>
+    </>
+  );
+  return (
+    <>
+      <Field label="Название">
+        <input
+          required
+          maxLength={300}
+          value={value.title}
+          onChange={(e) => set('title', e.target.value)}
+        />
+      </Field>
+      <Field label="Автор">
+        <input
+          maxLength={500}
+          value={value.authors}
+          onChange={(e) => set('authors', e.target.value)}
+        />
+      </Field>
+      {compact ? (
+        <details className="book-extra">
+          <summary>Данные издания — необязательно</summary>
+          {extra}
+        </details>
+      ) : (
+        extra
+      )}
     </>
   );
 }
@@ -228,12 +242,13 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
   });
   const { busy, error, run } = useTask();
   const { identity } = useSession();
+  const club = useCloud<ClubBook>('club_books');
   useEffect(() => {
     if (book) {
-      getDB()
+      void getDB()
         .reading_progress.get(book.id)
         .then((p) => setPages(p?.pages || 0));
-      getDB()
+      void getDB()
         .personal_reviews.get(book.id)
         .then((r) => {
           if (r) setReview(r);
@@ -248,40 +263,97 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
           if (
             await run(
               () =>
-                saveBook({ ...value, updatedAt: now() }, pages, { ...review, updatedAt: now() }),
+                saveBook(
+                  { ...value, updatedAt: now() },
+                  pages,
+                  { ...review, updatedAt: now() },
+                  true,
+                ),
               'Книга сохранена',
             )
           )
             onClose();
         }}
       >
-        {!book && <BookLookup onSelect={(b) => setValue({ ...value, ...b })} />}
-        <MetadataFields value={value} onChange={(b) => setValue({ ...value, ...b })} />
-        <h3 className="form-section-title">Моё чтение</h3>
-        <div className="form-grid">
-          <Field label="Личный статус">
-            <select
-              value={value.status}
-              onChange={(e) => setValue({ ...value, status: e.target.value as Book['status'] })}
-            >
-              {Object.entries(personalStatuses).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Прочитано страниц">
-            <input
-              aria-label="Прочитано страниц"
-              type="number"
-              min="0"
-              max={value.totalPages}
-              required
-              value={pages}
-              onChange={(e) => setPages(Number(e.target.value))}
-            />
-          </Field>
+        {!book && (
+          <>
+            {!!club.data?.length && (
+              <Field label="Взять книгу из клуба">
+                <select
+                  value={value.clubBookId || ''}
+                  onChange={(e) => {
+                    const b = club.data?.find((b) => b.id === e.target.value);
+                    if (b)
+                      setValue({
+                        ...value,
+                        clubBookId: b.id,
+                        title: b.title,
+                        authors: b.authors,
+                        description: b.description,
+                        genre: b.genre,
+                        year: b.year,
+                        isbn: b.isbn,
+                        cover: b.cover,
+                        totalPages: b.default_pages,
+                      });
+                    else setValue({ ...value, clubBookId: null });
+                  }}
+                >
+                  <option value="">Выбрать книгу или добавить свою ниже</option>
+                  {club.data.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            <BookLookup onSelect={(b) => setValue({ ...value, ...b, clubBookId: null })} />
+          </>
+        )}
+        <MetadataFields compact value={value} onChange={(b) => setValue({ ...value, ...b })} />
+        <details className="book-extra" open={!!book}>
+          <summary>Моё чтение</summary>
+          <div className="form-grid">
+            <Field label="Страниц в моём издании">
+              <input
+                type="number"
+                min={0}
+                max={1000000}
+                value={value.totalPages || ''}
+                placeholder="Можно не указывать"
+                onChange={(e) => setValue({ ...value, totalPages: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Личный статус">
+              <select
+                value={value.status}
+                onChange={(e) => setValue({ ...value, status: e.target.value as Book['status'] })}
+              >
+                {Object.entries(personalStatuses).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Прочитано страниц">
+              <input
+                type="number"
+                min={0}
+                max={value.totalPages}
+                value={pages || ''}
+                placeholder="0"
+                onChange={(e) => setPages(Number(e.target.value))}
+              />
+            </Field>
+          </div>
+          {identity && value.clubBookId && (
+            <p className="muted">Прогресс этой книги виден участникам клуба.</p>
+          )}
+        </details>
+        <details className="book-extra">
+          <summary>Отзыв, оценка и заметки</summary>
           <Field label="Моя оценка">
             <select
               value={review.rating || ''}
@@ -295,53 +367,41 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
               ))}
             </select>
           </Field>
-        </div>
-        <h3 className="form-section-title">Отзыв и личные заметки</h3>
-        <Field label="Мой отзыв">
-          <textarea
-            rows={4}
-            maxLength={30000}
-            value={review.text}
-            onChange={(e) => setReview({ ...review, text: e.target.value })}
-          />
-        </Field>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={review.spoilers}
-            onChange={(e) => setReview({ ...review, spoilers: e.target.checked })}
-          />{' '}
-          Содержит спойлеры
-        </label>
-        <Field label="Приватные заметки">
-          <textarea
-            rows={3}
-            maxLength={50000}
-            value={value.notes}
-            onChange={(e) => setValue({ ...value, notes: e.target.value })}
-          />
-        </Field>
-        {identity && value.clubBookId ? (
-          <fieldset>
-            <legend>Публикация в клубе</legend>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={value.publishProgress}
-                onChange={(e) => setValue({ ...value, publishProgress: e.target.checked })}
-              />{' '}
-              Публиковать статус и прогресс
-            </label>
+          <Field label="Мой отзыв">
+            <textarea
+              rows={3}
+              maxLength={30000}
+              value={review.text}
+              onChange={(e) => setReview({ ...review, text: e.target.value })}
+            />
+          </Field>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={review.spoilers}
+              onChange={(e) => setReview({ ...review, spoilers: e.target.checked })}
+            />
+            Содержит спойлеры
+          </label>
+          {identity && value.clubBookId && (
             <label className="check">
               <input
                 type="checkbox"
                 checked={value.publishReview}
                 onChange={(e) => setValue({ ...value, publishReview: e.target.checked })}
-              />{' '}
-              Публиковать отзыв и оценку
+              />
+              Поделиться отзывом и оценкой в клубе
             </label>
-          </fieldset>
-        ) : null}
+          )}
+          <Field label="Приватные заметки">
+            <textarea
+              rows={3}
+              maxLength={50000}
+              value={value.notes}
+              onChange={(e) => setValue({ ...value, notes: e.target.value })}
+            />
+          </Field>
+        </details>
         <ErrorNote text={error} />
         <footer>
           <button disabled={busy} className="primary">
@@ -361,7 +421,8 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
                   if (await run(() => deleteBook(book.id), 'Книга удалена')) onClose();
               }}
             >
-              <Trash2 size={16} /> Удалить
+              <Trash2 size={16} />
+              Удалить
             </button>
           )}
         </footer>
@@ -442,11 +503,19 @@ export function MyBooks() {
                   <span className={`badge ${b.status}`}>{personalStatuses[b.status]}</span>
                   <h3>{b.title}</h3>
                   <p>{b.authors || 'Автор не указан'}</p>
-                  <div className="progress">
-                    <i style={{ width: `${percent(p, b.totalPages)}%` }} />
-                  </div>
+                  {b.totalPages > 0 && (
+                    <div className="progress">
+                      <i style={{ width: `${percent(p, b.totalPages)}%` }} />
+                    </div>
+                  )}
                   <small>
-                    {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
+                    {b.totalPages > 0 ? (
+                      <>
+                        {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
+                      </>
+                    ) : (
+                      'Количество страниц не указано'
+                    )}
                   </small>
                 </div>
               </button>

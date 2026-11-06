@@ -2307,3 +2307,93 @@ summary {
     flex-wrap: wrap;
   }
 }
+.club-reading-book {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.club-reading-book > .book-card {
+  border: 0;
+  border-radius: 0;
+}
+.book-readers {
+  padding: 18px;
+}
+.book-readers h3 {
+  margin-bottom: 12px;
+}
+.reader-row {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 12px 0;
+  background: transparent;
+  gap: 12px;
+}
+.reader-row .avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  font-size: 16px;
+}
+.reader-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.reader-body .progress {
+  display: block;
+  width: 100%;
+}
+.place-link,
+.meeting-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin: 10px 0;
+  color: var(--green);
+}
+.meeting-more {
+  display: block;
+  font-size: 13px;
+}
+.clamp-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.quote-photo-preview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.photo-quote {
+  margin: 16px 0;
+}
+.photo-quote .muted {
+  font-size: 12px;
+  margin-top: 8px;
+}
+.photo-quote .disabled {
+  opacity: 0.5;
+}
+.book-extra {
+  margin: 16px 0;
+}
+.book-extra > summary {
+  cursor: pointer;
+  padding: 12px 0;
+}

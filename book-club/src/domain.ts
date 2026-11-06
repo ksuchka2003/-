@@ -150,7 +150,7 @@ export type PublicReview = {
 export type PublicQuote = {
   id: string;
   member_id: string;
-  book_id: string;
+  book_id: string | null;
   title: string;
   text: string;
   page: number | null;
@@ -168,6 +168,7 @@ export type Meeting = {
   version: number;
   duration_minutes?: number;
   schedule_version?: number;
+  venue_url?: string;
 };
 export type Proposal = {
   id: string;

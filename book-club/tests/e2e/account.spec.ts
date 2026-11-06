@@ -24,7 +24,8 @@ function backend() {
     show_reviews: false,
     show_quotes: false,
   };
-  const publications: unknown[] = [];
+  const publications: any[] = [];
+  const extra: Record<string, unknown[]> = {};
   const availability: Availability[] = [];
   const meetings: Meeting[] = [];
   const attendance: Attendance[] = [];
@@ -138,10 +139,10 @@ function backend() {
                   : table === 'private_library_records'
                     ? [...records.values()]
                     : table === 'member_profiles'
-                      ? [profile]
+                      ? [profile, ...(extra.member_profiles || [])]
                       : table === 'member_privacy_settings'
                         ? [privacy]
-                        : [];
+                        : extra[table || ''] || [];
       }
       await route.fulfill({ headers, json: body });
     });
@@ -149,6 +150,7 @@ function backend() {
   return {
     records,
     publications,
+    extra,
     connect,
     availability,
     attendance,
@@ -200,7 +202,10 @@ test('один Telegram-аккаунт на двух устройствах: к�
     await a.getByRole('button', { name: 'Добавить', exact: true }).click();
     const form = a.getByRole('dialog');
     await form.getByLabel('Название', { exact: true }).fill('Синхронная книга');
+    await form.getByText('Данные издания — необязательно', { exact: true }).click();
+    await form.getByText('Моё чтение', { exact: true }).click();
     await form.getByLabel('Страниц в моём издании').fill('400');
+    await form.getByText('Отзыв, оценка и заметки', { exact: true }).click();
     await form.getByLabel('Прочитано страниц').fill('100');
     await form.getByLabel('Приватные заметки').fill('Только для владельца');
     await form.getByRole('button', { name: 'Сохранить книгу' }).click();
@@ -209,6 +214,7 @@ test('один Telegram-аккаунт на двух устройствах: к�
     await b.goto('/#/books');
     await expect(b.getByRole('heading', { name: 'Синхронная книга' })).toBeVisible();
     await b.getByRole('heading', { name: 'Синхронная книга' }).click();
+    await b.getByText('Отзыв, оценка и заметки', { exact: true }).click();
     await expect(b.getByLabel('Приватные заметки')).toHaveValue('Только для владельца');
     await b.getByRole('button', { name: 'Закрыть', exact: true }).click();
     await a.goto('/#/quotes');
@@ -275,81 +281,167 @@ test('ошибка авторизации видна, локальный реж�
   await expect(page.locator('.connection-bar')).toContainText('Только на этом устройстве');
 });
 
-test('календарь: занятое утро оставляет вечер, отметки приходят на другое устройство, приглашение с комментарием', async ({
-  browser,
-  baseURL,
+test('встреча администратора видна на главной, содержит место и ссылку, принимает ответ', async ({
+  page,
+  context,
 }) => {
   const api = backend();
-  const first = await browser.newContext({ baseURL, viewport: { width: 320, height: 740 } });
-  const second = await browser.newContext({ baseURL });
-  const day = clubDay(new Date(Date.now() + 2 * 86400000));
-  api.availability.push({
-    member_id: api.participants[1].member_id,
-    day,
-    status: 'partial',
-    busy_ranges: [[0, 720]],
-    comment: 'Свободен после обеда',
-  });
-  try {
-    await api.connect(first);
-    await api.connect(second);
-    const a = await first.newPage(),
-      b = await second.newPage();
-    await a.goto('/#/meetings');
-    const openDay = async (page: Page) => {
-      while (
-        !(await page
-          .getByRole('button', { name: new RegExp('^' + Number(day.slice(-2)) + ' ') })
-          .count())
-      )
-        await page.getByRole('button', { name: 'Следующий месяц' }).click();
-      await page
-        .getByRole('button', { name: new RegExp('^' + Number(day.slice(-2)) + ' ') })
-        .click();
-    };
-    await openDay(a);
-    await expect(a.getByText('Свободен после обеда', { exact: true })).toBeVisible();
-    await a.getByLabel('Моя доступность').selectOption('free');
-    await a.getByLabel('Комментарий к дню').fill('Хочу обсудить финал');
-    await a.getByRole('button', { name: 'Сохранить моё время' }).click();
-    await expect(a.getByRole('dialog')).toHaveCount(0);
-    expect(api.availability).toHaveLength(2);
-    await b.goto('/#/meetings');
-    await openDay(b);
-    await expect(b.getByLabel('Комментарий к дню')).toHaveValue('Хочу обсудить финал');
-    await expect(
-      b.getByText('Общее свободное время: 12:00–23:00 · МСК', { exact: true }),
-    ).toBeVisible();
-    await b.getByLabel('Начало встречи (МСК)').fill('18:00');
-    await b.getByRole('button', { name: 'Предложить это время' }).click();
-    await b.getByLabel('Название встречи').fill('Разговор о книге');
-    await b.getByRole('button', { name: 'Предложить участникам' }).click();
-    await expect.poll(() => api.meetings.length).toBe(1);
-    await b.getByRole('button', { name: 'Ответить', exact: true }).click();
-    await b.getByLabel('Сможете прийти?').selectOption('no');
-    await b.getByLabel('Комментарий к встрече').fill('Хочу, но удобнее в субботу');
-    await b.getByRole('button', { name: 'Сохранить ответ' }).click();
-    await b.getByRole('button', { name: 'Встречи', exact: true }).click();
-    await expect(b.getByText('Ваш ответ: Хочу, но не смогу', { exact: true })).toBeVisible();
-    await expect(b.getByText('Хочу, но удобнее в субботу', { exact: true }).first()).toBeVisible();
-    expect(api.attendance).toHaveLength(1);
-    expect(await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await a.screenshot({ path: '../../work/calendar-mobile.png', fullPage: true });
-  } finally {
-    await first.close();
-    await second.close();
-  }
-});
-test('ошибка сохранения времени не показывает ложный успех', async ({ page, context }) => {
-  const api = backend();
-  api.failAvailability();
   await api.connect(context);
   await page.goto('/#/meetings');
-  await page.locator('.calendar-day:not([disabled])').first().click();
-  await page.getByRole('button', { name: 'Сохранить моё время' }).click();
-  await expect(
-    page.getByText('Не удалось сохранить время. Повторите', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  expect(api.availability).toHaveLength(0);
+  await expect(page.getByRole('button', { name: 'Календарь', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Предложить встречу', exact: true }).click();
+  await page.getByLabel('Название встречи').fill('Обсуждаем финал');
+  const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  await page.getByLabel('Дата и время · МСК').fill(date + 'T18:00');
+  await page.getByLabel('Место', { exact: true }).fill('Кафе на углу');
+  await page.getByLabel('Ссылка на место или созвон').fill('https://maps.example/place');
+  await page.getByLabel('Описание', { exact: true }).fill('Приносите любимые цитаты');
+  await page.getByRole('button', { name: 'Предложить участникам' }).click();
+  await expect.poll(() => api.meetings.length).toBe(1);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Обсуждаем финал' })).toBeVisible();
+  await expect(page.getByText('Приносите любимые цитаты', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Открыть место или созвон' })).toHaveAttribute(
+    'href',
+    'https://maps.example/place',
+  );
+  await page.getByRole('button', { name: 'Ответить на приглашение' }).click();
+  await page.getByLabel('Сможете прийти?').selectOption('yes');
+  await page.getByLabel('Комментарий к встрече').fill('Приду с книгой');
+  await page.getByRole('button', { name: 'Сохранить ответ' }).click();
+  await expect(page.getByText('Ваш ответ: Приду', { exact: true })).toBeVisible();
+  expect(api.attendance).toHaveLength(1);
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/simple-meeting-mobile.png', fullPage: true });
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  await page.screenshot({ path: '../../work/simple-meeting-dark.png', fullPage: true });
+});
+
+test('прогресс текущей книги открывает публикации только выбранного участника и книги', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  const id = '20000000-0000-4000-8000-000000000001',
+    reader = '10000000-0000-4000-8000-000000000002';
+  api.extra.club_books = [
+    {
+      id,
+      title: 'Солярис',
+      authors: 'Станислав Лем',
+      description: '',
+      genre: '',
+      year: 1961,
+      isbn: '',
+      cover: '',
+      default_pages: 300,
+      status: 'reading',
+    },
+  ];
+  api.extra.member_profiles = [
+    {
+      member_id: reader,
+      name: 'Борис',
+      avatar_url: null,
+      bio: '',
+      genres: '',
+      joined_at: new Date().toISOString(),
+    },
+  ];
+  api.extra.visible_progress = [
+    {
+      id: '30000000-0000-4000-8000-000000000001',
+      book_id: id,
+      member_id: reader,
+      title: 'Солярис',
+      status: 'reading',
+      pages: 150,
+      total_pages: 300,
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  api.extra.public_quotes = [
+    {
+      id: '40000000-0000-4000-8000-000000000001',
+      book_id: id,
+      member_id: reader,
+      title: 'Солярис',
+      text: 'Цитата к обсуждаемой книге',
+      page: 10,
+      chapter: '',
+      comment: 'Мой комментарий',
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '40000000-0000-4000-8000-000000000002',
+      book_id: '20000000-0000-4000-8000-000000000002',
+      member_id: reader,
+      title: 'Другая книга',
+      text: 'Цитата к другой книге',
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  api.extra.visible_reviews = [
+    {
+      id: '50000000-0000-4000-8000-000000000001',
+      book_id: id,
+      member_id: reader,
+      title: 'Солярис',
+      text: 'Хочется обсудить океан',
+      rating: 9,
+      spoilers: false,
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  await api.connect(context);
+  await page.goto('/#/club');
+  await expect(page.getByText('150 / 300 стр. · 50%', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/club-readers-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'Чтение Борис: Солярис' }).click();
+  await expect(page.getByText('Цитата к обсуждаемой книге', { exact: true })).toBeVisible();
+  await expect(page.getByText('Цитата к другой книге', { exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Комментарии и отзывы', exact: true }).click();
+  await expect(page.getByText('Хочется обсудить океан', { exact: true })).toBeVisible();
+});
+test('цитата личной книги приватна по умолчанию, делится отдельно и отзывается', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  await page.goto('/#/quotes');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByLabel('Название книги', { exact: true }).fill('Личная книга');
+  await page.getByLabel('Текст цитаты').fill('Приватная цитата');
+  await expect(page.getByLabel('Поделиться цитатой с клубом')).not.toBeChecked();
+  await page.getByRole('button', { name: 'Сохранить цитату' }).click();
+  await expect.poll(() => api.records.size).toBeGreaterThan(0);
+  expect(api.publications).toHaveLength(0);
+  await page.getByRole('button', { name: 'Редактировать цитату', exact: true }).click();
+  await page.getByLabel('Поделиться цитатой с клубом').check();
+  await page.getByRole('button', { name: 'Сохранить цитату' }).click();
+  await expect
+    .poll(
+      () => api.publications.filter((p) => p.action === 'sync' && p.data.kind === 'quote').length,
+    )
+    .toBe(1);
+  expect(api.publications[0].data.payload).toMatchObject({
+    book_id: null,
+    explicit_share: true,
+    text: 'Приватная цитата',
+  });
+  await page.getByRole('button', { name: 'Редактировать цитату', exact: true }).click();
+  await page.getByLabel('Поделиться цитатой с клубом').uncheck();
+  await page.getByRole('button', { name: 'Сохранить цитату' }).click();
+  await expect
+    .poll(
+      () =>
+        api.publications.filter(
+          (p) => p.action === 'sync' && p.data.kind === 'quote' && p.data.payload === null,
+        ).length,
+    )
+    .toBe(1);
 });

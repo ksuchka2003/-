@@ -5,6 +5,8 @@ async function addBook(page: Page) {
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Название', { exact: true }).fill('Дюна');
   await dialog.getByLabel('Автор', { exact: true }).fill('Фрэнк Герберт');
+  await dialog.getByText('Данные издания — необязательно', { exact: true }).click();
+  await dialog.getByText('Моё чтение', { exact: true }).click();
   await dialog.getByLabel('Страниц в моём издании').fill('480');
   await dialog.getByLabel('Прочитано страниц').fill('200');
   await dialog.getByLabel('Личный статус').selectOption('reading');
@@ -44,6 +46,7 @@ test('узкий экран: поиск ISBN по Enter, форма без пе�
   await expect(dialog.locator('.lookup-results button')).toHaveCount(1);
   await dialog.locator('.lookup-results button').click();
   await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Найденное издание');
+  await dialog.getByText('Данные издания — необязательно', { exact: true }).click();
   await expect(dialog.getByLabel('ISBN', { exact: true })).toHaveValue('536700198X');
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
@@ -64,6 +67,7 @@ test('книга: добавление, редактирование, сохра
   await page.reload();
   await page.getByRole('heading', { name: 'Дюна', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  await dialog.getByText('Отзыв, оценка и заметки', { exact: true }).click();
   await dialog.getByLabel('Приватные заметки').fill('Личная мысль');
   await dialog.getByLabel('Прочитано страниц').fill('240');
   await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
@@ -146,4 +150,61 @@ test('светлая и тёмная темы, мобильная ширина �
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+});
+
+test('новая книга сохраняется только с названием; цитата создаётся с фото без предварительного добавления книги', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await expect(page.getByLabel('Страниц в моём издании')).not.toBeVisible();
+  await expect(page.getByLabel('Мой отзыв')).not.toBeVisible();
+  await page.getByLabel('Название', { exact: true }).fill('Минимальная книга');
+  await page.screenshot({ path: '../../work/simple-book-form.png', fullPage: true });
+  await page.getByRole('button', { name: 'Сохранить книгу' }).click();
+  await expect(page.getByRole('heading', { name: 'Минимальная книга' })).toBeVisible();
+  await page.goto('/#/quotes');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByLabel('Название книги', { exact: true }).fill('Книга с фотографии');
+  const png = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 3000;
+    c.height = 560;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = 'black';
+    ctx.font = '96px Georgia';
+    ctx.fillText('Книжный клуб читает вместе.', 120, 200);
+    ctx.fillText('Истории объединяют людей.', 120, 360);
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  const thirdParty: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.url().startsWith('http') &&
+      !r.url().startsWith('http://127.0.0.1') &&
+      !r.url().includes('telegram.org')
+    )
+      thirdParty.push(r.url());
+  });
+  await page
+    .getByLabel('Выбрать фото цитаты')
+    .setInputFiles({
+      name: 'quote.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(png, 'base64'),
+    });
+  await page.getByRole('button', { name: 'Распознать текст', exact: true }).click();
+  await expect(page.getByLabel('Текст цитаты')).toHaveValue(/Книжный клуб читает вместе/, {
+    timeout: 90000,
+  });
+  await expect(page.getByLabel('Текст цитаты')).toHaveValue(/Истории объединяют людей/);
+  await page.getByRole('button', { name: 'Сохранить цитату' }).click();
+  await expect(
+    page.locator('.quote-source').filter({ hasText: 'Книга с фотографии' }),
+  ).toBeVisible();
+  await expect(page.getByText('Книжный клуб читает вместе.', { exact: false })).toBeVisible();
+  expect(thirdParty).toEqual([]);
 });

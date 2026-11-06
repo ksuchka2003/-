@@ -1,8 +1,15 @@
 import { endpoint, service, checked } from '../_shared/http.ts';
+import { shouldNotify, meetingNotificationText } from '../_shared/meeting-notifications.ts';
 Deno.serve(
   endpoint(async (req) => {
     const secret = Deno.env.get('CRON_SECRET');
     if (!secret || req.headers.get('x-cron-secret') !== secret) throw new Error('Нет доступа');
+    if(req.headers.get('x-bookclub-probe')==='1'){
+      const response=await fetch(`https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/getMe`,{signal:AbortSignal.timeout(10000)});
+      const result=await response.json();
+      if(!response.ok||!result.ok)throw new Error('Не удалось проверить подключение Telegram-бота');
+      return {ready:true,botUsername:result.result.username};
+    }
     const db = service();
     const jobs = checked(await db.rpc('claim_notifications'));
     let sent = 0;
@@ -26,42 +33,25 @@ Deno.serve(
         const attendance = checked(
           await db
             .from('meeting_attendance')
-            .select('response')
+            .select('response,schedule_version')
             .eq('meeting_id', job.meeting_id)
             .eq('member_id', job.member_id)
             .maybeSingle(),
         );
-        const reminder = ['24h', '1h'].includes(job.kind);
-        if (
-          !member.active ||
-          meeting.version !== job.meeting_version ||
-          (meeting.cancelled && job.kind !== 'cancelled') ||
-          (reminder &&
-            (attendance?.response === 'no' || new Date(meeting.starts_at).getTime() <= Date.now()))
-        ) {
+        if (!shouldNotify(job,meeting,member.active,attendance)) {
           await finish({ status: 'skipped' });
           continue;
         }
-        const prefix = (
-          {
-            new: 'Новая встреча',
-            changed: 'Встреча изменена',
-            cancelled: 'Встреча отменена',
-            '24h': 'Встреча через 24 часа',
-            '1h': 'Встреча через час',
-          } as Record<string, string>
-        )[job.kind];
-        const text =
-          `${prefix}: ${meeting.title}\n${new Date(meeting.starts_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)\n${meeting.place}\n${meeting.description}`.slice(
-            0,
-            4000,
-          );
+        const text = meetingNotificationText(job.kind,meeting);
+        const appUrl = Deno.env.get('TELEGRAM_APP_URL');
+        const appLink = appUrl ? new URL(appUrl) : null;
+        if(appLink) appLink.hash='/meetings';
         const response = await fetch(
           `https://api.telegram.org/bot${Deno.env.get('TELEGRAM_BOT_TOKEN')}/sendMessage`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: member.telegram_id, text }),
+            body: JSON.stringify({ chat_id: member.telegram_id, text, ...(appLink ? {reply_markup:{inline_keyboard:[[{text:'Открыть встречу',web_app:{url:appLink.href}}]]}} : {}) }),
             signal: AbortSignal.timeout(15000),
           },
         );

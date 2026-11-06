@@ -83,9 +83,13 @@ export function PublicContent({
               <Link className="author" to={`/members/${item.member_id}`}>
                 {author(item.member_id)}
               </Link>
-              <Link className="quote-source" to={`/club/${item.book_id}`}>
-                {item.title}
-              </Link>
+              {item.book_id ? (
+                <Link className="quote-source" to={`/club/${item.book_id}`}>
+                  {item.title}
+                </Link>
+              ) : (
+                <p className="quote-source">{item.title}</p>
+              )}
               {type === 'quotes'
                 ? (() => {
                     const q = item as PublicQuote;

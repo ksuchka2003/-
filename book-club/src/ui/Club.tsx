@@ -30,6 +30,7 @@ import {
   useSession,
   dateLabel,
   useClock,
+  SearchField,
 } from './shared';
 import { PublicContent } from './Social';
 import { BookPolls } from './Polls';
@@ -283,12 +284,7 @@ export function Club() {
             {!!all.length && (
               <>
                 <div className="toolbar">
-                  <input
-                    aria-label="Поиск книг клуба"
-                    placeholder="Название или автор"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                  />
+                  <SearchField label="Поиск книг клуба" value={q} onChange={setQ} />
                 </div>
                 <div
                   className="tabs collection-tabs"
@@ -371,9 +367,9 @@ export function ClubDetail() {
     );
   return (
     <CloudGate>
-      <section className="book-detail">
+      <section className="book-detail book-detail-compact">
         <Cover title={b.title} cover={bookCover(own, b.cover)} />
-        <div>
+        <div className="book-detail-heading">
           <span className="badge">{clubStatuses[b.status]}</span>
           <h1>{b.title}</h1>
           <h3>{b.authors}</h3>
@@ -382,10 +378,16 @@ export function ClubDetail() {
               .filter(Boolean)
               .join(' · ')}
           </p>
-          <p className="prewrap">{b.description}</p>
+        </div>
+        <div className="book-detail-actions">
+          {own && !own.deletedAt && (
+            <Link className="primary" to={`/books?book=${own.id}&action=progress`}>
+              Обновить мой прогресс
+            </Link>
+          )}
           {own ? (
             <Link
-              className="primary"
+              className={own.deletedAt ? 'primary' : 'button'}
               to={own.deletedAt ? '/books?view=trash' : `/books?book=${own.id}`}
             >
               {own.deletedAt ? 'Книга в корзине — восстановить' : 'Уже на моей полке'}
@@ -428,18 +430,21 @@ export function ClubDetail() {
               <Plus size={17} /> В мои книги
             </button>
           )}
-          {own && !own.deletedAt && (
-            <Link className="button" to={`/books?book=${own.id}&action=progress`}>
-              Обновить мой прогресс
-            </Link>
+          {!own?.deletedAt && (
+            <button className="button" onClick={() => setThought(true)}>
+              Оставить впечатление
+            </button>
           )}
-          <button className="button" onClick={() => setThought(true)}>
-            Оставить впечатление
-          </button>
           <ErrorNote text={error} />
         </div>
+        {b.description && (
+          <details className="book-extra book-description">
+            <summary>Описание книги</summary>
+            <p className="prewrap">{b.description}</p>
+          </details>
+        )}
       </section>
-      <div className="tabs">
+      <div className="tabs detail-tabs">
         {[
           ['overview', 'После чтения'],
           ['quotes', 'Цитаты'],
@@ -454,17 +459,19 @@ export function ClubDetail() {
       {tab === 'overview' ? (
         <>
           <BookMemory bookId={b.id} onTab={setTab} />
-          <details className="book-extra">
-            <summary>История чтения клубом</summary>
-            {readings.data
-              ?.filter((r) => r.book_id === id)
-              .map((r) => (
-                <p key={r.id}>
-                  {r.starts_on} — {r.ends_on || 'без даты окончания'} ·{' '}
-                  {{ active: 'Читаем', finished: 'Завершено', cancelled: 'Отменено' }[r.status]}
-                </p>
-              ))}
-          </details>
+          {(readings.data || []).some((r) => r.book_id === id) && (
+            <details className="book-extra">
+              <summary>История чтения клубом</summary>
+              {readings.data
+                ?.filter((r) => r.book_id === id)
+                .map((r) => (
+                  <p key={r.id}>
+                    {r.starts_on} — {r.ends_on || 'без даты окончания'} ·{' '}
+                    {{ active: 'Читаем', finished: 'Завершено', cancelled: 'Отменено' }[r.status]}
+                  </p>
+                ))}
+            </details>
+          )}
         </>
       ) : tab === 'progress' ? (
         <BookReaders bookId={id!} title={b.title} />

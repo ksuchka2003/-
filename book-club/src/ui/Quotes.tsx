@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../cloud';
 import { resolveQuoteBook } from '../quoteBooks';
@@ -11,6 +12,7 @@ import {
   Trash2,
   RotateCcw,
   Pencil,
+  SlidersHorizontal,
   Quote as QuoteIcon,
 } from 'lucide-react';
 import { getDB } from '../db';
@@ -26,6 +28,7 @@ import {
   dateLabel,
   CloudGate,
   useCloud,
+  SearchField,
 } from './shared';
 import { PublicContent } from './Social';
 import { QuoteBookPicker } from './QuoteBookPicker';
@@ -151,35 +154,41 @@ export function QuoteEditor({
             autoFocus={!!book}
             required
             maxLength={20000}
-            rows={6}
+            rows={5}
             value={v.text}
             onChange={(e) => setV({ ...v, text: e.target.value })}
           />
         </Field>
-        <div className="form-grid">
-          <Field label="Страница">
-            <input
-              type="number"
-              min="0"
-              value={v.page ?? ''}
-              onChange={(e) => setV({ ...v, page: e.target.value ? Number(e.target.value) : null })}
+        <details className="book-extra quote-extra">
+          <summary>Страница, глава и комментарий</summary>
+          <div className="form-grid quote-location">
+            <Field label="Страница">
+              <input
+                type="number"
+                min="0"
+                value={v.page ?? ''}
+                onChange={(e) =>
+                  setV({ ...v, page: e.target.value ? Number(e.target.value) : null })
+                }
+              />
+            </Field>
+            <Field label="Глава">
+              <input
+                maxLength={300}
+                value={v.chapter}
+                onChange={(e) => setV({ ...v, chapter: e.target.value })}
+              />
+            </Field>
+          </div>
+          <Field label="Комментарий">
+            <textarea
+              rows={3}
+              maxLength={10000}
+              value={v.comment}
+              onChange={(e) => setV({ ...v, comment: e.target.value })}
             />
           </Field>
-          <Field label="Глава">
-            <input
-              maxLength={300}
-              value={v.chapter}
-              onChange={(e) => setV({ ...v, chapter: e.target.value })}
-            />
-          </Field>
-        </div>
-        <Field label="Комментарий">
-          <textarea
-            maxLength={10000}
-            value={v.comment}
-            onChange={(e) => setV({ ...v, comment: e.target.value })}
-          />
-        </Field>
+        </details>
         <label className="check">
           <input
             type="checkbox"
@@ -199,9 +208,11 @@ export function QuoteEditor({
           </label>
         )}
         <ErrorNote text={error} />
-        <button className="primary" disabled={busy || (!book && catalog.isLoading)}>
-          Сохранить цитату
-        </button>
+        <footer>
+          <button className="primary" disabled={busy || (!book && catalog.isLoading)}>
+            Сохранить цитату
+          </button>
+        </footer>
       </form>
     </Modal>
   );
@@ -246,10 +257,35 @@ export function Quotes() {
   const pending = useLiveQuery(() => getDB().sync_queue.toArray()) || [];
   const shared = useCloud<PublicQuote>('club_quotes');
   const likes = useCloud<{ quote_id: string; member_id: string }>('quote_likes');
-  const [q, setQ] = useState('');
-  const [tab, setTab] = useState('mine');
-  const [favorite, setFavorite] = useState(false);
-  const [sort, setSort] = useState<'newest' | 'likes'>('newest');
+  const [params, setParams] = useSearchParams();
+  const sections = [
+    ['mine', 'Мои цитаты'],
+    ['saved', 'Сохранено себе'],
+    ...(identity
+      ? [
+          ['liked', 'Мои лайки'],
+          ['club', 'Цитаты клуба'],
+        ]
+      : []),
+    ['trash', 'Корзина'],
+  ];
+  const tab = sections.some(([key]) => key === params.get('tab')) ? params.get('tab')! : 'mine';
+  const q = params.get('q') || '';
+  const sort = params.get('sort') === 'likes' ? 'likes' : 'newest';
+  const favorite = ['mine', 'saved'].includes(tab) && params.get('favorite') === '1';
+  const update = (values: Record<string, string>) =>
+    setParams(
+      (old) => {
+        const next = new URLSearchParams(old);
+        for (const [key, value] of Object.entries(values))
+          value ? next.set(key, value) : next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  const [filters, setFilters] = useState(false);
+  const [filterSort, setFilterSort] = useState(sort);
+  const [filterFavorite, setFilterFavorite] = useState(favorite);
   const [edit, setEdit] = useState<Quote | true | null>(null);
   const { run, error, busy } = useTask();
   const publicTab = tab === 'club' || tab === 'liked';
@@ -291,38 +327,46 @@ export function Quotes() {
           </button>
         </div>
       </div>
-      {(quotes.length > 0 || publicTab) && (
-        <input
+      {(quotes.length > 0 || publicTab || q) && (
+        <SearchField
           className="quote-search"
-          aria-label="Поиск цитат"
+          label="Поиск цитат"
           placeholder="Книга или слова из цитаты"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(value) => update({ q: value })}
         />
       )}
-      <div className="tabs">
-        {[
-          ['mine', 'Мои'],
-          ['saved', 'Сохранено себе'],
-          ...(identity
-            ? [
-                ['liked', 'Мои лайки'],
-                ['club', 'В клубе'],
-              ]
-            : []),
-          ['trash', 'Корзина'],
-        ].map(([key, label]) => (
+      <div className="quote-navigation">
+        <Field label="Раздел цитат">
+          <select
+            value={tab}
+            onChange={(e) =>
+              update({ tab: e.target.value === 'mine' ? '' : e.target.value, favorite: '' })
+            }
+          >
+            {sections.map(([key, label]) => (
+              <option value={key} key={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {(quotes.length > 0 || publicTab) && (
           <button
-            key={key}
-            className={tab === key ? 'active' : ''}
+            type="button"
+            className={`quote-filter-button ${favorite || sort !== 'newest' ? 'selected' : ''}`}
+            aria-label="Фильтры цитат"
+            aria-haspopup="dialog"
             onClick={() => {
-              setTab(key);
-              setFavorite(false);
+              setFilterSort(sort);
+              setFilterFavorite(favorite);
+              setFilters(true);
             }}
           >
-            {label}
+            <SlidersHorizontal size={19} />
+            <span>Фильтры</span>
           </button>
-        ))}
+        )}
       </div>
       {tab === 'saved' && (
         <p className="tab-explanation">
@@ -334,26 +378,20 @@ export function Quotes() {
           Лайк отмечает публикацию автора. Нажмите «Сохранить себе», чтобы оставить личную копию.
         </p>
       )}
-      {(quotes.length > 0 || publicTab) && (
-        <div className="toolbar quotes-toolbar">
-          <select
-            aria-label="Сортировка цитат"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as 'newest' | 'likes')}
+      {(favorite || sort !== 'newest') && (
+        <div className="active-quote-filters">
+          <span>
+            {[favorite ? 'Избранное' : '', sort === 'likes' ? 'Больше лайков' : '']
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => update({ favorite: '', sort: '' })}
           >
-            <option value="newest">Сначала новые</option>
-            <option value="likes">Больше лайков</option>
-          </select>
-          {!publicTab && tab !== 'trash' && (
-            <button
-              className={favorite ? 'selected' : ''}
-              aria-pressed={favorite}
-              onClick={() => setFavorite(!favorite)}
-            >
-              <Star size={16} />
-              Избранное
-            </button>
-          )}
+            Сбросить фильтры
+          </button>
         </div>
       )}
       {tab === 'trash' && items.length > 0 && (
@@ -387,7 +425,13 @@ export function Quotes() {
                   ? 'Сохранённых цитат пока нет'
                   : 'Пока нет цитат'
           }
-        />
+        >
+          {(q || favorite) && (
+            <button onClick={() => update({ q: '', favorite: '', sort: '' })}>
+              Сбросить поиск и фильтры
+            </button>
+          )}
+        </Empty>
       ) : (
         <div className="quote-grid">
           {items.map((x) => {
@@ -526,6 +570,52 @@ export function Quotes() {
             );
           })}
         </div>
+      )}
+      {filters && (
+        <Modal title="Фильтры цитат" onClose={() => setFilters(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              update({
+                sort: filterSort === 'likes' ? 'likes' : '',
+                favorite: filterFavorite && ['mine', 'saved'].includes(tab) ? '1' : '',
+              });
+              setFilters(false);
+            }}
+          >
+            <Field label="Сортировка цитат">
+              <select
+                value={filterSort}
+                onChange={(e) => setFilterSort(e.target.value as 'newest' | 'likes')}
+              >
+                <option value="newest">Сначала новые</option>
+                <option value="likes">Больше лайков</option>
+              </select>
+            </Field>
+            {!publicTab && tab !== 'trash' && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={filterFavorite}
+                  onChange={(e) => setFilterFavorite(e.target.checked)}
+                />
+                Только избранное
+              </label>
+            )}
+            <footer>
+              <button className="primary">Показать цитаты</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterSort('newest');
+                  setFilterFavorite(false);
+                }}
+              >
+                Сбросить
+              </button>
+            </footer>
+          </form>
+        </Modal>
       )}
       {edit && (
         <QuoteEditor

@@ -12,7 +12,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, BookOpen, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, LoaderCircle, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { type Identity, rows } from '../cloud';
 import { message } from '../domain';
@@ -140,6 +140,50 @@ export function Field({ label, children }: { label: string; children: ReactNode 
           })
         : children}
     </label>
+  );
+}
+export function SearchField({
+  label,
+  value,
+  onChange,
+  placeholder = 'Название или автор',
+  className = '',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <div className={`search search-field ${className}`}>
+      <Search size={18} aria-hidden="true" />
+      <input
+        ref={input}
+        aria-label={label}
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        enterKeyHint="search"
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {value && (
+        <button
+          type="button"
+          className="search-clear"
+          aria-label="Очистить поиск"
+          onClick={() => {
+            onChange('');
+            input.current?.focus();
+          }}
+        >
+          <X size={18} />
+        </button>
+      )}
+    </div>
   );
 }
 export function BackLink({ fallback }: { fallback: string }) {

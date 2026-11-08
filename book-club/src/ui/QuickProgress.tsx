@@ -62,7 +62,7 @@ export function QuickProgress({ bookId, onClose }: { bookId: string; onClose: ()
             void save();
           }}
         >
-          <h3>{book.title}</h3>
+          <h3 className="progress-book-title">{book.title}</h3>
           <Field label="Прочитано страниц">
             <input
               type="number"
@@ -70,6 +70,7 @@ export function QuickProgress({ bookId, onClose }: { bookId: string; onClose: ()
               min={0}
               max={values.total}
               required
+              onFocus={(e) => e.currentTarget.select()}
               value={values.pages}
               onChange={(e) => setValues({ ...values, pages: Number(e.target.value) })}
             />
@@ -96,6 +97,7 @@ export function QuickProgress({ bookId, onClose }: { bookId: string; onClose: ()
                 min={0}
                 max={1000000}
                 required
+                onFocus={(e) => e.currentTarget.select()}
                 value={values.total || ''}
                 onChange={(e) => setValues({ ...values, total: Number(e.target.value) })}
               />

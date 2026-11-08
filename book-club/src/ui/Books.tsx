@@ -36,6 +36,7 @@ import {
   Loading,
   useSession,
   useCloud,
+  SearchField,
 } from './shared';
 const blank = (): Metadata => ({
   title: '',
@@ -766,15 +767,11 @@ export function MyBooks() {
           )}
           {books.length > 0 && (
             <div className="toolbar books-toolbar">
-              <label className="search">
-                <Search size={18} />
-                <input
-                  aria-label="Поиск моих книг"
-                  placeholder="Название или автор"
-                  value={q}
-                  onChange={(e) => updateFilter('q', e.target.value)}
-                />
-              </label>
+              <SearchField
+                label="Поиск моих книг"
+                value={q}
+                onChange={(value) => updateFilter('q', value)}
+              />
               <button
                 type="button"
                 aria-label="Фильтры книг"

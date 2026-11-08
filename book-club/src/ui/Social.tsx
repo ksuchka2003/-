@@ -25,6 +25,7 @@ import {
   useSession,
   Cover,
   dateLabel,
+  SearchField,
 } from './shared';
 export function Avatar({ profile }: { profile: Profile }) {
   return (
@@ -247,12 +248,12 @@ export function Members() {
       </div>
       <CloudGate>
         {!!profiles.data?.length && (
-          <input
+          <SearchField
             className="full"
-            aria-label="Найти участника"
+            label="Найти участника"
             placeholder="Имя или username"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={setQ}
           />
         )}
         <ErrorNote text={profiles.error?.message} />
@@ -329,7 +330,7 @@ export function MemberDetail() {
             ))}
         </div>
       )}
-      <div className="tabs">
+      <div className="tabs detail-tabs">
         {[
           ['progress', 'Книги'],
           ['current', 'Сейчас читает'],

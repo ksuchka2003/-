@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Search, UserPlus, ChevronRight } from 'lucide-react';
+import { UserPlus, ChevronRight } from 'lucide-react';
 import { action } from '../cloud';
-import { Field, Modal, useCloud, useTask, ErrorNote, Empty, Loading } from './shared';
+import { Field, Modal, useCloud, useTask, ErrorNote, Empty, Loading, SearchField } from './shared';
 
 export type ManagedMember = {
   id: string;
@@ -154,15 +154,13 @@ export function AdminMembers() {
           Доступ закрыт
         </button>
       </div>
-      <label className="search admin-search">
-        <Search size={18} />
-        <input
-          aria-label="Поиск участников в управлении"
-          placeholder="Имя или username"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </label>
+      <SearchField
+        className="admin-search"
+        label="Поиск участников в управлении"
+        placeholder="Имя или username"
+        value={search}
+        onChange={setSearch}
+      />
       <ErrorNote text={error || members.error?.message || invites.error?.message} />
       {members.isLoading ? (
         <Loading label="Загружаем участников…" />

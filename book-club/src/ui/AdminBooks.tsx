@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ChevronRight } from 'lucide-react';
+import { Plus, ChevronRight } from 'lucide-react';
 import { currentClubBooks } from '../clubSelectors';
 import { clubDay } from '../calendar';
 import {
@@ -23,6 +23,7 @@ import {
   Cover,
   Loading,
   confirmClose,
+  SearchField,
 } from './shared';
 import { MetadataFields, BookLookup } from './Books';
 import type { BookPoll } from './Polls';
@@ -375,15 +376,12 @@ export function AdminBooks() {
           Читаем сейчас
         </button>
       </div>
-      <label className="search admin-search">
-        <Search size={18} />
-        <input
-          aria-label="Поиск книг в управлении"
-          value={search}
-          onChange={(e) => update('q', e.target.value)}
-          placeholder="Название или автор"
-        />
-      </label>
+      <SearchField
+        className="admin-search"
+        label="Поиск книг в управлении"
+        value={search}
+        onChange={(value) => update('q', value)}
+      />
       {readingMode && (
         <p className="section-hint">
           Отметьте книги для главной страницы. Можно выбрать несколько.

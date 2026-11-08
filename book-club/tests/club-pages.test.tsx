@@ -8,6 +8,7 @@ import { Members, PublicContent } from '../src/ui/Social';
 import { MyBooks } from '../src/ui/Books';
 import { Quotes } from '../src/ui/Quotes';
 import { Admin } from '../src/ui/Admin';
+import { BookMemory } from '../src/ui/BookMemory';
 import { Session } from '../src/ui/shared';
 import { currentClubBooks, nextClubMeeting } from '../src/clubSelectors';
 import { uid, type ClubBook, type Reading } from '../src/domain';
@@ -201,7 +202,7 @@ it('публичная лента доступна во вкладке цита�
     ],
     member_profiles: [{ member_id: owner, name: 'Анна' }],
   });
-  fireEvent.click(screen.getByRole('button', { name: /^В клубе$/ }));
+  fireEvent.change(screen.getByLabelText('Раздел цитат'), { target: { value: 'club' } });
   expect(screen.getByText('Публичная цитата')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Книга' })).toHaveAttribute('href', `/club/${bookId}`);
 });
@@ -257,6 +258,26 @@ it('участник не получает интерфейс и действи�
   expect(
     screen.queryByRole('button', { name: /Добавить|Пригласить|Закрыть доступ/ }),
   ).not.toBeInTheDocument();
+});
+it('пустая память книги показывает одно короткое состояние без нулевой статистики и пустых разделов', () => {
+  const id = uid();
+  view(<BookMemory bookId={id} onTab={vi.fn()} />, {
+    club_book_stats: [
+      {
+        book_id: id,
+        average_rating: null,
+        rating_count: 0,
+        finished_readers: 0,
+        pace_count: 0,
+        pages_per_day: null,
+        average_days: null,
+      },
+    ],
+  });
+  expect(screen.getByText('Пока нет цитат и впечатлений к этой книге.')).toBeVisible();
+  expect(screen.queryByText('Пока нет публикаций')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Все цитаты' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Оценок в клубе пока нет.')).not.toBeInTheDocument();
 });
 it('несколько главных книг сохраняют порядок, завершённые и архивные не попадают на главную', () => {
   const first = book('Первая', 'reading'),

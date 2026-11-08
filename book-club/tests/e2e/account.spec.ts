@@ -550,6 +550,151 @@ test('управление: встреча сохраняет связанные
     release();
   }
 });
+test('мобильный UX: раздел и фильтры цитат сохраняются при возврате и перезагрузке', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    book = crypto.randomUUID(),
+    quote = crypto.randomUUID(),
+    date = new Date().toISOString();
+  api.records.set('book:' + book, {
+    kind: 'book',
+    entity_id: book,
+    revision: 1,
+    device_id: owner,
+    payload: {
+      id: book,
+      title: 'Книга',
+      authors: 'Автор',
+      clubBookId: null,
+      description: '',
+      genre: '',
+      year: null,
+      isbn: '',
+      cover: '',
+      totalPages: 200,
+      status: 'reading',
+      notes: '',
+      publishProgress: false,
+      publishReview: false,
+      createdAt: date,
+      updatedAt: date,
+    },
+  });
+  api.records.set('quote:' + quote, {
+    kind: 'quote',
+    entity_id: quote,
+    revision: 2,
+    device_id: owner,
+    payload: {
+      id: quote,
+      bookId: book,
+      text: 'Цитата для проверки фильтров',
+      page: 12,
+      chapter: '',
+      comment: '',
+      favorite: true,
+      deletedAt: null,
+      sourceId: null,
+      sourceAuthor: null,
+      published: false,
+      createdAt: date,
+      updatedAt: date,
+    },
+  });
+  await api.connect(context);
+  await page.goto('/#/quotes');
+  const section = page.getByLabel('Раздел цитат', { exact: true });
+  await expect(section.locator('option')).toHaveCount(5);
+  await expect(page.locator('main .tabs')).toHaveCount(0);
+  await page.getByLabel('Поиск цитат').fill('проверки');
+  await page.getByRole('button', { name: 'Фильтры цитат', exact: true }).click();
+  await page.getByLabel('Только избранное', { exact: true }).check();
+  await page.getByLabel('Сортировка цитат', { exact: true }).selectOption('likes');
+  await page.getByRole('button', { name: 'Показать цитаты', exact: true }).click();
+  await expect(page.locator('blockquote')).toHaveText('Цитата для проверки фильтров');
+  await page.goto('/#/profile');
+  await page.goBack();
+  await expect(page.getByLabel('Поиск цитат')).toHaveValue('проверки');
+  await page.reload();
+  await expect(page.getByText('Избранное · Больше лайков', { exact: true })).toBeVisible();
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 760 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.screenshot({ path: '../../work/quotes-compact-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'Очистить поиск', exact: true }).click();
+  await expect(page.getByLabel('Поиск цитат')).toHaveValue('');
+  await expect(page.getByLabel('Поиск цитат')).toBeFocused();
+  await section.selectOption('trash');
+  await expect(page.getByText('Корзина пуста', { exact: true })).toBeVisible();
+  expect(page.url()).not.toContain('favorite=');
+  await section.selectOption('saved');
+  await expect(page.getByText('Сохранённых цитат пока нет', { exact: true })).toBeVisible();
+  expect(api.publications).toEqual([]);
+});
+
+test('мобильный UX: длинное описание не закрывает действия книги, прогресс сохраняется при малой высоте', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    book = crypto.randomUUID();
+  const description = 'Очень подробное описание книги. '.repeat(120);
+  api.extra.club_books = [
+    {
+      id: book,
+      title: 'Книга клуба',
+      authors: 'Автор',
+      description,
+      genre: '',
+      year: null,
+      isbn: '',
+      cover: '',
+      status: 'reading',
+      default_pages: 300,
+    },
+  ];
+  await api.connect(context);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/#/club/' + book);
+  await expect(page.getByText(description, { exact: true })).not.toBeVisible();
+  const add = page.getByRole('button', { name: 'В мои книги', exact: true });
+  await expect(add).toBeInViewport();
+  await add.click();
+  const progress = page.getByRole('link', { name: 'Обновить мой прогресс', exact: true });
+  await expect(progress).toBeVisible();
+  for (const action of await page
+    .locator('.book-detail-actions > a, .book-detail-actions > button')
+    .all()) {
+    const bounds = (await action.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(16);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(304);
+  }
+  const tabs = page.locator('.detail-tabs button');
+  await expect(tabs).toHaveCount(4);
+  for (const tab of await tabs.all()) {
+    const bounds = (await tab.boundingBox())!;
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(304);
+  }
+  await page.screenshot({ path: '../../work/book-detail-mobile-compact.png', fullPage: true });
+  await progress.click();
+  await page.setViewportSize({ width: 320, height: 420 });
+  const dialog = page.getByRole('dialog', { name: 'Мой прогресс', exact: true });
+  await expect(
+    dialog.getByRole('button', { name: 'Сохранить прогресс', exact: true }),
+  ).toBeInViewport();
+  await dialog.getByLabel('Прочитано страниц').fill('120');
+  await dialog.getByRole('button', { name: 'Сохранить прогресс', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText('40%', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('вход работает в мобильном WebView без AbortSignal.timeout и AbortSignal.any', async ({
   browser,
   baseURL,
@@ -1575,10 +1720,10 @@ test('цитаты: понравившиеся и сохранённые отд�
       ),
     )
     .toBe(true);
-  await page.getByRole('button', { name: 'Мои лайки', exact: true }).click();
+  await page.getByLabel('Раздел цитат').selectOption('liked');
   await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Сохранить себе', exact: true }).click();
-  await page.getByRole('button', { name: 'Сохранено себе', exact: true }).click();
+  await page.getByLabel('Раздел цитат').selectOption('saved');
   await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
   await expect(page.getByText('Собственная мысль', { exact: true })).not.toBeVisible();
   await expect(page.getByLabel('Фильтр по книге')).toHaveCount(0);
@@ -1589,7 +1734,7 @@ test('цитаты: понравившиеся и сохранённые отд�
     '1',
   );
   await page.getByLabel('Поиск цитат').fill('');
-  await page.getByRole('button', { name: 'Мои', exact: true }).click();
+  await page.getByLabel('Раздел цитат').selectOption('mine');
   await expect(page.getByText('Собственная мысль', { exact: true })).toBeVisible();
   await expect(page.getByText('Цитата другого участника', { exact: true })).not.toBeVisible();
   await page.setViewportSize({ width: 320, height: 760 });
@@ -1605,7 +1750,7 @@ test('цитаты: понравившиеся и сохранённые отд�
   api.extra.quote_likes = [];
   api.extra.member_profiles = [];
   await page.reload();
-  await page.getByRole('button', { name: 'Сохранено себе', exact: true }).click();
+  await page.getByLabel('Раздел цитат').selectOption('saved');
   await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
   await expect(page.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
   const second = await browser.newContext({ baseURL });
@@ -1613,7 +1758,7 @@ test('цитаты: понравившиеся и сохранённые отд�
     await api.connect(second);
     const other = await second.newPage();
     await other.goto('/#/quotes');
-    await other.getByRole('button', { name: 'Сохранено себе', exact: true }).click();
+    await other.getByLabel('Раздел цитат').selectOption('saved');
     await expect(other.getByText('Цитата другого участника', { exact: true })).toBeVisible();
     await expect(other.getByText('Книга-источник', { exact: false })).toBeVisible();
     await expect(other.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
@@ -1662,7 +1807,7 @@ test('подсказки цитаты выбирают личную или кл�
   expect(
     await page.evaluate(() => {
       const input = document.querySelector('[aria-label="Поиск цитат"]')!,
-        tabs = document.querySelector('main .tabs')!;
+        tabs = document.querySelector('main .quote-navigation')!;
       return !!(input.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING);
     }),
   ).toBe(true);

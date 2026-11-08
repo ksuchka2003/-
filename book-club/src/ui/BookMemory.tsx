@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { type Book, type ClubBook, type BookStats, now, uid, message } from '../domain';
+import {
+  type Book,
+  type ClubBook,
+  type BookStats,
+  type PublicQuote,
+  type PublicReview,
+  now,
+  uid,
+  message,
+} from '../domain';
 import { decimal } from '../collection';
 import { getDB } from '../db';
 import { saveBook } from '../local';
@@ -10,6 +19,17 @@ import { Modal, Field, useCloud, useTask, ErrorNote, Loading } from './shared';
 export function BookStatistics({ bookId }: { bookId: string }) {
   const all = useCloud<BookStats>('club_book_stats');
   const stats = all.data?.find((s) => s.book_id === bookId);
+  if (
+    !all.isLoading &&
+    !all.error &&
+    (!stats ||
+      !(
+        Number(stats.rating_count) > 0 ||
+        Number(stats.finished_readers) > 0 ||
+        Number(stats.pace_count) > 0
+      ))
+  )
+    return null;
   return (
     <section className="book-statistics">
       <ErrorNote text={all.error?.message} />
@@ -18,13 +38,11 @@ export function BookStatistics({ bookId }: { bookId: string }) {
       ) : (
         stats && (
           <>
-            {stats.average_rating !== null && Number(stats.rating_count) > 0 ? (
+            {stats.average_rating !== null && Number(stats.rating_count) > 0 && (
               <div>
                 <RatingStars value={Number(stats.average_rating)} label="Средняя оценка" />
                 <span>Средняя оценка · оценок: {stats.rating_count}</span>
               </div>
-            ) : (
-              <p className="muted">Оценок в клубе пока нет.</p>
             )}
             {Number(stats.finished_readers) > 0 && (
               <div>
@@ -48,19 +66,44 @@ export function BookStatistics({ bookId }: { bookId: string }) {
   );
 }
 export function BookMemory({ bookId, onTab }: { bookId: string; onTab: (tab: string) => void }) {
+  const quotes = useCloud<PublicQuote>('club_quotes');
+  const reviews = useCloud<PublicReview>('club_reviews');
+  const hasQuotes = quotes.data?.some((q) => q.book_id === bookId);
+  const hasReviews = reviews.data?.some((r) => r.book_id === bookId);
   return (
     <>
       <BookStatistics bookId={bookId} />
-      <div className="section-title">
-        <h2>Цитаты, которые зацепили</h2>
-        <button onClick={() => onTab('quotes')}>Все цитаты</button>
-      </div>
-      <PublicContent type="quotes" bookId={bookId} sort="likes" limit={3} />
-      <div className="section-title">
-        <h2>Что осталось после книги</h2>
-        <button onClick={() => onTab('reviews')}>Все мысли</button>
-      </div>
-      <PublicContent type="reviews" bookId={bookId} limit={3} />
+      <ErrorNote text={quotes.error?.message || reviews.error?.message} />
+      {quotes.isLoading || reviews.isLoading ? (
+        <Loading />
+      ) : (
+        !quotes.error &&
+        !reviews.error && (
+          <>
+            {!hasQuotes && !hasReviews && (
+              <p className="quiet-empty">Пока нет цитат и впечатлений к этой книге.</p>
+            )}
+            {hasQuotes && (
+              <>
+                <div className="section-title">
+                  <h2>Цитаты, которые зацепили</h2>
+                  <button onClick={() => onTab('quotes')}>Все цитаты</button>
+                </div>
+                <PublicContent type="quotes" bookId={bookId} sort="likes" limit={3} />
+              </>
+            )}
+            {hasReviews && (
+              <>
+                <div className="section-title">
+                  <h2>Что осталось после книги</h2>
+                  <button onClick={() => onTab('reviews')}>Все мысли</button>
+                </div>
+                <PublicContent type="reviews" bookId={bookId} limit={3} />
+              </>
+            )}
+          </>
+        )
+      )}
     </>
   );
 }

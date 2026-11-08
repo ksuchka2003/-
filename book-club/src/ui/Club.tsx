@@ -53,37 +53,47 @@ export function MainBooks() {
       ) : (
         <div className="main-books">
           {current.map(({ book: b, reading: r }) => {
-            const own = personal.find((p) => p.clubBookId === b.id);
+            const own = personal.find((p) => p.clubBookId === b.id && !p.deletedAt);
             const pages = progress.find((p) => p.bookId === own?.id)?.pages || 0;
             return (
-              <Link
-                className="featured-book"
-                key={b.id}
-                aria-label={`Открыть книгу «${b.title}»`}
-                to={`/club/${b.id}`}
-              >
-                <Cover title={b.title} cover={bookCover(own, b.cover)} />
-                <div>
-                  <h2>{b.title}</h2>
-                  <p>{b.authors}</p>
-                  {r?.ends_on && (
-                    <small>
-                      До {new Date(r.ends_on + 'T12:00:00').toLocaleDateString('ru-RU')}
-                    </small>
-                  )}
-                  {own && (
-                    <>
-                      <div className="progress">
-                        <i style={{ width: `${percent(pages, own.totalPages)}%` }} />
-                      </div>
+              <article className="current-book" key={b.id}>
+                <Link
+                  className="featured-book"
+                  key={b.id}
+                  aria-label={`Открыть книгу «${b.title}»`}
+                  to={`/club/${b.id}`}
+                >
+                  <Cover title={b.title} cover={bookCover(own, b.cover)} />
+                  <div>
+                    <h2>{b.title}</h2>
+                    <p>{b.authors}</p>
+                    {r?.ends_on && (
                       <small>
-                        Мой прогресс: {pages} / {own.totalPages} стр.
+                        До {new Date(r.ends_on + 'T12:00:00').toLocaleDateString('ru-RU')}
                       </small>
-                    </>
-                  )}
-                  <span className="book-open-label">Открыть книгу →</span>
-                </div>
-              </Link>
+                    )}
+                    {own && (
+                      <>
+                        <div className="progress">
+                          <i style={{ width: `${percent(pages, own.totalPages)}%` }} />
+                        </div>
+                        <small>
+                          Мой прогресс: {pages} / {own.totalPages} стр.
+                        </small>
+                      </>
+                    )}
+                    <span className="book-open-label">Открыть книгу →</span>
+                  </div>
+                </Link>
+                {own && (
+                  <Link
+                    className="button current-book-progress"
+                    to={`/books?book=${own.id}&action=progress`}
+                  >
+                    Обновить мой прогресс
+                  </Link>
+                )}
+              </article>
             );
           })}
         </div>
@@ -374,8 +384,11 @@ export function ClubDetail() {
           </p>
           <p className="prewrap">{b.description}</p>
           {own ? (
-            <Link className="primary" to="/books">
-              Уже на моей полке
+            <Link
+              className="primary"
+              to={own.deletedAt ? '/books?view=trash' : `/books?book=${own.id}`}
+            >
+              {own.deletedAt ? 'Книга в корзине — восстановить' : 'Уже на моей полке'}
             </Link>
           ) : (
             <button
@@ -414,6 +427,11 @@ export function ClubDetail() {
             >
               <Plus size={17} /> В мои книги
             </button>
+          )}
+          {own && !own.deletedAt && (
+            <Link className="button" to={`/books?book=${own.id}&action=progress`}>
+              Обновить мой прогресс
+            </Link>
           )}
           <button className="button" onClick={() => setThought(true)}>
             Оставить впечатление

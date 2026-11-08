@@ -40,7 +40,8 @@ async function reconcilePublicCopies(db: LibraryDB, memberId: string) {
           publishProgress: false,
           publishReview: reviews.some((r) => r.member_id === identity.id && r.id === b.id),
         });
-      for (const q of localQuotes) if (q.published) await saveQuote(q);
+      for (const q of localQuotes)
+        if (q.published && !books.find((b) => b.id === q.bookId)?.deletedAt) await saveQuote(q);
     },
   );
 }

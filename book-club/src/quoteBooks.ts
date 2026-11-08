@@ -20,16 +20,20 @@ export async function resolveQuoteBook({
   if (personalId) {
     const book = await db.personal_books.get(personalId);
     if (!book) throw new Error('Книга удалена. Выберите её заново.');
+    if (book.deletedAt) throw new Error('Сначала восстановите книгу из корзины');
     return book.id;
   }
   const own = await db.personal_books.toArray();
   if (club) {
     const clubId = club.id;
     const existing = own.find((b) => b.clubBookId === clubId);
+    if (existing?.deletedAt) throw new Error('Сначала восстановите книгу из корзины');
     if (existing) return existing.id;
   }
   if (!club) {
-    const matches = own.filter((b) => bookSearchKey(b.title) === bookSearchKey(title));
+    const matches = own.filter(
+      (b) => !b.deletedAt && bookSearchKey(b.title) === bookSearchKey(title),
+    );
     const shared = catalog.filter(
       (b) =>
         bookSearchKey(b.title) === bookSearchKey(title) &&
@@ -40,6 +44,8 @@ export async function resolveQuoteBook({
     if (matches.length === 1) return matches[0].id;
     if (shared.length === 1) club = shared[0];
   }
+  if (club && own.some((b) => b.clubBookId === club.id && b.deletedAt))
+    throw new Error('Сначала восстановите книгу из корзины');
   const book: Book = {
     id: newId,
     clubBookId: club?.id || null,

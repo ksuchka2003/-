@@ -36,6 +36,7 @@ export const bookSchema = metadataSchema.extend({
   publishReview: z.boolean(),
   createdAt: date,
   updatedAt: date,
+  deletedAt: date.nullable().optional(),
   coverData: z
     .string()
     .max(60000)

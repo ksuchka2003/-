@@ -7,6 +7,10 @@ import {
   restoreQuote,
   copyPublicQuote,
   changeBookStatus,
+  updateReadingProgress,
+  trashBook,
+  restoreBook,
+  deleteBook,
 } from '../src/local';
 import { exportBackup, importBackup } from '../src/backup';
 import { now, uid, percent, type Book } from '../src/domain';
@@ -27,6 +31,87 @@ const book = (): Book => ({
   publishReview: false,
   createdAt: now(),
   updatedAt: now(),
+});
+it('короткая форма прогресса сохраняет заметки, отзыв, даты и приватность; проверяет границы', async () => {
+  const b = book(),
+    r = { bookId: b.id, rating: 9, text: 'Мой отзыв', spoilers: true, updatedAt: now() };
+  await saveBook(b, 20, r, false, { startedOn: '2026-01-01', chapter: 'Глава 1' });
+  await getDB().personal_books.update(b.id, { notes: 'Последняя заметка с другого экрана' });
+  await updateReadingProgress(b.id, 100, 'Глава 3', 500);
+  expect(await getDB().personal_books.get(b.id)).toMatchObject({
+    notes: 'Последняя заметка с другого экрана',
+    totalPages: 500,
+    publishReview: false,
+  });
+  expect(await getDB().personal_reviews.get(b.id)).toEqual(r);
+  expect(await getDB().reading_progress.get(b.id)).toMatchObject({
+    pages: 100,
+    chapter: 'Глава 3',
+    startedOn: '2026-01-01',
+  });
+  await expect(updateReadingProgress(b.id, 501, '', 500)).rejects.toThrow();
+  await expect(updateReadingProgress(b.id, -1, '', 500)).rejects.toThrow();
+  expect((await getDB().reading_progress.get(b.id))?.pages).toBe(100);
+  await getDB().reading_progress.update(b.id, { chapter: 'Новая глава с планшета' });
+  await getDB().personal_books.update(b.id, { totalPages: 600 });
+  await updateReadingProgress(b.id, 120, undefined, undefined);
+  expect((await getDB().reading_progress.get(b.id))?.chapter).toBe('Новая глава с планшета');
+  expect((await getDB().personal_books.get(b.id))?.totalPages).toBe(600);
+  await updateReadingProgress(b.id, 100, 'Эпилог', 500, true);
+  expect((await getDB().personal_books.get(b.id))?.status).toBe('finished');
+  expect((await getDB().reading_progress.get(b.id))?.pages).toBe(500);
+});
+it('корзина книг сохраняет всё содержимое и восстанавливает без публикации; окончательное удаление явно удаляет семью', async () => {
+  const b = { ...book(), clubBookId: uid(), publishReview: true };
+  await saveBook(
+    b,
+    200,
+    { bookId: b.id, rating: 8, text: 'Отзыв', spoilers: false, updatedAt: now() },
+    true,
+  );
+  const q = {
+    id: uid(),
+    bookId: b.id,
+    text: 'Сохранённый текст',
+    page: 10,
+    chapter: 'Глава',
+    comment: 'Мысль',
+    favorite: true,
+    deletedAt: null,
+    sourceId: uid(),
+    sourceAuthor: 'Автор',
+    published: true,
+    createdAt: now(),
+    updatedAt: now(),
+  };
+  await saveQuote(q, true);
+  await trashBook(b.id);
+  expect((await getDB().personal_books.get(b.id))?.deletedAt).toBeTruthy();
+  expect((await getDB().quotes.get(q.id))?.text).toBe(q.text);
+  expect((await getDB().reading_progress.get(b.id))?.pages).toBe(200);
+  expect((await getDB().personal_reviews.get(b.id))?.rating).toBe(8);
+  expect((await getDB().sync_queue.get('quote:' + q.id))?.payload).toBeNull();
+  expect((await getDB().sync_queue.get('review:' + b.id))?.payload).toBeNull();
+  await expect(saveQuote(q)).rejects.toThrow('восстановите');
+  const backup = JSON.stringify(await exportBackup());
+  await importBackup(backup, 'replace');
+  expect((await getDB().personal_books.get(b.id))?.deletedAt).toBeTruthy();
+  await restoreBook(b.id);
+  expect(await getDB().personal_books.get(b.id)).toMatchObject({
+    deletedAt: null,
+    notes: b.notes,
+    publishReview: false,
+  });
+  expect(await getDB().quotes.get(q.id)).toMatchObject({
+    sourceId: q.sourceId,
+    favorite: true,
+    published: false,
+    deletedAt: null,
+  });
+  await deleteBook(b.id);
+  expect(await getDB().quotes.count()).toBe(0);
+  expect(await getDB().reading_progress.count()).toBe(0);
+  expect(await getDB().personal_reviews.count()).toBe(0);
 });
 beforeEach(() => {
   openLibrary(uid());

@@ -48,5 +48,8 @@ export async function purgeTrash() {
   const expired = (await db.quotes.toArray()).filter(
     (q) => q.deletedAt && Date.parse(q.deletedAt) < Date.now() - 30 * 86400000 && !q.published,
   );
-  await db.quotes.bulkDelete(expired.map((q) => q.id));
+  const books = new Set(
+    (await db.personal_books.toArray()).filter((b) => b.deletedAt).map((b) => b.id),
+  );
+  await db.quotes.bulkDelete(expired.filter((q) => !books.has(q.bookId)).map((q) => q.id));
 }

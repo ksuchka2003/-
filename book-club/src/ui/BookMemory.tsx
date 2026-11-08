@@ -5,6 +5,7 @@ import { getDB } from '../db';
 import { saveBook } from '../local';
 import { PublicContent } from './Social';
 import { RatingStars } from './RatingStars';
+import { DraftNote, useDraft } from './useDraft';
 import { Modal, Field, useCloud, useTask, ErrorNote, Loading } from './shared';
 export function BookStatistics({ bookId }: { bookId: string }) {
   const all = useCloud<BookStats>('club_book_stats');
@@ -69,28 +70,44 @@ export function BookThoughtEditor({ book, onClose }: { book: ClubBook; onClose: 
   const [loadError, setLoadError] = useState('');
   const [pages, setPages] = useState(0);
   const [id] = useState(uid);
-  const [text, setText] = useState('');
-  const [rating, setRating] = useState<number | null>(null);
-  const [spoilers, setSpoilers] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [publish, setPublish] = useState(true);
+  const [initial, setInitial] = useState<{
+    text: string;
+    rating: number | null;
+    spoilers: boolean;
+    finished: boolean;
+    publish: boolean;
+  } | null>(null);
+  const draft = useDraft('thought:' + book.id, initial);
+  const {
+    text = '',
+    rating = null,
+    spoilers = false,
+    finished = false,
+    publish = true,
+  } = draft.value || {};
+  const setText = (text: string) => draft.setValue((old) => ({ ...old, text }));
+  const setRating = (rating: number | null) => draft.setValue((old) => ({ ...old, rating }));
+  const setSpoilers = (spoilers: boolean) => draft.setValue((old) => ({ ...old, spoilers }));
+  const setFinished = (finished: boolean) => draft.setValue((old) => ({ ...old, finished }));
+  const setPublish = (publish: boolean) => draft.setValue((old) => ({ ...old, publish }));
   const { run, busy, error } = useTask();
   useEffect(() => {
     let active = true;
     void (async () => {
       const b = await getDB().personal_books.where('clubBookId').equals(book.id).first();
+      if (b?.deletedAt) throw new Error('Сначала восстановите книгу из корзины');
       const r = b ? await getDB().personal_reviews.get(b.id) : null;
       const p = b ? await getDB().reading_progress.get(b.id) : null;
       if (active) {
         setPersonal(b || null);
         setPages(p?.pages || 0);
-        setFinished(b?.status === 'finished');
-        if (r) {
-          setText(r.text);
-          setRating(r.rating);
-          setSpoilers(r.spoilers);
-        }
-        setPublish(b?.publishReview ?? true);
+        setInitial({
+          text: r?.text || '',
+          rating: r?.rating ?? null,
+          spoilers: r?.spoilers || false,
+          finished: b?.status === 'finished',
+          publish: b?.publishReview ?? true,
+        });
         setLoading(false);
       }
     })().catch((e) => {
@@ -105,7 +122,7 @@ export function BookThoughtEditor({ book, onClose }: { book: ClubBook; onClose: 
   }, [book.id]);
   return (
     <Modal title={`Моё впечатление · ${book.title}`} onClose={onClose}>
-      {loading ? (
+      {loading || (!loadError && !draft.value) ? (
         <Loading />
       ) : loadError ? (
         <ErrorNote text={loadError} />
@@ -147,10 +164,13 @@ export function BookThoughtEditor({ book, onClose }: { book: ClubBook; onClose: 
                   true,
                 );
               }, 'Впечатление сохранено')
-            )
+            ) {
+              await draft.clear();
               onClose();
+            }
           }}
         >
+          <DraftNote draft={draft} />
           <Field label="Что осталось после книги?">
             <textarea
               rows={5}

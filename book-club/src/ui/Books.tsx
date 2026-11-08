@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, type SetStateAction } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, Search, SlidersHorizontal, Trash2, ChevronDown } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal, Trash2, ChevronDown, RotateCcw } from 'lucide-react';
 import { getDB } from '../db';
 import { personalCounts } from '../collection';
 import { clubDay } from '../calendar';
 import { CollectionCounts } from './CollectionCounts';
-import { saveBook, deleteBook, changeBookStatus } from '../local';
+import { saveBook, deleteBook, changeBookStatus, trashBook, restoreBook } from '../local';
+import { DraftNote, useDraft } from './useDraft';
+import { QuickProgress } from './QuickProgress';
 import { bookCover } from '../covers';
 import { CoverPicker, InternetCover } from './CoverPicker';
 import { RatingStars } from './RatingStars';
@@ -21,7 +24,17 @@ import {
   type ClubBook,
 } from '../domain';
 import { searchBooks } from '../bookSearch';
-import { Modal, Field, Empty, Cover, useTask, ErrorNote, useSession, useCloud } from './shared';
+import {
+  Modal,
+  Field,
+  Empty,
+  Cover,
+  useTask,
+  ErrorNote,
+  Loading,
+  useSession,
+  useCloud,
+} from './shared';
 const blank = (): Metadata => ({
   title: '',
   authors: '',
@@ -222,52 +235,88 @@ export function BookLookup({ onSelect }: { onSelect: (b: Metadata) => void }) {
   );
 }
 export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void }) {
-  const [value, setValue] = useState<Book>(
-    () =>
-      book || {
-        ...blank(),
-        id: uid(),
-        clubBookId: null,
-        status: 'planned',
-        notes: '',
-        publishProgress: false,
-        publishReview: false,
-        createdAt: now(),
-        updatedAt: now(),
-      },
-  );
-  const [pages, setPages] = useState(0);
-  const [chapter, setChapter] = useState('');
-  const [startedOn, setStartedOn] = useState('');
-  const [finishedOn, setFinishedOn] = useState('');
-  const [review, setReview] = useState<Review>({
-    bookId: value.id,
-    rating: null,
-    text: '',
-    spoilers: false,
-    updatedAt: now(),
+  type BookDraft = {
+    book: Book;
+    pages: number;
+    chapter: string;
+    startedOn: string;
+    finishedOn: string;
+    review: Review;
+  };
+  const [initial, setInitial] = useState<BookDraft | null>(() => {
+    if (book) return null;
+    const b: Book = {
+      ...blank(),
+      id: uid(),
+      clubBookId: null,
+      status: 'planned',
+      notes: '',
+      publishProgress: false,
+      publishReview: false,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    return {
+      book: b,
+      pages: 0,
+      chapter: '',
+      startedOn: '',
+      finishedOn: '',
+      review: { bookId: b.id, rating: null, text: '', spoilers: false, updatedAt: now() },
+    };
   });
+  const draft = useDraft('book:' + (book?.id || 'new'), initial);
   const { busy, error, run } = useTask();
   const { identity } = useSession();
   const club = useCloud<ClubBook>('club_books');
   const [coverBusy, setCoverBusy] = useState(false);
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
-    if (book) {
-      void getDB()
-        .reading_progress.get(book.id)
-        .then((p) => {
-          setPages(p?.pages || 0);
-          setChapter(p?.chapter || '');
-          setStartedOn(p?.startedOn || '');
-          setFinishedOn(p?.finishedOn || '');
+    let active = true;
+    if (book)
+      void Promise.all([
+        getDB().reading_progress.get(book.id),
+        getDB().personal_reviews.get(book.id),
+      ])
+        .then(([p, r]) => {
+          if (active)
+            setInitial({
+              book,
+              pages: p?.pages || 0,
+              chapter: p?.chapter || '',
+              startedOn: p?.startedOn || '',
+              finishedOn: p?.finishedOn || '',
+              review: r || {
+                bookId: book.id,
+                rating: null,
+                text: '',
+                spoilers: false,
+                updatedAt: now(),
+              },
+            });
+        })
+        .catch(() => {
+          if (active)
+            setLoadError('Не удалось прочитать книгу. Закройте форму и попробуйте ещё раз.');
         });
-      void getDB()
-        .personal_reviews.get(book.id)
-        .then((r) => {
-          if (r) setReview(r);
-        });
-    }
+    return () => {
+      active = false;
+    };
   }, [book]);
+  if (!draft.value || loadError)
+    return (
+      <Modal title={book ? 'Моя книга' : 'Добавить книгу'} onClose={onClose}>
+        {loadError ? <ErrorNote text={loadError} /> : <Loading />}
+      </Modal>
+    );
+  const { book: value, pages, chapter, startedOn, finishedOn, review } = draft.value;
+  const setValue = (next: SetStateAction<Book>) =>
+    draft.setValue((old) => ({ ...old, book: typeof next === 'function' ? next(old.book) : next }));
+  const setPages = (pages: number) => draft.setValue((old) => ({ ...old, pages }));
+  const setChapter = (chapter: string) => draft.setValue((old) => ({ ...old, chapter }));
+  const setStartedOn = (startedOn: string) => draft.setValue((old) => ({ ...old, startedOn }));
+  const setFinishedOn = (finishedOn: string) => draft.setValue((old) => ({ ...old, finishedOn }));
+  const setReview = (review: Review) => draft.setValue((old) => ({ ...old, review }));
   return (
     <Modal title={book ? 'Моя книга' : 'Добавить книгу'} onClose={onClose}>
       <form
@@ -289,10 +338,13 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
                 ),
               'Книга сохранена',
             )
-          )
+          ) {
+            await draft.clear();
             onClose();
+          }
         }}
       >
+        <DraftNote draft={draft} />
         {!book && (
           <>
             {!!club.data?.length && (
@@ -477,14 +529,16 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
               onClick={async () => {
                 if (
                   confirm(
-                    'Удалить книгу, её отзывы, заметки и цитаты? Публичные копии будут удалены после синхронизации.',
+                    'Переместить книгу в корзину? Заметки, отзыв, прогресс и цитаты сохранятся. Публикации будут сняты после синхронизации.',
                   )
                 )
-                  if (await run(() => deleteBook(book.id), 'Книга удалена')) onClose();
+                  if (await run(() => trashBook(book.id), 'Книга в корзине')) {
+                    await draft.clear();
+                    onClose();
+                  }
               }}
             >
-              <Trash2 size={16} />
-              Удалить
+              <Trash2 size={16} />В корзину
             </button>
           )}
         </footer>
@@ -514,7 +568,35 @@ function QuickReadingStatus({ book, onClose }: { book: Book; onClose: () => void
 }
 export function MyBooks() {
   const catalog = useCloud<ClubBook>('club_books');
-  const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
+  const allBooks = useLiveQuery(() => getDB().personal_books.toArray()) || [];
+  const books = allBooks.filter((b) => !b.deletedAt);
+  const trashed = allBooks.filter((b) => !!b.deletedAt);
+  const [params, setParams] = useSearchParams();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const trash = params.get('view') === 'trash';
+  const linked = books.find((b) => b.id === params.get('book'));
+  const progressOpen = linked && params.get('action') === 'progress';
+  const { run, error, busy } = useTask();
+  const openBook = (book: Book, action = '') => {
+    const next = new URLSearchParams(params);
+    next.set('book', book.id);
+    if (action) next.set('action', action);
+    else next.delete('action');
+    setParams(next);
+  };
+  const closeBook = () => {
+    setEdit(null);
+    const next = new URLSearchParams(params);
+    next.delete('book');
+    next.delete('action');
+    if (mounted.current && params.has('book')) setParams(next, { replace: true });
+  };
   const progress = useLiveQuery(() => getDB().reading_progress.toArray()) || [];
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
@@ -537,88 +619,178 @@ export function MyBooks() {
     <>
       <div className="page-heading">
         <div>
-          <h1>Мои книги {books.length > 0 && <em>{books.length}</em>}</h1>
+          <h1>
+            {trash ? 'Корзина книг' : <>Мои книги {books.length > 0 && <em>{books.length}</em>}</>}
+          </h1>
         </div>
-        <button className="primary" onClick={() => setEdit(true)}>
-          <Plus size={18} /> Добавить
-        </button>
+        {(trashed.length > 0 || trash) && (
+          <button onClick={() => setParams(trash ? {} : { view: 'trash' })}>
+            {trash ? (
+              'К библиотеке'
+            ) : (
+              <>
+                <Trash2 size={17} /> Корзина · {trashed.length}
+              </>
+            )}
+          </button>
+        )}
+        {!trash && (
+          <button className="primary" onClick={() => setEdit(true)}>
+            <Plus size={18} /> Добавить
+          </button>
+        )}
       </div>
-      {books.length > 0 && (
-        <CollectionCounts counts={personalCounts(books)} selected={status} onSelect={setStatus} />
-      )}
-      {books.length > 0 && (
-        <div className="toolbar books-toolbar">
-          <label className="search">
-            <Search size={18} />
-            <input
-              aria-label="Поиск моих книг"
-              placeholder="Название или автор"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </label>
-          <label className="sort">
-            <SlidersHorizontal size={16} />
-            <select aria-label="Сортировка" value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="updated">По обновлению</option>
-              <option value="title">По названию</option>
-            </select>
-          </label>
-        </div>
-      )}
-      {books.length > 0 && <ReadingStatus filter value={status} onChange={setStatus} />}
-      {!filtered.length ? (
-        <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'} />
-      ) : (
-        <div className="book-list">
-          {filtered.map((b) => {
-            const p = progress.find((x) => x.bookId === b.id)?.pages || 0;
-            return (
-              <article className="book-card personal-book-card" key={b.id}>
-                <button
-                  className="cover-open"
-                  aria-label={`Открыть книгу: ${b.title}`}
-                  onClick={() => setEdit(b)}
-                >
-                  <Cover
-                    cover={bookCover(b, catalog.data?.find((c) => c.id === b.clubBookId)?.cover)}
-                    title={b.title}
-                  />
-                </button>
-                <div>
-                  <button
-                    className={`badge quick-status ${b.status}`}
-                    aria-label={`Изменить статус: ${b.title}`}
-                    onClick={() => setQuick(b)}
-                  >
-                    {personalStatuses[b.status]}
-                    <ChevronDown size={14} />
-                  </button>
-                  <button className="personal-book-open" onClick={() => setEdit(b)}>
+      {trash ? (
+        <>
+          <ErrorNote text={error} />
+          {!trashed.length ? (
+            <Empty title="Корзина книг пуста" />
+          ) : (
+            <div className="book-list">
+              {trashed.map((b) => (
+                <article className="book-card" key={b.id}>
+                  <Cover title={b.title} cover={bookCover(b)} />
+                  <div>
                     <h3>{b.title}</h3>
-                    <p>{b.authors || 'Автор не указан'}</p>
-                    {b.totalPages > 0 && (
-                      <div className="progress">
-                        <i style={{ width: `${percent(p, b.totalPages)}%` }} />
-                      </div>
-                    )}
-                    <small>
-                      {b.totalPages > 0 ? (
-                        <>
-                          {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
-                        </>
-                      ) : (
-                        'Количество страниц не указано'
-                      )}
-                    </small>
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                    <p>{b.authors}</p>
+                    <small>Прогресс, заметки, отзыв и цитаты сохранены.</small>
+                    <div className="actions">
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void run(
+                            () => restoreBook(b.id),
+                            'Книга восстановлена. Публикации выключены.',
+                          )
+                        }
+                      >
+                        <RotateCcw size={16} /> Восстановить книгу
+                      </button>
+                      <button
+                        className="danger"
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              'Удалить книгу, заметки, отзыв, прогресс и все её цитаты навсегда? Восстановление будет невозможно.',
+                            )
+                          )
+                            void run(() => deleteBook(b.id), 'Книга удалена навсегда');
+                        }}
+                      >
+                        Удалить навсегда
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {books.length > 0 && (
+            <CollectionCounts
+              counts={personalCounts(books)}
+              selected={status}
+              onSelect={setStatus}
+            />
+          )}
+          {books.length > 0 && (
+            <div className="toolbar books-toolbar">
+              <label className="search">
+                <Search size={18} />
+                <input
+                  aria-label="Поиск моих книг"
+                  placeholder="Название или автор"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              </label>
+              <label className="sort">
+                <SlidersHorizontal size={16} />
+                <select
+                  aria-label="Сортировка"
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                >
+                  <option value="updated">По обновлению</option>
+                  <option value="title">По названию</option>
+                </select>
+              </label>
+            </div>
+          )}
+          {books.length > 0 && <ReadingStatus filter value={status} onChange={setStatus} />}
+          {!filtered.length ? (
+            <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'} />
+          ) : (
+            <div className="book-list">
+              {filtered.map((b) => {
+                const p = progress.find((x) => x.bookId === b.id)?.pages || 0;
+                return (
+                  <article className="book-card personal-book-card" key={b.id}>
+                    <button
+                      className="cover-open"
+                      aria-label={`Открыть книгу: ${b.title}`}
+                      onClick={() => openBook(b)}
+                    >
+                      <Cover
+                        cover={bookCover(
+                          b,
+                          catalog.data?.find((c) => c.id === b.clubBookId)?.cover,
+                        )}
+                        title={b.title}
+                      />
+                    </button>
+                    <div>
+                      <button
+                        className={`badge quick-status ${b.status}`}
+                        aria-label={`Изменить статус: ${b.title}`}
+                        onClick={() => setQuick(b)}
+                      >
+                        {personalStatuses[b.status]}
+                        <ChevronDown size={14} />
+                      </button>
+                      <button className="personal-book-open" onClick={() => openBook(b)}>
+                        <h3>{b.title}</h3>
+                        <p>{b.authors || 'Автор не указан'}</p>
+                      </button>
+                      <button
+                        className="progress-open"
+                        aria-label={`Обновить прогресс: ${b.title}`}
+                        onClick={() => openBook(b, 'progress')}
+                      >
+                        {b.totalPages > 0 && (
+                          <div className="progress">
+                            <i style={{ width: `${percent(p, b.totalPages)}%` }} />
+                          </div>
+                        )}
+                        <small>
+                          {b.totalPages > 0 ? (
+                            <>
+                              {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
+                            </>
+                          ) : (
+                            'Количество страниц не указано'
+                          )}
+                        </small>
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
-      {edit && <BookEditor book={edit === true ? undefined : edit} onClose={() => setEdit(null)} />}
+      {(edit || (linked && !progressOpen)) && (
+        <BookEditor
+          key={linked?.id || 'new'}
+          book={linked || (edit === true ? undefined : edit || undefined)}
+          onClose={closeBook}
+        />
+      )}
+      {progressOpen && <QuickProgress bookId={linked.id} onClose={closeBook} />}
       {quick && <QuickReadingStatus book={quick} onClose={() => setQuick(null)} />}
     </>
   );

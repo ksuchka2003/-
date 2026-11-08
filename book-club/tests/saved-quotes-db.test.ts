@@ -3,9 +3,17 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { getDB, LibraryDB, openLibrary } from '../src/db';
-import { copyPublicQuote } from '../src/local';
+import {
+  copyPublicQuote,
+  saveBook,
+  saveQuote,
+  trashBook,
+  restoreBook,
+  deleteBook,
+} from '../src/local';
 import { createLibrarySynchronizer } from '../src/privateSync';
 import { now, uid } from '../src/domain';
+import type { Book } from '../src/domain';
 import type { LibraryRecord, LibraryChange, LibraryReply } from '../src/privateTypes';
 
 let pg: PGlite;
@@ -73,6 +81,124 @@ beforeAll(async () => {
     "insert into public.club_books(id,title,authors) values($1,'Книга-источник','Писатель')",
     [clubBook],
   );
+}, 30000);
+
+it('корзина переносится между устройствами и на сервере скрывает прогресс, отзывы, цитаты и старые задания публикации', async () => {
+  const shared = uid();
+  await pg.exec('reset role');
+  await pg.query("insert into public.club_books(id,title) values($1,'Книга для корзины')", [
+    shared,
+  ]);
+  const book: Book = {
+    id: uid(),
+    clubBookId: shared,
+    title: 'Книга для корзины',
+    authors: 'Автор',
+    description: '',
+    genre: '',
+    year: null,
+    isbn: '',
+    cover: '',
+    totalPages: 300,
+    status: 'reading',
+    notes: 'Приватная заметка',
+    publishReview: true,
+    publishProgress: false,
+    createdAt: now(),
+    updatedAt: now(),
+  };
+  await saveBook(
+    book,
+    150,
+    { bookId: book.id, text: 'Мой отзыв', rating: 9, spoilers: false, updatedAt: now() },
+    true,
+  );
+  const quote = {
+    id: uid(),
+    bookId: book.id,
+    text: 'Цитата в книге',
+    page: 12,
+    chapter: '',
+    comment: '',
+    favorite: true,
+    published: true,
+    deletedAt: null,
+    sourceId: null,
+    sourceAuthor: null,
+    createdAt: now(),
+    updatedAt: now(),
+  };
+  await saveQuote(quote, true);
+  const syncA = synchronizer(first),
+    syncB = synchronizer(second);
+  await syncA.sync();
+  await actor(reader);
+  const qPayload = { book_id: shared, title: book.title, text: quote.text, explicit_share: true };
+  await pg.query("select public.sync_public('quote',$1,$2::jsonb,1)", [
+    quote.id,
+    JSON.stringify(qPayload),
+  ]);
+  await pg.query("select public.sync_public('review',$1,$2::jsonb,1)", [
+    book.id,
+    JSON.stringify({
+      book_id: shared,
+      title: book.title,
+      text: 'Мой отзыв',
+      rating: 9,
+      explicit_share: true,
+    }),
+  ]);
+  expect(
+    (await pg.query('select * from public.visible_progress where book_id=$1', [shared])).rows,
+  ).toHaveLength(1);
+  await trashBook(book.id);
+  await syncA.sync();
+  await syncB.sync();
+  expect((await second.personal_books.get(book.id))?.deletedAt).toBeTruthy();
+  expect((await second.personal_books.get(book.id))?.notes).toBe('Приватная заметка');
+  expect((await second.quotes.get(quote.id))?.text).toBe(quote.text);
+  expect((await second.reading_progress.get(book.id))?.pages).toBe(150);
+  expect((await second.personal_reviews.get(book.id))?.text).toBe('Мой отзыв');
+  await actor(reader);
+  for (const table of ['visible_progress', 'visible_reviews', 'public_quotes'])
+    expect(
+      (await pg.query('select * from public.' + table + ' where book_id=$1', [shared])).rows,
+    ).toHaveLength(0);
+  await pg.query(
+    "select public.sync_public(p_kind=>'quote',p_entity=>$1,p_payload=>$2::jsonb,p_version=>2)",
+    [quote.id, JSON.stringify(qPayload)],
+  );
+  expect(
+    (await pg.query('select * from public.public_quotes where id=$1', [quote.id])).rows,
+  ).toHaveLength(0);
+  await expect(
+    pg.query("select public.sync_public_v11('quote',$1,$2::jsonb,3)", [
+      quote.id,
+      JSON.stringify(qPayload),
+    ]),
+  ).rejects.toThrow();
+  await restoreBook(book.id);
+  await syncA.sync();
+  await syncB.sync();
+  expect(await second.personal_books.get(book.id)).toMatchObject({
+    deletedAt: null,
+    publishReview: false,
+    notes: book.notes,
+  });
+  expect(await second.quotes.get(quote.id)).toMatchObject({ favorite: true, published: false });
+  expect((await second.personal_reviews.get(book.id))?.rating).toBe(9);
+  await actor(reader);
+  expect(
+    (await pg.query('select * from public.visible_progress where book_id=$1', [shared])).rows,
+  ).toHaveLength(1);
+  expect(
+    (await pg.query('select * from public.public_quotes where id=$1', [quote.id])).rows,
+  ).toHaveLength(0);
+  await deleteBook(book.id);
+  await syncA.sync();
+  await syncB.sync();
+  expect(await second.personal_books.get(book.id)).toBeUndefined();
+  expect(await second.quotes.get(quote.id)).toBeUndefined();
 }, 30000);
 afterAll(async () => {
   await first?.delete();

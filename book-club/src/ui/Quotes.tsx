@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../cloud';
 import { resolveQuoteBook } from '../quoteBooks';
@@ -29,13 +29,19 @@ import {
 } from './shared';
 import { PublicContent } from './Social';
 import { QuoteBookPicker } from './QuoteBookPicker';
+import { DraftNote, useDraft } from './useDraft';
+import { Loading } from './shared';
 function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void }) {
-  const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
+  const books = (useLiveQuery(() => getDB().personal_books.toArray()) || []).filter(
+    (b) => !b.deletedAt,
+  );
   const { identity } = useSession();
   const catalog = useCloud<ClubBook>('club_books');
-  const [clubChoice, setClubChoice] = useState<ClubBook | null>(null);
-  const [v, setV] = useState<Quote>(
-    quote || {
+  const [initial] = useState(() => ({
+    clubChoice: null as ClubBook | null,
+    newTitle: '',
+    newBookId: uid(),
+    quote: quote || {
       id: uid(),
       bookId: '',
       text: '',
@@ -50,16 +56,32 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
       createdAt: now(),
       updatedAt: now(),
     },
-  );
+  }));
+  const draft = useDraft('quote:' + (quote?.id || 'new'), initial);
   const { run, busy, error } = useTask();
-  const [newTitle, setNewTitle] = useState('');
-  const [newBookId] = useState(uid);
+  const v = draft.value?.quote;
+  const newTitle = draft.value?.newTitle || '';
   useEffect(() => {
-    if (v.bookId && !newTitle) {
+    if (v?.bookId && !newTitle) {
       const book = books.find((b) => b.id === v.bookId);
-      if (book) setNewTitle(book.title);
+      if (book) draft.setValue((old) => ({ ...old, newTitle: book.title }));
     }
-  }, [books, v.bookId, newTitle]);
+  }, [books, v?.bookId, newTitle]);
+  if (!draft.value || !v)
+    return (
+      <Modal title="Новая цитата" onClose={onClose}>
+        <Loading />
+      </Modal>
+    );
+  const { clubChoice, newBookId } = draft.value;
+  const setV = (quote: SetStateAction<Quote>) =>
+    draft.setValue((old) => ({
+      ...old,
+      quote: typeof quote === 'function' ? quote(old.quote) : quote,
+    }));
+  const setNewTitle = (newTitle: string) => draft.setValue((old) => ({ ...old, newTitle }));
+  const setClubChoice = (clubChoice: ClubBook | null) =>
+    draft.setValue((old) => ({ ...old, clubChoice }));
   return (
     <Modal title={quote ? 'Редактировать цитату' : 'Новая цитата'} onClose={onClose}>
       <form
@@ -90,10 +112,13 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
                 },
               );
             }, 'Цитата сохранена')
-          )
+          ) {
+            await draft.clear();
             onClose();
+          }
         }}
       >
+        <DraftNote draft={draft} />
         <QuoteBookPicker
           value={newTitle}
           books={books}
@@ -202,7 +227,9 @@ export function Quotes() {
   const { identity } = useSession();
   const query = useQueryClient();
   const quotes = useLiveQuery(() => getDB().quotes.toArray()) || [];
-  const books = useLiveQuery(() => getDB().personal_books.toArray()) || [];
+  const books = (useLiveQuery(() => getDB().personal_books.toArray()) || []).filter(
+    (b) => !b.deletedAt,
+  );
   const pending = useLiveQuery(() => getDB().sync_queue.toArray()) || [];
   const shared = useCloud<PublicQuote>('club_quotes');
   const likes = useCloud<{ quote_id: string; member_id: string }>('quote_likes');
@@ -226,6 +253,7 @@ export function Quotes() {
   const items = quotes
     .filter(
       (x) =>
+        bookMap.has(x.bookId) &&
         (tab === 'trash' ? !!x.deletedAt : !x.deletedAt) &&
         (tab === 'trash' || (tab === 'saved' ? !!x.sourceId : !x.sourceId)) &&
         (!favorite || tab === 'trash' || x.favorite) &&

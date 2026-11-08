@@ -64,6 +64,10 @@ export async function enqueueBook(
   previous?: Book,
   explicitShare = false,
 ) {
+  if (book.deletedAt) {
+    await retract('review', book.id, previous?.publishReview);
+    return;
+  }
   if (book.clubBookId) {
     const r = review || (await getDB().personal_reviews.get(book.id));
     if (
@@ -143,7 +147,7 @@ export async function changeBookStatus(id: string, status: Book['status']) {
     [db.personal_books, db.reading_progress, db.personal_reviews, db.sync_queue, db.settings],
     async () => {
       const book = await db.personal_books.get(id);
-      if (!book) throw new Error('Книга уже удалена');
+      if (!book || book.deletedAt) throw new Error('Книга находится в корзине');
       if (book.status === status) return;
       const p = await db.reading_progress.get(id),
         r = (await db.personal_reviews.get(id)) || {
@@ -167,6 +171,95 @@ export async function changeBookStatus(id: string, status: Book['status']) {
     },
   );
 }
+export async function updateReadingProgress(
+  id: string,
+  pages: number | undefined,
+  chapter: string | undefined,
+  totalPages: number | undefined,
+  finished = false,
+) {
+  const db = getDB();
+  await db.transaction(
+    'rw',
+    [db.personal_books, db.reading_progress, db.personal_reviews, db.sync_queue, db.settings],
+    async () => {
+      const b = await db.personal_books.get(id);
+      if (!b || b.deletedAt) throw new Error('Книга находится в корзине');
+      const p = await db.reading_progress.get(id);
+      const total = totalPages ?? b.totalPages;
+      const current = pages ?? p?.pages ?? 0;
+      const r = (await db.personal_reviews.get(id)) || {
+        bookId: id,
+        rating: null,
+        text: '',
+        spoilers: false,
+        updatedAt: now(),
+      };
+      const status = finished
+        ? 'finished'
+        : (b.status === 'planned' && current > 0) || (b.status === 'finished' && current < total)
+          ? 'reading'
+          : b.status;
+      await saveBook(
+        { ...b, totalPages: total, status, updatedAt: now() },
+        finished ? total : current,
+        r,
+        false,
+        {
+          chapter: chapter ?? p?.chapter,
+          startedOn: p?.startedOn || (status === 'reading' ? clubDay() : undefined),
+          finishedOn: status === 'finished' ? p?.finishedOn || clubDay() : undefined,
+        },
+      );
+    },
+  );
+}
+export async function trashBook(id: string) {
+  const db = getDB();
+  await db.transaction(
+    'rw',
+    [db.personal_books, db.quotes, db.sync_queue, db.settings],
+    async () => {
+      const book = await db.personal_books.get(id);
+      if (!book || book.deletedAt) return;
+      for (const q of await db.quotes.where('bookId').equals(id).toArray()) {
+        await retract('quote', q.id, q.published);
+        await db.quotes.put({ ...q, published: false, updatedAt: now() });
+      }
+      await retract('review', id, book.publishReview);
+      await db.personal_books.put({
+        ...book,
+        deletedAt: now(),
+        publishReview: false,
+        publishProgress: false,
+        updatedAt: now(),
+      });
+    },
+  );
+}
+export async function restoreBook(id: string) {
+  const db = getDB();
+  await db.transaction(
+    'rw',
+    [db.personal_books, db.quotes, db.sync_queue, db.settings],
+    async () => {
+      const book = await db.personal_books.get(id);
+      if (book?.deletedAt) {
+        for (const q of await db.quotes.where('bookId').equals(id).toArray()) {
+          await retract('quote', q.id, q.published);
+          if (q.published) await db.quotes.put({ ...q, published: false, updatedAt: now() });
+        }
+        await db.personal_books.put({
+          ...book,
+          deletedAt: null,
+          publishProgress: false,
+          publishReview: false,
+          updatedAt: now(),
+        });
+      }
+    },
+  );
+}
 export async function deleteBook(id: string) {
   const db = getDB();
   await db.transaction(
@@ -182,7 +275,12 @@ export async function deleteBook(id: string) {
     async () => {
       const quotes = await db.quotes.where('bookId').equals(id).toArray();
       const book = await db.personal_books.get(id);
-      for (const q of quotes) await retract('quote', q.id, q.published);
+      for (const q of quotes) {
+        await retract('quote', q.id, q.published);
+        await db.settings.delete('_draft:quote:' + q.id);
+      }
+      await db.settings.delete('_draft:book:' + id);
+      if (book?.clubBookId) await db.settings.delete('_draft:thought:' + book.clubBookId);
       await retract('review', id, book?.publishReview);
       await db.quotes.bulkDelete(quotes.map((q) => q.id));
       await db.personal_books.delete(id);
@@ -196,6 +294,7 @@ export async function saveQuote(quote: Quote, explicitShare = false) {
   const db = getDB();
   const book = await db.personal_books.get(q.bookId);
   if (!book) throw new Error('Выберите книгу');
+  if (book.deletedAt) throw new Error('Сначала восстановите книгу из корзины');
   await db.transaction('rw', [db.quotes, db.sync_queue, db.settings], async () => {
     const previous = await db.quotes.get(q.id);
     await db.quotes.put(q);
@@ -256,6 +355,7 @@ export async function copyPublicQuote(
       let book = q.book_id
         ? await db.personal_books.where('clubBookId').equals(q.book_id).first()
         : undefined;
+      if (book?.deletedAt) throw new Error('Книга находится в корзине. Сначала восстановите её.');
       if (!book) {
         const club = q.book_id ? await db.club_catalog_cache.get(q.book_id) : undefined;
         book = {

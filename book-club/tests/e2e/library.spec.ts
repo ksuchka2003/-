@@ -79,8 +79,42 @@ test('книга: добавление, редактирование, сохра
   await page.getByRole('heading', { name: 'Дюна', exact: true }).click();
   await expect(dialog.getByLabel('Приватные заметки')).toHaveValue('Личная мысль');
   page.once('dialog', (d) => d.accept());
-  await dialog.getByRole('button', { name: 'Удалить', exact: true }).click();
+  await dialog.getByRole('button', { name: 'В корзину', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Пока нет книг' })).toBeVisible();
+  await page.getByRole('button', { name: 'Корзина · 1', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Дюна', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Восстановить книгу', exact: true }).click();
+  await page.getByRole('button', { name: 'К библиотеке', exact: true }).click();
+  await page.getByRole('heading', { name: 'Дюна', exact: true }).click();
+  await dialog.getByText('Отзыв, оценка и заметки', { exact: true }).click();
+  await expect(dialog.getByLabel('Приватные заметки')).toHaveValue('Личная мысль');
+});
+
+test('черновики книги и цитаты переживают закрытие и перезагрузку, сохранённый черновик очищается', async ({
+  page,
+}) => {
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByLabel('Название', { exact: true }).fill('Незаконченная книга');
+  await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Незаконченная книга');
+  await expect(page.getByText('Черновик восстановлен', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.goto('/#/quotes');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByLabel('Название книги', { exact: true }).fill('Незаконченная книга');
+  await page.getByLabel('Текст цитаты').fill('Мысль, которую не хочется потерять');
+  await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await expect(page.getByLabel('Текст цитаты')).toHaveValue('Мысль, которую не хочется потерять');
+  await page.getByRole('button', { name: 'Сохранить цитату', exact: true }).click();
+  await expect(page.locator('blockquote')).toHaveText('Мысль, которую не хочется потерять');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await expect(page.getByLabel('Текст цитаты')).toHaveValue('');
 });
 
 test('статус меняется с карточки без полной формы, завершение обновляет страницы', async ({

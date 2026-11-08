@@ -21,16 +21,22 @@ export const backupSchema = z.object({
   settings: z.array(z.object({ key: z.string().max(100), value: z.unknown() })).max(100),
 });
 export async function exportBackup(db: LibraryDB = getDB()) {
-  return {
-    format: 'bookclub' as const,
-    version: 1 as const,
-    exportedAt: now(),
-    books: await db.personal_books.toArray(),
-    reviews: await db.personal_reviews.toArray(),
-    progress: await db.reading_progress.toArray(),
-    quotes: await db.quotes.toArray(),
-    settings: (await db.settings.toArray()).filter((s) => !s.key.startsWith('_')),
-  };
+  return db.transaction(
+    'r',
+    [db.personal_books, db.personal_reviews, db.reading_progress, db.quotes, db.settings],
+    async () => {
+      return {
+        format: 'bookclub' as const,
+        version: 1 as const,
+        exportedAt: now(),
+        books: await db.personal_books.toArray(),
+        reviews: await db.personal_reviews.toArray(),
+        progress: await db.reading_progress.toArray(),
+        quotes: await db.quotes.toArray(),
+        settings: (await db.settings.toArray()).filter((s) => !s.key.startsWith('_')),
+      };
+    },
+  );
 }
 export function parseBackup(raw: string) {
   if (raw.length > 20 * 1024 * 1024) throw new Error('Файл больше 20 МБ');

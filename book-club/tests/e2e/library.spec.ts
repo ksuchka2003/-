@@ -1,8 +1,10 @@
+import { openBookEditor } from './helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function addBook(page: Page) {
   await page.goto('/#/books');
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
   await dialog.getByLabel('Название', { exact: true }).fill('Дюна');
   await dialog.getByLabel('Автор', { exact: true }).fill('Фрэнк Герберт');
   await dialog.getByText('Данные издания — необязательно', { exact: true }).click();
@@ -43,11 +45,12 @@ test('узкий экран: поиск названия по Enter, форма 
   await page.goto('/#/books');
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  const lookup = dialog.getByLabel('Поиск книги в интернете');
+  const lookup = dialog.getByLabel('Найти книгу');
   await lookup.fill('Найденное издание');
   await lookup.press('Enter');
   await expect(dialog.locator('.lookup-results button')).toHaveCount(1);
   await dialog.locator('.lookup-results button').click();
+  await dialog.getByText('Изменить данные книги', { exact: true }).click();
   await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Найденное издание');
   await dialog.getByText('Данные издания — необязательно', { exact: true }).click();
   await expect(dialog.getByLabel('ISBN', { exact: true })).toHaveCount(0);
@@ -69,14 +72,14 @@ test('книга: добавление, редактирование, сохра
   await expect(page.getByRole('heading', { name: 'Дюна', exact: true })).toBeVisible();
   await expect(page.getByText('42%', { exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole('heading', { name: 'Дюна', exact: true }).click();
+  await openBookEditor(page, 'Дюна');
   const dialog = page.getByRole('dialog');
   await dialog.getByText('Отзыв, оценка и заметки', { exact: true }).click();
   await dialog.getByLabel('Приватные заметки').fill('Личная мысль');
   await dialog.getByLabel('Прочитано страниц').fill('240');
   await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
   await expect(page.getByText('50%', { exact: true })).toBeVisible();
-  await page.getByRole('heading', { name: 'Дюна', exact: true }).click();
+  await openBookEditor(page, 'Дюна');
   await expect(dialog.getByLabel('Приватные заметки')).toHaveValue('Личная мысль');
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: 'В корзину', exact: true }).click();
@@ -85,7 +88,7 @@ test('книга: добавление, редактирование, сохра
   await expect(page.getByRole('heading', { name: 'Дюна', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Восстановить книгу', exact: true }).click();
   await page.getByRole('button', { name: 'К библиотеке', exact: true }).click();
-  await page.getByRole('heading', { name: 'Дюна', exact: true }).click();
+  await openBookEditor(page, 'Дюна');
   await dialog.getByText('Отзыв, оценка и заметки', { exact: true }).click();
   await expect(dialog.getByLabel('Приватные заметки')).toHaveValue('Личная мысль');
 });
@@ -95,6 +98,7 @@ test('черновики книги и цитаты переживают зак�
 }) => {
   await page.goto('/#/books');
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
   await page.getByLabel('Название', { exact: true }).fill('Незаконченная книга');
   await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
   await page.reload();
@@ -161,7 +165,7 @@ test('цитаты: создание, избранное, корзина и во
 test('локальная библиотека работает без сети после загрузки', async ({ page, context }) => {
   await addBook(page);
   await context.setOffline(true);
-  await page.getByRole('heading', { name: 'Дюна', exact: true }).click();
+  await openBookEditor(page, 'Дюна');
   await page.getByRole('dialog').getByLabel('Прочитано страниц').fill('300');
   await page.getByRole('button', { name: 'Сохранить книгу' }).click();
   await expect(page.getByText('63%', { exact: true })).toBeVisible();
@@ -213,6 +217,7 @@ test('светлая и тёмная темы, мобильная ширина �
 test('книга с одним названием и обычная текстовая цитата без фото', async ({ page }) => {
   await page.goto('/#/books');
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
   await page.getByLabel('Название', { exact: true }).fill('Минимальная книга');
   await page.getByRole('button', { name: 'Сохранить книгу' }).click();
   await expect(page.getByRole('heading', { name: 'Минимальная книга' })).toBeVisible();

@@ -280,6 +280,8 @@ export async function deleteBook(id: string) {
         await db.settings.delete('_draft:quote:' + q.id);
       }
       await db.settings.delete('_draft:book:' + id);
+      await db.settings.delete('_draft:personal-thought:' + id);
+      await db.settings.delete('_draft:quote:new:' + id);
       if (book?.clubBookId) await db.settings.delete('_draft:thought:' + book.clubBookId);
       await retract('review', id, book?.publishReview);
       await db.quotes.bulkDelete(quotes.map((q) => q.id));

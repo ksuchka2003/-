@@ -5,7 +5,9 @@ import { Plus, Search, SlidersHorizontal, Trash2, ChevronDown, RotateCcw } from 
 import { getDB } from '../db';
 import { personalCounts } from '../collection';
 import { clubDay } from '../calendar';
-import { CollectionCounts } from './CollectionCounts';
+import { BookFinder } from './BookFinder';
+import { PersonalBook, PersonalThought } from './PersonalBook';
+import { QuoteEditor } from './Quotes';
 import { saveBook, deleteBook, changeBookStatus, trashBook, restoreBook } from '../local';
 import { DraftNote, useDraft } from './useDraft';
 import { QuickProgress } from './QuickProgress';
@@ -234,7 +236,15 @@ export function BookLookup({ onSelect }: { onSelect: (b: Metadata) => void }) {
     </section>
   );
 }
-export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void }) {
+export function BookEditor({
+  book,
+  onClose,
+  onExisting,
+}: {
+  book?: Book;
+  onClose: () => void;
+  onExisting?: (b: Book) => void;
+}) {
   type BookDraft = {
     book: Book;
     pages: number;
@@ -242,6 +252,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
     startedOn: string;
     finishedOn: string;
     review: Review;
+    manual?: boolean;
   };
   const [initial, setInitial] = useState<BookDraft | null>(() => {
     if (book) return null;
@@ -271,6 +282,7 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
   const club = useCloud<ClubBook>('club_books');
   const [coverBusy, setCoverBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [manual, setManual] = useState(false);
   useEffect(() => {
     let active = true;
     if (book)
@@ -317,6 +329,30 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
   const setStartedOn = (startedOn: string) => draft.setValue((old) => ({ ...old, startedOn }));
   const setFinishedOn = (finishedOn: string) => draft.setValue((old) => ({ ...old, finishedOn }));
   const setReview = (review: Review) => draft.setValue((old) => ({ ...old, review }));
+  const editingMetadata = manual || !!draft.value.manual;
+  const chooseAnotherBook = () => {
+    if (
+      (value.notes || review.text || pages > 0) &&
+      !confirm('Выбрать другую книгу? Несохранённые заметки и прогресс этой книги будут сброшены.')
+    )
+      return;
+    setManual(false);
+    draft.setValue(initial!);
+  };
+  if (!book && !editingMetadata && !value.title.trim())
+    return (
+      <Modal title="Добавить книгу" onClose={onClose}>
+        <BookFinder
+          catalog={club.data || []}
+          onExisting={(b) => onExisting?.(b)}
+          onManual={(title) => {
+            setManual(true);
+            draft.setValue((old) => ({ ...old, manual: true, book: { ...old.book, title } }));
+          }}
+          onSelect={(metadata, clubId) => setValue({ ...value, ...metadata, clubBookId: clubId })}
+        />
+      </Modal>
+    );
   return (
     <Modal title={book ? 'Моя книга' : 'Добавить книгу'} onClose={onClose}>
       <form
@@ -345,69 +381,63 @@ export function BookEditor({ book, onClose }: { book?: Book; onClose: () => void
         }}
       >
         <DraftNote draft={draft} />
-        {!book && (
-          <>
-            {!!club.data?.length && (
-              <Field label="Взять книгу из клуба">
-                <select
-                  value={value.clubBookId || ''}
-                  onChange={(e) => {
-                    const b = club.data?.find((b) => b.id === e.target.value);
-                    if (b)
-                      setValue({
-                        ...value,
-                        clubBookId: b.id,
-                        title: b.title,
-                        authors: b.authors,
-                        description: b.description,
-                        genre: b.genre,
-                        year: b.year,
-                        isbn: b.isbn,
-                        cover: b.cover,
-                        totalPages: b.default_pages,
-                      });
-                    else setValue({ ...value, clubBookId: null });
-                  }}
-                >
-                  <option value="">Выбрать книгу или добавить свою ниже</option>
-                  {club.data.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-            <BookLookup onSelect={(b) => setValue({ ...value, ...b, clubBookId: null })} />
-          </>
+        {!book && editingMetadata && (
+          <button type="button" className="text-button" onClick={chooseAnotherBook}>
+            К поиску книги
+          </button>
         )}
-        <CoverPicker
-          title={value.title}
-          authors={value.authors}
-          cover={bookCover(value, club.data?.find((b) => b.id === value.clubBookId)?.cover)}
-          hasCustom={
-            !!value.coverData ||
-            !!(
-              value.clubBookId &&
-              value.cover &&
-              value.cover !== club.data?.find((b) => b.id === value.clubBookId)?.cover
-            )
+        {!book && !editingMetadata && (
+          <div className="chosen-book">
+            <Cover title={value.title} cover={bookCover(value)} small />
+            <div>
+              <h3>{value.title}</h3>
+              <p>{value.authors}</p>
+              <small>{value.totalPages > 0 ? value.totalPages + ' стр.' : ''}</small>
+              <button type="button" onClick={chooseAnotherBook}>
+                Выбрать другую
+              </button>
+            </div>
+          </div>
+        )}
+        <details
+          className={
+            book || editingMetadata ? 'metadata-editor metadata-always' : 'metadata-editor'
           }
-          shared={!!value.clubBookId}
-          onBusy={setCoverBusy}
-          onChange={(data) => setValue((old) => ({ ...old, coverData: data }))}
-          onUrl={(cover) => setValue(({ coverData, ...old }) => ({ ...old, cover }))}
-          onReset={() =>
-            setValue((old) => {
-              const { coverData, ...rest } = old;
-              return {
-                ...rest,
-                cover: club.data?.find((b) => b.id === old.clubBookId)?.cover || old.cover,
-              };
-            })
-          }
-        />
-        <MetadataFields compact value={value} onChange={(b) => setValue({ ...value, ...b })} />
+          open={!!book || editingMetadata}
+          onToggle={(e) => {
+            if (e.currentTarget.open && !book)
+              draft.setValue((old) => (old.manual ? old : { ...old, manual: true }));
+          }}
+        >
+          <summary>Изменить данные книги</summary>
+          <CoverPicker
+            title={value.title}
+            authors={value.authors}
+            cover={bookCover(value, club.data?.find((b) => b.id === value.clubBookId)?.cover)}
+            hasCustom={
+              !!value.coverData ||
+              !!(
+                value.clubBookId &&
+                value.cover &&
+                value.cover !== club.data?.find((b) => b.id === value.clubBookId)?.cover
+              )
+            }
+            shared={!!value.clubBookId}
+            onBusy={setCoverBusy}
+            onChange={(data) => setValue((old) => ({ ...old, coverData: data }))}
+            onUrl={(cover) => setValue(({ coverData, ...old }) => ({ ...old, cover }))}
+            onReset={() =>
+              setValue((old) => {
+                const { coverData, ...rest } = old;
+                return {
+                  ...rest,
+                  cover: club.data?.find((b) => b.id === old.clubBookId)?.cover || old.cover,
+                };
+              })
+            }
+          />
+          <MetadataFields compact value={value} onChange={(b) => setValue({ ...value, ...b })} />
+        </details>
         <details className="book-extra" open={!!book}>
           <summary>Моё чтение</summary>
           <div className="form-grid">
@@ -582,6 +612,14 @@ export function MyBooks() {
   const trash = params.get('view') === 'trash';
   const linked = books.find((b) => b.id === params.get('book'));
   const progressOpen = linked && params.get('action') === 'progress';
+  const editorOpen = linked && params.get('action') === 'edit';
+  const quoteOpen = linked && params.get('action') === 'quote';
+  const thoughtOpen = linked && params.get('action') === 'thought';
+  const closeAction = () => {
+    const next = new URLSearchParams(params);
+    next.delete('action');
+    setParams(next, { replace: true });
+  };
   const { run, error, busy } = useTask();
   const openBook = (book: Book, action = '') => {
     const next = new URLSearchParams(params);
@@ -598,9 +636,24 @@ export function MyBooks() {
     if (mounted.current && params.has('book')) setParams(next, { replace: true });
   };
   const progress = useLiveQuery(() => getDB().reading_progress.toArray()) || [];
-  const [q, setQ] = useState('');
-  const [status, setStatus] = useState('all');
-  const [sort, setSort] = useState('updated');
+  const q = params.get('q') || '';
+  const status = ['all', 'reading', 'finished', 'unfinished', 'planned', 'paused'].includes(
+    params.get('status') || '',
+  )
+    ? params.get('status')!
+    : 'all';
+  const sort = params.get('sort') === 'title' ? 'title' : 'updated';
+  const updateFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (!value || (key === 'status' && value === 'all') || (key === 'sort' && value === 'updated'))
+      next.delete(key);
+    else next.set(key, value);
+    setParams(next, { replace: true });
+  };
+  const [filters, setFilters] = useState(false);
+  const [filterStatus, setFilterStatus] = useState(status);
+  const [filterSort, setFilterSort] = useState(sort);
+  const counts = personalCounts(books);
   const [edit, setEdit] = useState<Book | true | null>(null);
   const [quick, setQuick] = useState<Book | null>(null);
   const filtered = books
@@ -619,9 +672,7 @@ export function MyBooks() {
     <>
       <div className="page-heading">
         <div>
-          <h1>
-            {trash ? 'Корзина книг' : <>Мои книги {books.length > 0 && <em>{books.length}</em>}</>}
-          </h1>
+          <h1>{trash ? 'Корзина книг' : 'Мои книги'}</h1>
         </div>
         {(trashed.length > 0 || trash) && (
           <button onClick={() => setParams(trash ? {} : { view: 'trash' })}>
@@ -690,11 +741,26 @@ export function MyBooks() {
       ) : (
         <>
           {books.length > 0 && (
-            <CollectionCounts
-              counts={personalCounts(books)}
-              selected={status}
-              onSelect={setStatus}
-            />
+            <div className="shelf-tabs" role="group" aria-label="Книги на полке">
+              {(
+                [
+                  ['all', 'Все', counts.total],
+                  ['reading', 'Читаю', counts.reading],
+                  ['finished', 'Прочитано', counts.finished],
+                  ['unfinished', 'Не прочитано', counts.unfinished],
+                ] as const
+              ).map(([key, label, count]) => (
+                <button
+                  type="button"
+                  key={key}
+                  className={status === key ? 'active' : ''}
+                  aria-pressed={status === key}
+                  onClick={() => updateFilter('status', key)}
+                >
+                  {label} <b>{count}</b>
+                </button>
+              ))}
+            </div>
           )}
           {books.length > 0 && (
             <div className="toolbar books-toolbar">
@@ -704,25 +770,49 @@ export function MyBooks() {
                   aria-label="Поиск моих книг"
                   placeholder="Название или автор"
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => updateFilter('q', e.target.value)}
                 />
               </label>
-              <label className="sort">
-                <SlidersHorizontal size={16} />
-                <select
-                  aria-label="Сортировка"
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value)}
-                >
-                  <option value="updated">По обновлению</option>
-                  <option value="title">По названию</option>
-                </select>
-              </label>
+              <button
+                type="button"
+                aria-label="Фильтры книг"
+                className={
+                  sort !== 'updated' || ['planned', 'paused'].includes(status) ? 'selected' : ''
+                }
+                onClick={() => {
+                  setFilterStatus(status);
+                  setFilterSort(sort);
+                  setFilters(true);
+                }}
+              >
+                <SlidersHorizontal size={18} /> <span>Фильтры</span>
+              </button>
             </div>
           )}
-          {books.length > 0 && <ReadingStatus filter value={status} onChange={setStatus} />}
+          {['planned', 'paused'].includes(status) && (
+            <p className="active-shelf-filter">
+              {personalStatuses[status as Book['status']]}{' '}
+              <button type="button" onClick={() => updateFilter('status', 'all')}>
+                Сбросить
+              </button>
+            </p>
+          )}
           {!filtered.length ? (
-            <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'} />
+            <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'}>
+              {books.length > 0 && (
+                <button
+                  onClick={() => {
+                    const next = new URLSearchParams(params);
+                    next.delete('q');
+                    next.delete('status');
+                    next.delete('sort');
+                    setParams(next, { replace: true });
+                  }}
+                >
+                  Сбросить поиск и фильтры
+                </button>
+              )}
+            </Empty>
           ) : (
             <div className="book-list">
               {filtered.map((b) => {
@@ -783,14 +873,66 @@ export function MyBooks() {
           )}
         </>
       )}
-      {(edit || (linked && !progressOpen)) && (
+      {(edit || editorOpen) && (
         <BookEditor
           key={linked?.id || 'new'}
-          book={linked || (edit === true ? undefined : edit || undefined)}
+          book={editorOpen ? linked : edit === true ? undefined : edit || undefined}
+          onExisting={(b) => {
+            setEdit(null);
+            if (b.deletedAt) setParams({ view: 'trash' });
+            else openBook(b);
+          }}
           onClose={closeBook}
         />
       )}
       {progressOpen && <QuickProgress bookId={linked.id} onClose={closeBook} />}
+      {linked && !progressOpen && !editorOpen && !quoteOpen && !thoughtOpen && !edit && (
+        <PersonalBook
+          book={linked}
+          onClose={closeBook}
+          onEdit={() => openBook(linked, 'edit')}
+          onProgress={() => openBook(linked, 'progress')}
+          onQuote={() => openBook(linked, 'quote')}
+          onThought={() => openBook(linked, 'thought')}
+        />
+      )}
+      {quoteOpen && <QuoteEditor key={linked.id} book={linked} onClose={closeAction} />}
+      {thoughtOpen && <PersonalThought book={linked} onClose={closeAction} />}
+      {filters && (
+        <Modal title="Фильтры книг" onClose={() => setFilters(false)}>
+          <ReadingStatus filter value={filterStatus} onChange={setFilterStatus} />
+          <Field label="Сортировка">
+            <select value={filterSort} onChange={(e) => setFilterSort(e.target.value)}>
+              <option value="updated">По обновлению</option>
+              <option value="title">По названию</option>
+            </select>
+          </Field>
+          <footer>
+            <button
+              className="primary"
+              onClick={() => {
+                const next = new URLSearchParams(params);
+                if (filterStatus === 'all') next.delete('status');
+                else next.set('status', filterStatus);
+                if (filterSort === 'updated') next.delete('sort');
+                else next.set('sort', filterSort);
+                setParams(next, { replace: true });
+                setFilters(false);
+              }}
+            >
+              Показать книги
+            </button>
+            <button
+              onClick={() => {
+                setFilterStatus('all');
+                setFilterSort('updated');
+              }}
+            >
+              Сбросить
+            </button>
+          </footer>
+        </Modal>
+      )}
       {quick && <QuickReadingStatus book={quick} onClose={() => setQuick(null)} />}
     </>
   );

@@ -14,7 +14,7 @@ import {
   Quote as QuoteIcon,
 } from 'lucide-react';
 import { getDB } from '../db';
-import { now, uid, type Quote, type ClubBook, type PublicQuote } from '../domain';
+import { now, uid, type Quote, type Book, type ClubBook, type PublicQuote } from '../domain';
 import { saveQuote, trashQuote, restoreQuote, eraseQuote } from '../local';
 import {
   Modal,
@@ -31,7 +31,15 @@ import { PublicContent } from './Social';
 import { QuoteBookPicker } from './QuoteBookPicker';
 import { DraftNote, useDraft } from './useDraft';
 import { Loading } from './shared';
-function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void }) {
+export function QuoteEditor({
+  quote,
+  book,
+  onClose,
+}: {
+  quote?: Quote;
+  book?: Book;
+  onClose: () => void;
+}) {
   const books = (useLiveQuery(() => getDB().personal_books.toArray()) || []).filter(
     (b) => !b.deletedAt,
   );
@@ -39,11 +47,11 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
   const catalog = useCloud<ClubBook>('club_books');
   const [initial] = useState(() => ({
     clubChoice: null as ClubBook | null,
-    newTitle: '',
+    newTitle: book?.title || '',
     newBookId: uid(),
     quote: quote || {
       id: uid(),
-      bookId: '',
+      bookId: book?.id || '',
       text: '',
       page: null,
       chapter: '',
@@ -57,7 +65,7 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
       updatedAt: now(),
     },
   }));
-  const draft = useDraft('quote:' + (quote?.id || 'new'), initial);
+  const draft = useDraft('quote:' + (quote?.id || (book ? 'new:' + book.id : 'new')), initial);
   const { run, busy, error } = useTask();
   const v = draft.value?.quote;
   const newTitle = draft.value?.newTitle || '';
@@ -119,23 +127,28 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
         }}
       >
         <DraftNote draft={draft} />
-        <QuoteBookPicker
-          value={newTitle}
-          books={books}
-          catalog={catalog.data || []}
-          onChange={(text) => {
-            setNewTitle(text);
-            setV((old) => ({ ...old, bookId: '' }));
-            setClubChoice(null);
-          }}
-          onSelect={(choice) => {
-            setNewTitle(choice.title);
-            setV((old) => ({ ...old, bookId: choice.personal?.id || '' }));
-            setClubChoice(choice.club || null);
-          }}
-        />
+        {book ? (
+          <p className="quote-book-context">{book.title}</p>
+        ) : (
+          <QuoteBookPicker
+            value={newTitle}
+            books={books}
+            catalog={catalog.data || []}
+            onChange={(text) => {
+              setNewTitle(text);
+              setV((old) => ({ ...old, bookId: '' }));
+              setClubChoice(null);
+            }}
+            onSelect={(choice) => {
+              setNewTitle(choice.title);
+              setV((old) => ({ ...old, bookId: choice.personal?.id || '' }));
+              setClubChoice(choice.club || null);
+            }}
+          />
+        )}
         <Field label="Текст цитаты">
           <textarea
+            autoFocus={!!book}
             required
             maxLength={20000}
             rows={6}
@@ -186,7 +199,7 @@ function QuoteEditor({ quote, onClose }: { quote?: Quote; onClose: () => void })
           </label>
         )}
         <ErrorNote text={error} />
-        <button className="primary" disabled={busy || catalog.isLoading}>
+        <button className="primary" disabled={busy || (!book && catalog.isLoading)}>
           Сохранить цитату
         </button>
       </form>

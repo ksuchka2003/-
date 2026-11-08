@@ -23,12 +23,15 @@ export const Session = createContext<{
   retryLogin?: () => void;
 }>({ identity: null, error: '', notify: () => {} });
 export const useSession = () => useContext(Session);
-export function useCloud<T>(table: string) {
+export function confirmClose(changed: boolean, onClose: () => void) {
+  if (!changed || confirm('Изменения не сохранены. Закрыть без сохранения?')) onClose();
+}
+export function useCloud<T>(table: string, enabled = true) {
   const { identity } = useSession();
   return useQuery({
     queryKey: ['cloud', identity?.id, table],
     queryFn: () => rows<T>(table, identity?.id),
-    enabled: !!identity,
+    enabled: !!identity && enabled,
     networkMode: 'always',
   });
 }
@@ -175,10 +178,10 @@ export function CloudGate({ children }: { children: ReactNode }) {
   const { identity, error } = useSession();
   return identity ? <>{children}</> : <Empty title="Войдите через Telegram" />;
 }
-export function Loading() {
+export function Loading({ label = 'Загружаем библиотеку…' }: { label?: string } = {}) {
   return (
     <div role="status" className="skeleton">
-      <LoaderCircle className="spin" /> Загружаем библиотеку…
+      <LoaderCircle className="spin" /> {label}
     </div>
   );
 }

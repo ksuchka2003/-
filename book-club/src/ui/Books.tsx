@@ -51,17 +51,19 @@ export function MetadataFields({
   value,
   onChange,
   compact = false,
+  pagesLabel,
 }: {
   value: Metadata;
   onChange: (b: Metadata) => void;
   compact?: boolean;
+  pagesLabel?: string;
 }) {
   const set = (key: keyof Metadata, v: unknown) => onChange({ ...value, [key]: v });
   const extra = (
     <>
       <div className="form-grid">
-        {!compact && (
-          <Field label="Страниц в моём издании">
+        {(!compact || pagesLabel) && (
+          <Field label={pagesLabel || 'Страниц в моём издании'}>
             <input
               type="number"
               min={0}

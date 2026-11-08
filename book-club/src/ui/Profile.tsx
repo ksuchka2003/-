@@ -59,9 +59,11 @@ function EditProfile({ profile, onClose }: { profile: ProfileData; onClose: () =
           />
         </Field>
         <ErrorNote text={error} />
-        <button disabled={busy} className="primary">
-          Сохранить
-        </button>
+        <footer>
+          <button disabled={busy} className="primary">
+            Сохранить
+          </button>
+        </footer>
       </form>
     </Modal>
   );
@@ -144,24 +146,29 @@ export function Profile() {
           {identity ? (
             <>
               <p className="muted">
-                {identity.role === 'admin' ? 'Администратор' : 'Участник'} · Вход через Telegram
+                {identity.role === 'admin' ? 'Администратор' : 'Участник клуба'}
               </p>
-              {identity.telegramId && (
-                <p>
-                  Telegram ID: <code>{identity.telegramId}</code>
-                </p>
-              )}
               {p?.bio && <p>{p.bio}</p>}
               {p?.genres && <p className="muted">{p.genres}</p>}
-              {p && <button onClick={() => setEdit(true)}>Редактировать профиль</button>}
-              {identity.role === 'admin' ? (
-                <Link className="primary admin-entry" to="/admin">
-                  <Settings2 size={17} /> Управление клубом
-                </Link>
-              ) : null}
-              <button className="text-button" onClick={retryLogin}>
-                Обновить вход и права
-              </button>
+              <div className="profile-actions">
+                {p && <button onClick={() => setEdit(true)}>Редактировать профиль</button>}
+                {identity.role === 'admin' ? (
+                  <Link className="primary admin-entry" to="/admin">
+                    <Settings2 size={17} /> Управление клубом
+                  </Link>
+                ) : null}
+              </div>
+              <details className="account-details">
+                <summary>Вход в клуб</summary>
+                {identity.telegramId && (
+                  <p>
+                    Telegram ID: <code>{identity.telegramId}</code>
+                  </p>
+                )}
+                <button className="text-button" onClick={retryLogin}>
+                  Обновить вход и права
+                </button>
+              </details>
             </>
           ) : (
             <>
@@ -189,8 +196,8 @@ export function Profile() {
                       : 'Подключаем библиотеку…'}
             </p>
             <p className="muted">
-              Основная копия библиотеки хранится на сервере и доступна только вам. На этом
-              устройстве сохраняется локальная копия для работы без сети.
+              Библиотека доступна на ваших устройствах. Без сети изменения сохраняются здесь и
+              отправляются позже.
             </p>
             <button
               disabled={busy || status?.phase === 'syncing'}

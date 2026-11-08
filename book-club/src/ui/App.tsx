@@ -230,7 +230,7 @@ function Shell({
             </p>
           )}
           <main>
-            {(/^\/(club|members)\//.test(location.pathname) || location.pathname === '/admin') && (
+            {/^\/(club|members)\//.test(location.pathname) && (
               <BackLink
                 fallback={
                   location.pathname.startsWith('/club/')

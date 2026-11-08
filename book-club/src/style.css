@@ -3340,3 +3340,323 @@ main,
   font-size: 10px;
   color: var(--muted);
 }
+
+/* Shared rhythm for forms, lists and management screens. */
+.modal > header {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.modal > header h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+.modal .book-extra {
+  margin-bottom: 16px;
+}
+.modal .book-extra > summary {
+  display: list-item;
+  padding: 13px 0;
+  line-height: 1.5;
+  min-height: 46px;
+}
+.modal .book-extra[open] > summary {
+  margin-bottom: 8px;
+}
+.modal form > button.primary:last-child {
+  margin-top: 18px;
+  min-height: 46px;
+}
+.modal footer > button {
+  min-height: 44px;
+}
+.stack {
+  gap: 12px;
+  margin-top: 16px;
+}
+.stack > .proposal-row {
+  margin-top: 0;
+}
+.form-context {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.form-return {
+  margin-bottom: 16px;
+}
+.section-hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 12px 0;
+}
+.segmented,
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+  overflow-x: auto;
+  margin: 0 0 16px;
+}
+.segmented > button,
+.tabs > button {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.segmented > button {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+}
+.segmented > button[aria-pressed='true'],
+.tabs > button.active {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+.management-page {
+  width: 100%;
+  max-width: 900px;
+}
+.page-heading.with-back {
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.with-back .detail-back {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 10px;
+}
+.with-back h1 {
+  min-width: 0;
+  font-size: clamp(26px, 5vw, 34px);
+  letter-spacing: -0.6px;
+}
+.management-menu {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.management-menu > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.management-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  font-weight: 400;
+}
+button.management-row:hover,
+a.management-row:hover {
+  background: var(--soft);
+}
+.management-row > span:not(.management-symbol, .management-count, .member-initial) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.management-row b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.management-row small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.management-row > svg:last-child {
+  margin-left: auto;
+  color: var(--muted);
+}
+.management-row .cover {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 56px;
+}
+.management-symbol,
+.member-initial {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--green);
+  background: var(--soft);
+  border-radius: 10px;
+}
+.management-count {
+  color: var(--muted);
+  font-size: 13px;
+}
+.management-count.has-pending {
+  background: var(--green);
+  color: var(--bg);
+  padding: 4px 8px;
+  border-radius: 20px;
+}
+.section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+.admin-list {
+  gap: 10px;
+}
+.admin-search {
+  margin: 0 0 16px;
+}
+.admin-history {
+  margin-top: 20px;
+}
+.admin-history .stack {
+  margin: 0 0 12px;
+}
+.admin-current-book {
+  padding: 14px 16px;
+}
+.admin-current-book .text-button {
+  margin-left: 32px;
+}
+.admin-current-book .cover {
+  width: 38px;
+  height: 56px;
+  flex: 0 0 38px;
+}
+.current-book-choice small {
+  margin-top: 4px;
+}
+.destructive-menu {
+  width: 100%;
+  font-size: 13px;
+}
+.destructive-menu > summary,
+.account-details > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  color: var(--muted);
+}
+.destructive-menu p {
+  margin: 8px 0 12px;
+}
+.member-access-summary {
+  margin-bottom: 16px;
+}
+.member-access-summary .badge {
+  margin-top: 12px;
+}
+.poll-summary {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+.meeting-book-options {
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.delivery-row,
+.delivery-notice {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--surface);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.delivery-row > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.delivery-row > small {
+  display: block;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.delivery-row details {
+  margin-top: 12px;
+  color: var(--muted);
+}
+.delivery-notice button {
+  margin-top: 12px;
+}
+.delivery-failed {
+  color: #b1533c;
+}
+.list-heading {
+  font-size: 22px;
+  margin: 24px 0 16px;
+}
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.profile-actions .admin-entry {
+  margin: 0;
+}
+.account-details {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .management-menu {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .management-row {
+    padding: 14px 12px;
+    gap: 10px;
+  }
+  .management-menu .management-row {
+    min-height: 78px;
+  }
+  .section-actions > button {
+    width: 100%;
+  }
+  .with-back h1 {
+    font-size: 27px;
+  }
+  .modal form > button.primary:last-child {
+    width: 100%;
+  }
+  .invite-row {
+    flex-wrap: wrap;
+  }
+}

@@ -1,4 +1,4 @@
-import { afterEach, it, expect } from 'vitest';
+import { afterEach, beforeEach, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,6 +7,7 @@ import { Profile } from '../src/ui/Profile';
 import { Members, PublicContent } from '../src/ui/Social';
 import { MyBooks } from '../src/ui/Books';
 import { Quotes } from '../src/ui/Quotes';
+import { Admin } from '../src/ui/Admin';
 import { Session } from '../src/ui/shared';
 import { currentClubBooks, nextClubMeeting } from '../src/clubSelectors';
 import { uid, type ClubBook, type Reading } from '../src/domain';
@@ -48,6 +49,9 @@ function view(
     'club_book_stats',
     'meeting_questions',
     'meeting_reflections',
+    'visible_club_members',
+    'visible_member_invites',
+    'notification_jobs',
   ])
     q.setQueryData(
       ['cloud', owner, table],
@@ -74,7 +78,13 @@ function view(
     </QueryClientProvider>,
   );
 }
-afterEach(cleanup);
+beforeEach(() => {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 it('популярные цитаты сортируются по лайкам и раскрываются частями без потери фильтра книги', () => {
   const b = book('Солярис', 'finished');
   const rows = Array.from({ length: 26 }, (_, i) => ({
@@ -223,7 +233,30 @@ it('профиль администратора содержит явную кн
     'admin',
   );
   expect(screen.getByRole('link', { name: 'Управление клубом' })).toHaveAttribute('href', '/admin');
+  expect(screen.getByText('42')).not.toBeVisible();
+  fireEvent.click(screen.getByText('Вход в клуб', { exact: true }));
   expect(screen.getByText('42')).toBeVisible();
+});
+it('управление открывается коротким меню, пустые предложения имеют понятное состояние', () => {
+  view(<Admin />, {}, 'admin');
+  expect(
+    screen.getByRole('navigation', { name: 'Разделы управления' }).querySelectorAll('a'),
+  ).toHaveLength(5);
+  expect(screen.queryByText('Последние отправки')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link', { name: /Предложения книг/ }));
+  expect(screen.getByText('Новых предложений нет')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'К управлению клубом' })).toHaveAttribute(
+    'href',
+    '/admin',
+  );
+});
+it('участник не получает интерфейс и действия управления', () => {
+  view(<Admin />);
+  expect(screen.getByText('Раздел администратора')).toBeVisible();
+  expect(screen.queryByRole('navigation', { name: 'Разделы управления' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: /Добавить|Пригласить|Закрыть доступ/ }),
+  ).not.toBeInTheDocument();
 });
 it('несколько главных книг сохраняют порядок, завершённые и архивные не попадают на главную', () => {
   const first = book('Первая', 'reading'),

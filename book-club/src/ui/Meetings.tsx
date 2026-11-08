@@ -24,6 +24,7 @@ import {
   Loading,
   ErrorNote,
   useClock,
+  confirmClose,
 } from './shared';
 export const meetingDateLabel = (date: string) =>
   new Date(date).toLocaleString('ru-RU', {
@@ -50,22 +51,48 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
     },
   );
   const [ids, setIds] = useState<string[] | null>(null);
+  const [initial] = useState(v);
+  const [bookSearch, setBookSearch] = useState('');
   const selected =
     ids || links.data?.filter((l) => l.meeting_id === meeting?.id).map((l) => l.book_id) || [];
   const { run, busy, error } = useTask();
   const query = useQueryClient();
+  const waitingForLinks = !!meeting && (links.isLoading || !links.data || !!links.error);
+  const save = async (value: Meeting) => {
+    if (waitingForLinks) return;
+    if (
+      await run(
+        async () => {
+          await action('admin.meeting', { ...value, book_ids: selected });
+          await query.invalidateQueries({ queryKey: ['cloud'] });
+        },
+        value.cancelled ? 'Встреча отменена' : 'Встреча сохранена',
+      )
+    )
+      onClose();
+  };
   return (
-    <Modal title={meeting ? 'Редактировать встречу' : 'Создать встречу'} onClose={onClose}>
+    <Modal
+      title={meeting ? 'Редактировать встречу' : 'Создать встречу'}
+      onClose={() =>
+        confirmClose(
+          JSON.stringify(v) !== JSON.stringify(initial) ||
+            (ids !== null &&
+              JSON.stringify([...ids].sort()) !==
+                JSON.stringify(
+                  (links.data || [])
+                    .filter((l) => l.meeting_id === meeting?.id)
+                    .map((l) => l.book_id)
+                    .sort(),
+                )),
+          onClose,
+        )
+      }
+    >
       <form
         onSubmit={async (e) => {
           e.preventDefault();
-          if (
-            await run(async () => {
-              await action('admin.meeting', { ...v, book_ids: selected });
-              await query.invalidateQueries({ queryKey: ['cloud'] });
-            }, 'Встреча сохранена')
-          )
-            onClose();
+          await save(v);
         }}
       >
         <Field label="Название встречи">
@@ -94,16 +121,6 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
             placeholder="Кафе, адрес или онлайн"
           />
         </Field>
-        <Field label="Ссылка на место или созвон">
-          <input
-            type="url"
-            pattern="https://.*"
-            maxLength={2048}
-            value={v.venue_url || ''}
-            onChange={(e) => setV({ ...v, venue_url: e.target.value })}
-            placeholder="https://…"
-          />
-        </Field>
         <Field label="Описание">
           <textarea
             rows={3}
@@ -113,7 +130,17 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
           />
         </Field>
         <details className="book-extra">
-          <summary>Книги и продолжительность</summary>
+          <summary>Ссылка, книги и длительность</summary>
+          <Field label="Ссылка на место или созвон">
+            <input
+              type="url"
+              pattern="https://.*"
+              maxLength={2048}
+              value={v.venue_url || ''}
+              onChange={(e) => setV({ ...v, venue_url: e.target.value })}
+              placeholder="https://…"
+            />
+          </Field>
           <Field label="Продолжительность, минут">
             <input
               type="number"
@@ -125,35 +152,71 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
               onChange={(e) => setV({ ...v, duration_minutes: Number(e.target.value) })}
             />
           </Field>
-          {books.data?.map((b) => (
-            <label className="check" key={b.id}>
-              <input
-                type="checkbox"
-                checked={selected.includes(b.id)}
-                onChange={(e) =>
-                  setIds(
-                    e.target.checked ? [...selected, b.id] : selected.filter((id) => id !== b.id),
-                  )
-                }
-              />
-              {b.title}
-            </label>
-          ))}
-        </details>
-        {meeting && (
-          <label className="check">
+          <Field label="Найти книгу встречи">
             <input
-              type="checkbox"
-              checked={v.cancelled}
-              onChange={(e) => setV({ ...v, cancelled: e.target.checked })}
+              value={bookSearch}
+              onChange={(e) => setBookSearch(e.target.value)}
+              placeholder="Название или автор"
             />
-            Встреча отменена
-          </label>
-        )}
-        <ErrorNote text={error} />
-        <button className="primary" disabled={busy}>
-          {meeting ? 'Сохранить встречу' : 'Создать встречу'}
-        </button>
+          </Field>
+          <p className="section-hint">Выбрано книг: {selected.length}</p>
+          <ErrorNote text={books.error?.message} />
+          <div className="meeting-book-options">
+            {books.data
+              ?.filter((b) =>
+                `${b.title} ${b.authors}`
+                  .toLocaleLowerCase('ru')
+                  .includes(bookSearch.trim().toLocaleLowerCase('ru')),
+              )
+              .sort(
+                (a, b) =>
+                  Number(selected.includes(b.id)) - Number(selected.includes(a.id)) ||
+                  a.title.localeCompare(b.title, 'ru'),
+              )
+              .map((b) => (
+                <label className="check" key={b.id}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(b.id)}
+                    onChange={(e) =>
+                      setIds(
+                        e.target.checked
+                          ? [...selected, b.id]
+                          : selected.filter((id) => id !== b.id),
+                      )
+                    }
+                  />
+                  {b.title}
+                </label>
+              ))}
+          </div>
+        </details>
+        <ErrorNote text={error || (meeting ? links.error?.message : '')} />
+        <footer>
+          <button className="primary" disabled={busy || waitingForLinks}>
+            {meeting ? 'Сохранить встречу' : 'Создать встречу'}
+          </button>
+          {meeting && (
+            <button
+              type="button"
+              className={v.cancelled ? '' : 'danger'}
+              disabled={busy || waitingForLinks}
+              onClick={() => {
+                if (
+                  !confirm(
+                    v.cancelled
+                      ? 'Возобновить встречу и уведомить участников?'
+                      : 'Отменить встречу? Участники получат уведомление в боте.',
+                  )
+                )
+                  return;
+                void save({ ...v, cancelled: !v.cancelled });
+              }}
+            >
+              {v.cancelled ? 'Возобновить встречу' : 'Отменить встречу'}
+            </button>
+          )}
+        </footer>
       </form>
     </Modal>
   );
@@ -261,12 +324,12 @@ export function Meetings() {
         )}
       </div>
       <CloudGate>
-        <div className="tabs">
-          <button className={!past ? 'active' : ''} onClick={() => setPast(false)}>
+        <div className="segmented" role="group" aria-label="Список встреч">
+          <button aria-pressed={!past} onClick={() => setPast(false)}>
             Предстоящие
           </button>
-          <button className={past ? 'active' : ''} onClick={() => setPast(true)}>
-            Прошедшие и отменённые
+          <button aria-pressed={past} onClick={() => setPast(true)}>
+            Прошедшие
           </button>
         </div>
         <ErrorNote text={meetings.error?.message} />

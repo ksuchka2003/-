@@ -271,6 +271,285 @@ function backend() {
 async function synced(page: Page) {
   await expect(page.locator('.connection-bar')).toContainText('Синхронизировано');
 }
+test('управление: короткое меню, отдельные разделы и журнал без длинной ленты', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  api.extra.notification_jobs = Array.from({ length: 24 }, (_, i) => ({
+    id: crypto.randomUUID(),
+    kind: 'selected_book',
+    status: i === 0 ? 'failed' : 'sent',
+    last_error: i === 0 ? 'Telegram: service temporarily unavailable' : null,
+    run_at: new Date().toISOString(),
+  }));
+  let jobReads = 0;
+  page.on('request', (request) => {
+    if (request.url().includes('/notification_jobs')) jobReads++;
+  });
+  await api.connect(context);
+  await page.goto('/#/admin');
+  const menu = page.getByRole('navigation', { name: 'Разделы управления' });
+  await expect(menu.getByRole('link')).toHaveCount(5);
+  await expect(page.locator('.management-page .tabs')).toHaveCount(0);
+  expect(jobReads).toBe(0);
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.screenshot({ path: '../../work/admin-home-friendly.png', fullPage: true });
+  await menu.getByRole('link', { name: /Уведомления/ }).click();
+  await expect(page.locator('.delivery-row')).toHaveCount(10);
+  expect(jobReads).toBeGreaterThan(0);
+  await expect(
+    page.getByText('Telegram: service temporarily unavailable', { exact: true }),
+  ).not.toBeVisible();
+  expect(api.publications).toEqual([]);
+  await page.getByRole('button', { name: 'С ошибкой', exact: true }).click();
+  await expect(page.locator('.delivery-row')).toHaveCount(1);
+  await page.getByText('Причина ошибки', { exact: true }).click();
+  await expect(
+    page.getByText('Telegram: service temporarily unavailable', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'К управлению клубом', exact: true }).click();
+  await menu.getByRole('link', { name: /Предложения книг/ }).click();
+  await expect(page.getByText('Новых предложений нет', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Предложения книг', exact: true })).toBeVisible();
+});
+
+test('управление: короткая форма книги сохраняет ввод при отказе сервера и отмене закрытия', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  let fail = true;
+  await context.route('**/functions/v1/club-api', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const input = route.request().postDataJSON();
+    if (input.action === 'admin.book') {
+      if (fail)
+        return route.fulfill({
+          status: 400,
+          json: { error: 'Не удалось сохранить книгу. Повторите попытку.' },
+          headers: { 'access-control-allow-origin': '*' },
+        });
+      api.extra.club_books = [{ ...input.data, default_pages: input.data.totalPages }];
+    }
+    await route.fallback();
+  });
+  await page.goto('/#/admin?section=books');
+  await page.getByRole('button', { name: 'Добавить книгу', exact: true }).click();
+  await expect(page.getByLabel('Поиск книги в интернете')).toBeVisible();
+  await expect(page.getByLabel('Название', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
+  await page.getByLabel('Название', { exact: true }).fill('Книга для клуба');
+  await page.getByLabel('Автор', { exact: true }).fill('Автор книги');
+  await expect(page.getByLabel('Страниц по умолчанию')).not.toBeVisible();
+  await page.getByText('Данные издания — необязательно', { exact: true }).click();
+  await page.getByLabel('Страниц по умолчанию').fill('350');
+  await page.getByLabel('Клубный статус').selectOption('finished');
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Не удалось сохранить книгу');
+  await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Книга для клуба');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
+  await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Книга для клуба');
+  fail = false;
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Изменить книгу: Книга для клуба', exact: true }),
+  ).toBeVisible();
+  expect((api.extra.club_books[0] as any).default_pages).toBe(350);
+  expect(api.records.size).toBe(0);
+});
+
+test('управление: одобрение и отклонение предложения разделены, причина требуется только для отказа', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  api.extra.book_proposals = [1, 2].map((n) => ({
+    id: crypto.randomUUID(),
+    member_id: owner,
+    status: 'pending',
+    reason: '',
+    metadata: {
+      title: 'Предложение ' + n,
+      authors: 'Автор',
+      description: '',
+      genre: '',
+      year: null,
+      isbn: '',
+      cover: '',
+      totalPages: 200,
+    },
+  }));
+  await api.connect(context);
+  await context.route('**/functions/v1/club-api', async (route) => {
+    if (route.request().method() === 'POST') {
+      const input = route.request().postDataJSON();
+      if (input.action === 'admin.proposal') {
+        const proposal = (api.extra.book_proposals as any[]).find((p) => p.id === input.data.id);
+        proposal.status = input.data.approve ? 'approved' : 'rejected';
+      }
+    }
+    await route.fallback();
+  });
+  await page.goto('/#/admin?section=proposals');
+  await page.getByRole('button', { name: 'Рассмотреть: Предложение 1', exact: true }).click();
+  await expect(page.getByLabel('Причина отклонения')).toHaveCount(0);
+  await expect(page.getByLabel('Название', { exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Добавить в каталог', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Рассмотреть: Предложение 2', exact: true }).click();
+  await page.getByRole('button', { name: 'Отклонить', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Отклонить предложение', exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel('Причина отклонения').fill('Уже обсуждали эту книгу');
+  await page.getByRole('button', { name: 'Отклонить предложение', exact: true }).click();
+  await expect(page.getByText('Новых предложений нет', { exact: true })).toBeVisible();
+  const actions = api.publications.filter((p) => p.action === 'admin.proposal');
+  expect(actions.map((p) => p.data.approve)).toEqual([true, false]);
+  expect(actions[1].data.reason).toBe('Уже обсуждали эту книгу');
+});
+
+test('управление: поиск участников, закрытие и восстановление доступа, приглашение без ID', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  const boris = crypto.randomUUID();
+  api.extra.visible_club_members = [
+    { id: owner, name: 'Анна', username: null, role: 'admin', active: true },
+    { id: boris, name: 'Борис', username: 'boris', role: 'member', active: true },
+  ];
+  await api.connect(context);
+  await context.route('**/functions/v1/club-api', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const input = route.request().postDataJSON();
+    if (input.action === 'admin.member')
+      (api.extra.visible_club_members as any[]).find((m) => m.id === input.data.id).active =
+        input.data.active;
+    if (input.action === 'admin.telegram' || input.action === 'admin.invitation')
+      return route.fulfill({
+        json:
+          input.action === 'admin.telegram'
+            ? { username: 'bookclub_test_bot' }
+            : { token: 'test-invitation-token' },
+        headers: { 'access-control-allow-origin': '*' },
+      });
+    await route.fallback();
+  });
+  await page.goto('/#/admin?section=members');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByLabel('Поиск участников в управлении').fill('@boris');
+  await page.getByRole('button', { name: 'Участник: Борис', exact: true }).click();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'Закрыть доступ', exact: true }).click();
+  expect(api.publications.filter((p) => p.action === 'admin.member')).toHaveLength(0);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Закрыть доступ', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Доступ закрыт', exact: true }).click();
+  await page.getByRole('button', { name: 'Участник: Борис', exact: true }).click();
+  await page.getByRole('button', { name: 'Восстановить доступ', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect(
+    api.publications.filter((p) => p.action === 'admin.member').map((p) => p.data.active),
+  ).toEqual([false, true]);
+  await page.getByRole('button', { name: 'Пригласить участника', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Создать приглашение', exact: true }).click();
+  await expect(page.getByLabel('Ссылка приглашения')).toHaveValue(
+    'https://t.me/bookclub_test_bot?start=join_test-invitation-token',
+  );
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/admin-invitation-friendly.png', fullPage: true });
+});
+
+test('управление: встреча сохраняет связанные книги после медленной загрузки, отмена требует подтверждения', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  const meetingId = crypto.randomUUID(),
+    bookId = crypto.randomUUID();
+  api.meetings.push({
+    id: meetingId,
+    title: 'Встреча клуба',
+    starts_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+    place: 'Кафе',
+    venue_url: '',
+    description: '',
+    duration_minutes: 120,
+    cancelled: false,
+    version: 1,
+  });
+  api.extra.club_books = [
+    {
+      id: bookId,
+      title: 'Книга встречи',
+      authors: 'Автор',
+      status: 'reading',
+      cover: '',
+      default_pages: 300,
+    },
+  ];
+  api.extra.meeting_books = [{ meeting_id: meetingId, book_id: bookId }];
+  await api.connect(context);
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await context.route('**/rest/v1/meeting_books*', async (route) => {
+    await hold;
+    await route.fallback();
+  });
+  try {
+    await page.goto('/#/admin?section=meetings');
+    await page
+      .getByRole('button', { name: 'Изменить встречу: Встреча клуба', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Сохранить встречу', exact: true }),
+    ).toBeDisabled();
+    release();
+    await expect(
+      page.getByRole('button', { name: 'Сохранить встречу', exact: true }),
+    ).toBeEnabled();
+    await page.getByText('Ссылка, книги и длительность', { exact: true }).click();
+    await page.getByLabel('Найти книгу встречи').fill('Книга');
+    await expect(page.getByRole('checkbox', { name: 'Книга встречи', exact: true })).toBeChecked();
+    await page.getByLabel('Место', { exact: true }).fill('Другое кафе');
+    await page.getByRole('button', { name: 'Сохранить встречу', exact: true }).click();
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    expect((api.meetings[0] as any).book_ids).toEqual([bookId]);
+    await page
+      .getByRole('button', { name: 'Изменить встречу: Встреча клуба', exact: true })
+      .click();
+    page.once('dialog', (dialog) => dialog.dismiss());
+    await page.getByRole('button', { name: 'Отменить встречу', exact: true }).click();
+    expect(api.meetings[0].cancelled).toBe(false);
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Отменить встречу', exact: true }).click();
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    expect(api.meetings[0].cancelled).toBe(true);
+    await page.getByRole('button', { name: 'Прошедшие', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Изменить встречу: Встреча клуба', exact: true }),
+    ).toBeVisible();
+  } finally {
+    release();
+  }
+});
 test('вход работает в мобильном WebView без AbortSignal.timeout и AbortSignal.any', async ({
   browser,
   baseURL,
@@ -732,7 +1011,11 @@ test('администратор ищет книги и выбирает нес�
   await api.connect(context);
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto('/#/admin');
-  await page.getByRole('button', { name: 'Главные книги', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Разделы управления' })
+    .getByRole('link', { name: /Книги клуба/ })
+    .click();
+  await page.getByRole('button', { name: 'Читаем сейчас', exact: true }).click();
   await page.getByLabel('Поиск книг в управлении').fill('Длинное');
   await expect(page.locator('.current-book-choice')).toHaveCount(1);
   await page.getByRole('checkbox', { name: /Читаем сейчас: Длинное/ }).check();
@@ -755,7 +1038,7 @@ test('администратор ищет книги и выбирает нес�
   await page.getByRole('button', { name: 'Каталог', exact: true }).click();
   await page.getByLabel('Поиск книг в управлении').fill('Длинное');
   await expect(page.locator('.admin-book-row')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Изменить', exact: true }).click();
+  await page.getByRole('button', { name: /^Изменить книгу:/ }).click();
   const form = page.getByRole('dialog');
   await expect(form.getByLabel('ISBN', { exact: true })).toHaveCount(0);
   await expect(form.getByLabel('Обложка (HTTPS-ссылка)')).toHaveCount(0);
@@ -856,6 +1139,7 @@ test('встреча администратора видна на главной
   const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   await page.getByLabel('Дата и время · МСК').fill(date + 'T18:00');
   await page.getByLabel('Место', { exact: true }).fill('Кафе на углу');
+  await page.getByText('Ссылка, книги и длительность', { exact: true }).click();
   await page.getByLabel('Ссылка на место или созвон').fill('https://maps.example/place');
   await page.getByLabel('Описание', { exact: true }).fill('Приносите любимые цитаты');
   await page.getByRole('dialog').getByRole('button', { name: 'Создать встречу' }).click();
@@ -1060,7 +1344,7 @@ test('вопросы к встрече и итоги сохраняются на
     await dialog.getByRole('button', { name: 'Отметить обсуждённым', exact: true }).click();
     await expect(dialog.getByText('Обсудили', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Назад', exact: true }).click();
-    await a.getByRole('button', { name: 'Прошедшие и отменённые', exact: true }).click();
+    await a.getByRole('button', { name: 'Прошедшие', exact: true }).click();
     await a.getByRole('button', { name: 'Итоги встречи', exact: true }).click();
     dialog = a.getByRole('dialog');
     await dialog
@@ -1077,7 +1361,7 @@ test('вопросы к встрече и итоги сохраняются на
       dialog.locator('.discussion-note').getByText('Хочется перечитать финал', { exact: true }),
     ).toBeVisible();
     await b.goto('/#/meetings');
-    await b.getByRole('button', { name: 'Прошедшие и отменённые', exact: true }).click();
+    await b.getByRole('button', { name: 'Прошедшие', exact: true }).click();
     await b.getByRole('button', { name: /^Итоги встречи/ }).click();
     await expect(
       b

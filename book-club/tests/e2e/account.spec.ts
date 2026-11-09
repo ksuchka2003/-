@@ -1,4 +1,4 @@
-import { openBookEditor, editOpenBook } from './helpers';
+import { openBookEditor, editOpenBook, writeEntry, expectEntry } from './helpers';
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import type { LibraryChange, LibraryRecord } from '../../src/privateTypes';
 import type { Availability, Attendance } from '../../src/calendar';
@@ -87,6 +87,26 @@ function backend() {
             records.set(key, record);
             return { status: 'applied', record };
           });
+          const entries = (extra.club_entries || []).filter((p: any) => p.member_id !== owner);
+          for (const record of records.values()) {
+            const e = record.payload as any;
+            if (record.kind !== 'entry' || !e?.published || e.deletedAt) continue;
+            const book = records.get('book:' + e.bookId)?.payload as any;
+            if (!book || book.deletedAt) continue;
+            entries.push({
+              id: e.id,
+              member_id: owner,
+              book_id: book.clubBookId,
+              title: book.title,
+              kind: e.kind,
+              text: e.text,
+              page: e.page,
+              chapter: e.chapter,
+              created_at: e.createdAt,
+              updated_at: e.updatedAt,
+            });
+          }
+          extra.club_entries = entries;
           if (
             input.data.changes.some(
               (c: LibraryChange) => c.kind === 'book' || c.kind === 'progress',
@@ -114,6 +134,60 @@ function backend() {
             }
             extra.visible_progress = projected;
           }
+        } else if (input.action === 'reading.participation') {
+          const values = (extra.visible_reading_participation ||= []) as any[];
+          const old = values.findIndex(
+            (p) => p.reading_id === input.data.reading_id && p.member_id === owner,
+          );
+          const reading = (extra.club_readings as any[])?.find(
+            (r) => r.id === input.data.reading_id,
+          );
+          const value = {
+            ...input.data,
+            book_id: reading?.book_id,
+            member_id: owner,
+            updated_at: new Date().toISOString(),
+          };
+          if (old >= 0) values[old] = value;
+          else values.push(value);
+          body = value;
+        } else if (input.action === 'content.reaction') {
+          const values = (extra.content_reactions ||= []) as any[];
+          const { target_kind, target_id, value } = input.data;
+          const old = values.findIndex(
+            (r) =>
+              r.target_kind === target_kind && r.target_id === target_id && r.member_id === owner,
+          );
+          if (old >= 0) values.splice(old, 1);
+          if (value !== null) values.push({ target_kind, target_id, member_id: owner, value });
+          if (target_kind === 'quote') {
+            const likes = (extra.quote_likes ||= []) as any[],
+              index = likes.findIndex((l) => l.quote_id === target_id && l.member_id === owner);
+            if (index >= 0) likes.splice(index, 1);
+            if (value === 1) likes.push({ quote_id: target_id, member_id: owner });
+          }
+          body = { ok: true };
+        } else if (
+          input.action === 'content.comment' ||
+          input.action === 'content.comment.delete'
+        ) {
+          const values = (extra.content_comments ||= []) as any[],
+            old = values.findIndex((c) => c.id === input.data.id);
+          if (input.action.endsWith('.delete')) {
+            if (old >= 0) values.splice(old, 1);
+          } else {
+            const row = {
+              ...input.data,
+              member_id: owner,
+              created_at: values[old]?.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            if (old >= 0) values[old] = row;
+            else values.push(row);
+          }
+          body = { ok: true };
+        } else if (input.action === 'admin.reading_report') {
+          body = extra.report?.[0] || {};
         } else if (input.action.startsWith('meeting.question')) {
           const rows = (extra.meeting_questions ||= []) as any[];
           const index = rows.findIndex((q) => q.id === input.data.id);
@@ -225,6 +299,13 @@ function backend() {
         }
       } else {
         const table = url.pathname.split('/').at(-1);
+        if (table === 'content_reactions' && !extra.content_reactions)
+          extra.content_reactions = (extra.quote_likes || []).map((l: any) => ({
+            target_kind: 'quote',
+            target_id: l.quote_id,
+            member_id: l.member_id,
+            value: 1,
+          }));
         body =
           table === 'meeting_availability'
             ? availability
@@ -290,7 +371,7 @@ test('управление: короткое меню, отдельные раз
   await api.connect(context);
   await page.goto('/#/admin');
   const menu = page.getByRole('navigation', { name: 'Разделы управления' });
-  await expect(menu.getByRole('link')).toHaveCount(5);
+  await expect(menu.getByRole('link')).toHaveCount(6);
   await expect(page.locator('.management-page .tabs')).toHaveCount(0);
   expect(jobReads).toBe(0);
   for (const width of [320, 390, 768, 1280]) {
@@ -666,6 +747,8 @@ test('мобильный UX: длинное описание не закрыва
   const add = page.getByRole('button', { name: 'В мои книги', exact: true });
   await expect(add).toBeInViewport();
   await add.click();
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await page.goto('/#/club/' + book);
   const progress = page.getByRole('link', { name: 'Обновить мой прогресс', exact: true });
   await expect(progress).toBeVisible();
   for (const action of await page
@@ -675,8 +758,8 @@ test('мобильный UX: длинное описание не закрыва
     expect(bounds.x).toBeGreaterThanOrEqual(16);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(304);
   }
-  const tabs = page.locator('.detail-tabs button');
-  await expect(tabs).toHaveCount(4);
+  const tabs = page.locator('.book-section-nav button');
+  await expect(tabs).toHaveCount(6);
   for (const tab of await tabs.all()) {
     const bounds = (await tab.boundingBox())!;
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(304);
@@ -737,18 +820,17 @@ test('один Telegram-аккаунт на двух устройствах: к�
     await form.getByText('Данные издания — необязательно', { exact: true }).click();
     await form.getByText('Моё чтение', { exact: true }).click();
     await form.getByLabel('Страниц в моём издании').fill('400');
-    await form.getByText('Отзыв, оценка и заметки', { exact: true }).click();
     await form.getByLabel('Прочитано страниц').fill('100');
-    await form.getByLabel('Приватные заметки').fill('Только для владельца');
     await form.getByRole('button', { name: 'Сохранить книгу' }).click();
+    await writeEntry(a, 'Синхронная книга', 'Только для владельца');
     await expect.poll(() => api.records.size).toBeGreaterThanOrEqual(3);
     await synced(a);
     await b.goto('/#/books');
     await expect(b.getByRole('heading', { name: 'Синхронная книга' })).toBeVisible();
     await openBookEditor(b, 'Синхронная книга');
-    await b.getByText('Отзыв, оценка и заметки', { exact: true }).click();
-    await expect(b.getByLabel('Приватные заметки')).toHaveValue('Только для владельца');
+
     await b.getByRole('button', { name: 'Назад', exact: true }).click();
+    await expectEntry(b, 'Синхронная книга', 'Только для владельца');
     await a.goto('/#/quotes');
     await a.getByRole('button', { name: 'Добавить', exact: true }).click();
     await a.getByLabel('Название книги', { exact: true }).fill('Синхронная');
@@ -824,21 +906,19 @@ test('книга из клуба открывается напрямую, быс
   await api.connect(context);
   await page.goto('/#/club/' + clubId);
   await page.getByRole('button', { name: 'В мои книги', exact: true }).click();
-  await page.getByRole('link', { name: 'Уже на моей полке', exact: true }).click();
-  await editOpenBook(page);
-  let dialog = page.getByRole('dialog', { name: 'Моя книга', exact: true });
+  let dialog = page.getByRole('dialog', { name: 'Настроить моё издание', exact: true });
   await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Короткий путь');
-  await dialog.getByText('Отзыв, оценка и заметки', { exact: true }).click();
-  await dialog.getByLabel('Приватные заметки').fill('Важная заметка');
   await dialog.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
   await expect(dialog).not.toBeVisible();
+  await page.goto('/#/books');
+  await writeEntry(page, 'Короткий путь', 'Важная заметка');
   await page.goto('/#/club/' + clubId);
   await page.getByRole('button', { name: 'Оставить впечатление', exact: true }).click();
-  await page.getByLabel('Что осталось после книги?').fill('Незаконченный отзыв');
+  await page.getByLabel('Законченная мысль').fill('Незаконченный отзыв');
   await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByRole('button', { name: 'Оставить впечатление', exact: true }).click();
-  await expect(page.getByLabel('Что осталось после книги?')).toHaveValue('Незаконченный отзыв');
-  await page.getByRole('button', { name: 'Сохранить впечатление', exact: true }).click();
+  await expect(page.getByLabel('Законченная мысль')).toHaveValue('Незаконченный отзыв');
+  await page.getByRole('button', { name: 'Сохранить мысль', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.goto('/#/');
   await page.getByRole('link', { name: 'Обновить мой прогресс', exact: true }).click();
@@ -885,10 +965,11 @@ test('книга из клуба открывается напрямую, быс
     await other.getByRole('button', { name: 'Восстановить книгу', exact: true }).click();
     await other.getByRole('button', { name: 'К библиотеке', exact: true }).click();
     await openBookEditor(other, 'Короткий путь');
-    await other.getByText('Отзыв, оценка и заметки', { exact: true }).click();
-    await expect(other.getByLabel('Приватные заметки')).toHaveValue('Важная заметка');
+
     await expect(other.getByLabel('Прочитано страниц')).toHaveValue('150');
     await expect(other.getByLabel('Текущая глава')).toHaveValue('Глава 3');
+    await other.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
+    await expectEntry(other, 'Короткий путь', 'Важная заметка');
     await other.goto('/#/quotes');
     await expect(other.locator('blockquote')).toHaveText('Эта цитата должна восстановиться');
     expect(api.publications).toEqual([]);
@@ -897,7 +978,7 @@ test('книга из клуба открывается напрямую, быс
   }
 });
 
-test('UX: единый поиск открывает существующие книги и сохраняет UUID клуба для интернет-издания', async ({
+test('UX: каталог сохраняет UUID клуба и позволяет настроить личное издание', async ({
   page,
   context,
 }) => {
@@ -934,11 +1015,11 @@ test('UX: единый поиск открывает существующие к
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   let form = page.getByRole('dialog', { name: 'Добавить книгу', exact: true });
   await expect(form.getByRole('textbox')).toHaveCount(1);
-  await form.getByLabel('Найти книгу').fill('Дюна');
+  await form.getByLabel('Найти в книгах клуба').fill('Дюна');
   await expect(form.getByRole('region', { name: 'В клубе', exact: true })).toBeVisible();
-  await form.getByRole('region', { name: 'В интернете', exact: true }).getByRole('button').click();
-  await expect(form.getByRole('heading', { name: 'Дюна', exact: true })).toBeVisible();
-  await expect(form.getByLabel('Название', { exact: true })).not.toBeVisible();
+  await form.getByRole('region', { name: 'В клубе', exact: true }).getByRole('button').click();
+  await expect(form.getByLabel('Название', { exact: true })).toHaveValue('Дюна');
+  await form.getByLabel('Страниц в моём издании').fill('480');
   await form.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
   await expect(form).not.toBeVisible();
   await expect
@@ -947,8 +1028,10 @@ test('UX: единый поиск открывает существующие к
   expect([...api.records.values()].find((r) => r.kind === 'book')?.payload?.totalPages).toBe(480);
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   form = page.getByRole('dialog', { name: 'Добавить книгу', exact: true });
+  await form.getByLabel('Найти в книгах клуба').fill('Дюна');
   await form.getByRole('region', { name: 'Уже у меня', exact: true }).getByRole('button').click();
-  const card = page.getByRole('dialog', { name: 'Карточка книги', exact: true });
+  const card = page.getByRole('dialog', { name: 'Моя книга', exact: true });
+  await card.getByRole('button', { name: /^Цитаты/ }).click();
   await expect(card.getByRole('button', { name: 'Добавить цитату', exact: true })).toBeVisible();
   await expect(card.getByLabel('Название', { exact: true })).toHaveCount(0);
   expect([...api.records.values()].filter((r) => r.kind === 'book' && r.payload)).toHaveLength(1);
@@ -988,26 +1071,36 @@ test('UX: карточка создаёт цитату без повторног
     .click();
   await page
     .getByRole('dialog')
+    .getByRole('button', { name: /^Цитаты/ })
+    .click();
+  await page
+    .getByRole('dialog')
     .getByRole('button', { name: 'Добавить цитату', exact: true })
     .click();
   await expect(page.getByLabel('Название книги', { exact: true })).toHaveCount(0);
   await page.getByLabel('Текст цитаты').fill('Цитата без лишних шагов');
   await page.getByRole('button', { name: 'Сохранить цитату', exact: true }).click();
-  let card = page.getByRole('dialog', { name: 'Карточка книги', exact: true });
+  let card = page.getByRole('dialog', { name: 'Моя книга', exact: true });
+  await card.getByRole('button', { name: /^Цитаты/ }).click();
   await expect(card.locator('blockquote')).toHaveText('Цитата без лишних шагов');
-  await card.getByRole('button', { name: 'Записать мысль', exact: true }).click();
-  await page.getByLabel('Мой отзыв', { exact: true }).fill('Моё впечатление');
-  await page.getByLabel('Приватные заметки').fill('Только для меня');
-  await expect(page.getByLabel('Поделиться отзывом и оценкой в клубе')).not.toBeChecked();
-  await page.getByRole('button', { name: 'Сохранить мысли', exact: true }).click();
-  await expect(card.getByText('Только для меня', { exact: true })).toBeVisible();
+  await card.getByRole('button', { name: /^Мысли/ }).click();
+  await card.getByRole('button', { name: 'Добавить мысль', exact: true }).click();
+  await page.getByLabel('Законченная мысль').fill('Моё впечатление');
+  await expect(page.getByLabel('Поделиться мыслью с клубом')).not.toBeChecked();
+  await page.getByRole('button', { name: 'Сохранить мысль', exact: true }).click();
+  await card.getByRole('button', { name: 'Назад', exact: true }).click();
+  await writeEntry(page, 'Удобная книга', 'Только для меня');
+  await page
+    .locator('.personal-book-card')
+    .getByRole('heading', { name: 'Удобная книга', exact: true })
+    .click();
   await page.setViewportSize({ width: 320, height: 760 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/ux-personal-book.png', fullPage: true });
   await expect
     .poll(() =>
       [...api.records.values()].some(
-        (r) => r.kind === 'book' && r.payload?.notes === 'Только для меня',
+        (r) => r.kind === 'entry' && r.payload?.text === 'Только для меня',
       ),
     )
     .toBe(true);
@@ -1020,9 +1113,11 @@ test('UX: карточка создаёт цитату без повторног
       .locator('.personal-book-card')
       .getByRole('heading', { name: 'Удобная книга', exact: true })
       .click();
-    card = second.getByRole('dialog', { name: 'Карточка книги', exact: true });
-    await expect(card.getByText('Моё впечатление', { exact: true })).toBeVisible();
+    card = second.getByRole('dialog', { name: 'Моя книга', exact: true });
     await expect(card.getByText('Только для меня', { exact: true })).toBeVisible();
+    await card.getByRole('button', { name: /^Мысли/ }).click();
+    await expect(card.getByText('Моё впечатление', { exact: true })).toBeVisible();
+    await card.getByRole('button', { name: /^Цитаты/ }).click();
     await expect(card.locator('blockquote')).toHaveText('Цитата без лишних шагов');
     expect(api.publications).toEqual([]);
   } finally {
@@ -1251,8 +1346,7 @@ test('поиск обложки сохраняет только картинку
   const dialog = page.getByRole('dialog');
   await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
   await dialog.getByLabel('Название', { exact: true }).fill('Солярис');
-  await dialog.getByRole('button', { name: 'Из интернета', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Найти обложки', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Сменить обложку', exact: true }).click();
   await dialog
     .getByRole('button', { name: 'Выбрать: Другое издание, Станислав Лем', exact: true })
     .click();
@@ -1263,10 +1357,9 @@ test('поиск обложки сохраняет только картинку
     .toBe('https://covers.example/solaris.jpg');
   expect([...api.records.values()].find((r) => r.kind === 'book')?.payload?.totalPages).toBe(0);
   await openBookEditor(page, 'Солярис');
-  await dialog.getByRole('button', { name: 'Из интернета', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Сменить обложку', exact: true }).click();
   fail = true;
   await dialog.getByLabel('Поиск обложки').fill('Неизвестное издание');
-  await dialog.getByRole('button', { name: 'Найти обложки', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('Поиск временно недоступен');
   await expect(dialog.getByLabel('Ссылка на картинку')).toHaveCount(0);
 });
@@ -1302,7 +1395,8 @@ test('встреча администратора видна на главной
   await page.setViewportSize({ width: 320, height: 760 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/simple-meeting-mobile.png', fullPage: true });
-  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  await page.evaluate(() => (window.Telegram!.WebApp.colorScheme = 'dark'));
+  await page.emulateMedia({ colorScheme: 'dark' });
   await page.screenshot({ path: '../../work/simple-meeting-dark.png', fullPage: true });
 });
 
@@ -1396,7 +1490,7 @@ test('прогресс текущей книги открывает публик
   await page.getByRole('button', { name: 'Чтение Борис: Солярис' }).click();
   await expect(page.getByText('Цитата к обсуждаемой книге', { exact: true })).toBeVisible();
   await expect(page.getByText('Цитата к другой книге', { exact: true })).not.toBeVisible();
-  await page.getByRole('button', { name: 'Мысли по прочитанному', exact: true }).click();
+  await page.getByLabel('Записи участника').selectOption('reviews');
   await expect(page.getByText('Хочется обсудить океан', { exact: true })).toBeVisible();
 });
 test('цитата личной книги приватна по умолчанию, делится отдельно и отзывается', async ({
@@ -1624,7 +1718,8 @@ test('все книги: поиск, фильтр прочитанного, ре
   await page.setViewportSize({ width: 320, height: 760 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/book-memory-mobile.png', fullPage: true });
-  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  await page.evaluate(() => (window.Telegram!.WebApp.colorScheme = 'dark'));
+  await page.emulateMedia({ colorScheme: 'dark' });
   await expect
     .poll(() =>
       page
@@ -1633,20 +1728,36 @@ test('все книги: поиск, фильтр прочитанного, ре
     )
     .toBe('rgb(38, 45, 39)');
   await page.screenshot({ path: '../../work/book-memory-dark.png', fullPage: true });
-  await page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
+  await page.evaluate(() => (window.Telegram!.WebApp.colorScheme = 'light'));
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.getByRole('button', { name: 'Оставить впечатление', exact: true }).click();
-  await page.getByLabel('Что осталось после книги?').fill('Мой взгляд спустя годы');
+  await page.getByLabel('Законченная мысль').fill('Мой взгляд спустя годы');
+  await page.getByLabel('Поделиться мыслью с клубом').check();
+  await page.getByRole('button', { name: 'Сохранить мысль', exact: true }).click();
+  await expect
+    .poll(() => api.extra.club_entries?.some((e: any) => e.text === 'Мой взгляд спустя годы'))
+    .toBe(true);
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Изменить статус: Давняя книга', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Прочитано', exact: true }).click();
+  await page
+    .locator('.personal-book-card')
+    .getByRole('heading', { name: 'Давняя книга', exact: true })
+    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Отзыв', exact: true }).click();
+  await page.getByRole('button', { name: 'Написать отзыв', exact: true }).click();
+  await page.getByLabel('Мой отзыв', { exact: true }).fill('Мой отзыв спустя годы');
   await page.getByRole('slider', { name: 'Моя оценка', exact: true }).press('End');
   await page.getByRole('slider', { name: 'Моя оценка', exact: true }).press('ArrowLeft');
-  await page.getByLabel('Я прочитал(а) эту книгу').check();
-  await page.getByRole('button', { name: 'Сохранить впечатление', exact: true }).click();
+  await page.getByLabel('Поделиться отзывом и оценкой в клубе').check();
+  await page.getByRole('button', { name: 'Сохранить отзыв', exact: true }).click();
   await expect
     .poll(() =>
       api.publications.some(
         (p) =>
           p.action === 'sync' &&
           p.data.kind === 'review' &&
-          p.data.payload?.text === 'Мой взгляд спустя годы',
+          p.data.payload?.text === 'Мой отзыв спустя годы',
       ),
     )
     .toBe(true);
@@ -1729,6 +1840,8 @@ test('цитаты: понравившиеся и сохранённые отд�
   await expect(page.getByLabel('Фильтр по книге')).toHaveCount(0);
   await page.getByLabel('Поиск цитат').fill('Книга-источник');
   await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+  await expect(page.getByText('Сохранено от Борис', { exact: true })).not.toBeVisible();
+  await page.locator('.source-disclosure summary').click();
   await expect(page.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Нравится цитата', exact: true })).toContainText(
     '1',
@@ -1752,6 +1865,8 @@ test('цитаты: понравившиеся и сохранённые отд�
   await page.reload();
   await page.getByLabel('Раздел цитат').selectOption('saved');
   await expect(page.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+  await expect(page.getByText('Сохранено от Борис', { exact: true })).not.toBeVisible();
+  await page.locator('.source-disclosure summary').click();
   await expect(page.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
   const second = await browser.newContext({ baseURL });
   try {
@@ -1760,6 +1875,7 @@ test('цитаты: понравившиеся и сохранённые отд�
     await other.goto('/#/quotes');
     await other.getByLabel('Раздел цитат').selectOption('saved');
     await expect(other.getByText('Цитата другого участника', { exact: true })).toBeVisible();
+    await other.locator('.source-disclosure summary').click();
     await expect(other.getByText('Книга-источник', { exact: false })).toBeVisible();
     await expect(other.getByText('Сохранено от Борис', { exact: true })).toBeVisible();
     await expect(other.getByRole('button', { name: 'Нравится цитата', exact: true })).toHaveCount(
@@ -1872,8 +1988,8 @@ test('личная обложка и звёзды синхронизируютс
     await expect(a.getByLabel('Какие книги показать')).toHaveCount(0);
     await a.getByRole('heading', { name: 'Солярис', exact: true }).click();
     await a.getByRole('button', { name: /В мои книги/ }).click();
-    await a.getByRole('button', { name: 'Назад', exact: true }).click();
-    await expect(a.getByLabel('Поиск книг клуба')).toHaveValue('Соля');
+    await a.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+    await expect(a.getByRole('dialog', { name: 'Моя книга', exact: true })).toBeVisible();
     await a.goto('/#/books');
     await openBookEditor(a, 'Солярис');
     const png = await a.evaluate(() => {
@@ -1897,12 +2013,21 @@ test('личная обложка и звёзды синхронизируютс
       'src',
       /^data:image\/jpeg;base64,/,
     );
-    await a.getByText('Отзыв, оценка и заметки', { exact: true }).click();
+    await a.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+    await a.getByRole('button', { name: 'Изменить статус: Солярис', exact: true }).click();
+    await a.getByRole('dialog').getByRole('button', { name: 'Прочитано', exact: true }).click();
+    await a
+      .locator('.personal-book-card')
+      .getByRole('heading', { name: 'Солярис', exact: true })
+      .click();
+    await a.getByRole('dialog').getByRole('button', { name: 'Отзыв', exact: true }).click();
+    await a.getByRole('button', { name: 'Написать отзыв', exact: true }).click();
     await a.getByRole('slider', { name: 'Моя оценка', exact: true }).press('End');
     await a.getByRole('slider', { name: 'Моя оценка', exact: true }).press('ArrowLeft');
     await expect(a.getByRole('slider')).toHaveAttribute('aria-valuenow', '4.5');
     await a.screenshot({ path: '../../work/personal-cover-stars.png', fullPage: true });
-    await a.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+    await a.getByRole('button', { name: 'Сохранить отзыв', exact: true }).click();
+    await a.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
     await expect
       .poll(() =>
         [...api.records.values()].some(
@@ -1930,8 +2055,7 @@ test('личная обложка и звёзды синхронизируютс
       'src',
       /^data:image\/jpeg;base64,/,
     );
-    await b.getByText('Отзыв, оценка и заметки', { exact: true }).click();
-    await expect(b.getByRole('slider')).toHaveAttribute('aria-valuenow', '4.5');
+
     await b.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
     await expect(b.getByRole('heading', { name: /^Мои книги/ })).toBeVisible();
     await openBookEditor(b, 'Солярис');
@@ -1945,4 +2069,297 @@ test('личная обложка и звёзды синхронизируютс
     await first.close();
     await second.close();
   }
+});
+
+test('чтение клуба: отказ, просмотр чужих записей, смена решения и настройка своего издания', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    book = '20000000-0000-4000-8000-000000000061',
+    reading = '40000000-0000-4000-8000-000000000061';
+  api.extra.club_books = [
+    {
+      id: book,
+      title: 'Новая клубная',
+      authors: 'Автор',
+      description: '',
+      genre: '',
+      year: null,
+      isbn: '',
+      cover: '',
+      default_pages: 300,
+      status: 'reading',
+    },
+  ];
+  api.extra.club_readings = [
+    {
+      id: reading,
+      book_id: book,
+      starts_on: clubDay(),
+      ends_on: null,
+      position: 0,
+      status: 'active',
+    },
+  ];
+  await api.connect(context);
+  await page.goto('/#/');
+  await page.getByRole('button', { name: 'Не буду читать', exact: true }).click();
+  await expect
+    .poll(() => (api.extra.visible_reading_participation?.[0] as any)?.choice)
+    .toBe('declined');
+  expect([...api.records.values()].filter((r) => r.kind === 'book')).toHaveLength(0);
+  await page.getByText('Прогресс участников', { exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Чтение Анна: Новая клубная', exact: true }),
+  ).toContainText('Не будет читать');
+  await page.getByRole('button', { name: 'Изменить решение', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Буду читать', exact: true }).click();
+  const edition = page.getByRole('dialog', { name: 'Настроить моё издание', exact: true });
+  await expect(edition).toBeVisible();
+  await edition.getByLabel('Страниц в моём издании').fill('480');
+  await edition.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  const card = page.getByRole('dialog', { name: 'Моя книга', exact: true });
+  await expect(card.getByRole('link', { name: 'Клубная книга →', exact: true })).toHaveAttribute(
+    'href',
+    '#/club/' + book,
+  );
+  await card.getByRole('button', { name: 'Добавить заметку', exact: true }).click();
+  await page.getByLabel('Текст заметки').fill('Личное наблюдение');
+  await expect(page.getByLabel('Поделиться заметкой с клубом')).not.toBeChecked();
+  await page.getByRole('button', { name: 'Сохранить заметку', exact: true }).click();
+  await card.getByRole('button', { name: /^Мысли/ }).click();
+  await card.getByRole('button', { name: 'Добавить мысль', exact: true }).click();
+  await page.getByLabel('Законченная мысль').fill('У меня есть соображения');
+  await page.getByLabel('Поделиться мыслью с клубом').check();
+  await page.getByRole('button', { name: 'Сохранить мысль', exact: true }).click();
+  await expect.poll(() => api.extra.club_entries?.length).toBe(1);
+  expect((api.extra.club_entries[0] as any).text).toBe('У меня есть соображения');
+  await expect(card.getByText('В клубе', { exact: false })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/reader-thought-mobile.png', fullPage: true });
+});
+
+test('публикации: переключение лайка на дизлайк и отдельные комментарии с реакциями', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    quote = '50000000-0000-4000-8000-000000000062';
+  api.extra.public_quotes = [
+    {
+      id: quote,
+      member_id: '10000000-0000-4000-8000-000000000002',
+      book_id: null,
+      title: '',
+      text: 'Фраза вне книги',
+      page: null,
+      chapter: '',
+      comment: '',
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  await api.connect(context);
+  await page.goto('/#/quotes?tab=club');
+  const post = page.locator('.quote-card').filter({ hasText: 'Фраза вне книги' });
+  await post.getByRole('button', { name: 'Нравится цитата', exact: true }).click();
+  await expect(post.getByRole('button', { name: 'Нравится цитата', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await post.getByRole('button', { name: 'Не нравится цитата', exact: true }).click();
+  expect(api.extra.content_reactions).toHaveLength(1);
+  expect((api.extra.content_reactions[0] as any).value).toBe(-1);
+  await post.getByRole('button', { name: 'Комментарии', exact: true }).click();
+  const discussion = page.getByRole('dialog', { name: 'Комментарии', exact: true });
+  await discussion.getByLabel('Ваш комментарий').fill('Первая реплика');
+  await discussion.getByRole('button', { name: 'Отправить комментарий', exact: true }).click();
+  await expect(discussion.locator('.content-comment')).toHaveCount(1);
+  await discussion.getByLabel('Ваш комментарий').fill('Вторая реплика');
+  await discussion.getByRole('button', { name: 'Отправить комментарий', exact: true }).click();
+  await expect(discussion.locator('.content-comment')).toHaveCount(2);
+  await discussion
+    .locator('.content-comment')
+    .first()
+    .getByRole('button', { name: 'Не нравится комментарий', exact: true })
+    .click();
+  await expect(
+    discussion
+      .locator('.content-comment')
+      .first()
+      .getByRole('button', { name: 'Не нравится комментарий', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await discussion.getByRole('button', { name: 'Назад', exact: true }).click();
+  await post.getByRole('button', { name: 'Сохранить себе', exact: true }).click();
+  await expect
+    .poll(() => [...api.records.values()].filter((r) => r.kind === 'quote' && r.payload).length)
+    .toBe(1);
+  expect([...api.records.values()].find((r) => r.kind === 'quote')?.payload?.bookId).toBeNull();
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('ручная книга предлагает связь с клубом и сохраняет личное число страниц', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    id = '20000000-0000-4000-8000-000000000063';
+  api.extra.club_books = [
+    {
+      id,
+      title: 'Дюна',
+      authors: 'Фрэнк Герберт',
+      description: '',
+      genre: '',
+      year: null,
+      isbn: '',
+      cover: '',
+      default_pages: 600,
+      status: 'planned',
+    },
+  ];
+  await api.connect(context);
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
+  await page.getByLabel('Название', { exact: true }).fill('Дюна');
+  await expect(page.locator('.similar-books')).toContainText('Дюна');
+  await page.getByLabel('Страниц в моём издании').fill('480');
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  const duplicate = page.getByRole('dialog', { name: 'Похожая книга есть в клубе', exact: true });
+  await expect(duplicate).toContainText('не появятся');
+  await duplicate.getByRole('button', { name: /Читать клубную книгу/ }).click();
+  await expect(duplicate).not.toBeVisible();
+  await expect
+    .poll(() => [...api.records.values()].find((r) => r.kind === 'book')?.payload?.clubBookId)
+    .toBe(id);
+  expect([...api.records.values()].find((r) => r.kind === 'book')?.payload?.totalPages).toBe(480);
+});
+
+test('полки, перемещение и карточки книг; личная палитра сохраняется', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
+  await page.getByLabel('Название', { exact: true }).fill('Книга на полке');
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await page.getByRole('button', { name: 'Мои полки', exact: true }).click();
+  const manager = page.getByRole('dialog', { name: 'Мои полки', exact: true });
+  for (const name of ['Любимое', 'На лето']) {
+    await manager.getByLabel('Новая полка').fill(name);
+    await manager.getByRole('button', { name: 'Создать полку', exact: true }).click();
+    await expect(manager.getByLabel('Новая полка')).toHaveValue('');
+  }
+  await manager.getByRole('button', { name: 'Назад', exact: true }).click();
+  await page
+    .locator('.personal-book-card')
+    .getByRole('heading', { name: 'Книга на полке', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'На полки', exact: true }).click();
+  await page.getByLabel('Любимое', { exact: true }).check();
+  await page.getByRole('button', { name: 'Сохранить полки', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.getByLabel('Полка', { exact: true }).selectOption({ label: 'Любимое' });
+  await expect(page.locator('.personal-book-card')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Переместить на полку', exact: true }).click();
+  await page.getByText('Переместить с текущей полки', { exact: true }).click();
+  await page.getByLabel('Куда переместить').selectOption({ label: 'На лето' });
+  await page.getByRole('button', { name: 'Переместить книгу', exact: true }).click();
+  await expect(page.locator('.personal-book-card')).toHaveCount(0);
+  await page.getByLabel('Полка', { exact: true }).selectOption({ label: 'На лето' });
+  await page.getByRole('button', { name: 'Вид библиотеки', exact: true }).click();
+  await expect(page.locator('.book-grid')).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/reader-shelves-grid.png', fullPage: true });
+  await page.goto('/#/profile');
+  await page.getByLabel('Палитра', { exact: true }).selectOption('ink');
+  await page.getByLabel('Тема', { exact: true }).selectOption('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'ink');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect
+    .poll(
+      () =>
+        [...api.records.values()].find((r) => r.kind === 'setting' && r.entity_id === 'palette')
+          ?.payload?.value,
+    )
+    .toBe('ink');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'ink');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+test('администратор открывает отчёт по книге и скачивает его', async ({ page, context }) => {
+  const api = backend(),
+    id = '20000000-0000-4000-8000-000000000065';
+  const book = {
+    id,
+    title: 'Отчётная книга',
+    authors: 'Автор',
+    description: '',
+    genre: '',
+    year: null,
+    isbn: '',
+    cover: '',
+    default_pages: 200,
+    status: 'finished',
+  };
+  api.extra.club_books = [book];
+  api.extra.report = [
+    {
+      book,
+      reading: null,
+      cycles: [],
+      generated_at: new Date().toISOString(),
+      timezone: 'Europe/Moscow',
+      readers: [
+        {
+          member_id: owner,
+          name: 'Анна',
+          choice: 'reading',
+          status: 'finished',
+          pages: 200,
+          total_pages: 200,
+          percent: 100,
+          completed_at: new Date().toISOString(),
+        },
+      ],
+      finishers: [{ member_id: owner, name: 'Анна', completed_at: new Date().toISOString() }],
+      activity: { pages_logged: 150, updates: 3, corrections: 1, baselines: 1 },
+      periods: [{ label: 'Вечер · 18–24', pages: 150, updates: 3 }],
+      weekdays: [{ label: 'Пт', pages: 150, updates: 3 }],
+      timeline: [],
+      member_activity: [
+        {
+          member_id: owner,
+          name: 'Анна',
+          date: '2026-11-09',
+          period: 'Вечер · 18–24',
+          pages: 150,
+          updates: 3,
+        },
+      ],
+      top_liked: [],
+      top_disliked: [],
+    },
+  ];
+  await api.connect(context);
+  await page.goto('/#/admin?section=reports');
+  await page.getByLabel('Книга', { exact: true }).selectOption(id);
+  await expect(page.getByRole('heading', { name: 'Отчётная книга', exact: true })).toBeVisible();
+  await expect(page.getByText('150', { exact: true })).toBeVisible();
+  await page.getByText('Журнал обновлений участников', { exact: true }).click();
+  await expect(page.getByText('150 стр. · обновлений: 3', { exact: true })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Скачать отчёт', exact: true }).click();
+  expect((await download).suggestedFilename()).toBe('book-club-report.html');
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '../../work/reader-admin-report.png', fullPage: true });
 });

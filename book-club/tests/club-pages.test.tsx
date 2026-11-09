@@ -120,7 +120,7 @@ it('в прогрессе видны все действующие участн�
   });
   fireEvent.click(screen.getByRole('button', { name: 'Открыть прогресс: Дюна' }));
   expect(screen.getByRole('button', { name: 'Чтение Мария: Дюна' })).toBeVisible();
-  expect(screen.getByText('Нет отметки о чтении')).toBeVisible();
+  expect(screen.getByText('Ещё не выбрал участие')).toBeVisible();
   expect(screen.queryByText(/0%/)).toBeNull();
 });
 it('предложения находятся во всех книгах, текущий раздел содержит только чтение', () => {
@@ -242,7 +242,7 @@ it('управление открывается коротким меню, пу�
   view(<Admin />, {}, 'admin');
   expect(
     screen.getByRole('navigation', { name: 'Разделы управления' }).querySelectorAll('a'),
-  ).toHaveLength(5);
+  ).toHaveLength(6);
   expect(screen.queryByText('Последние отправки')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name: /Предложения книг/ }));
   expect(screen.getByText('Новых предложений нет')).toBeVisible();

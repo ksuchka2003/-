@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { LibraryBase, LibraryConflict } from './privateTypes';
+import type { Entry } from './readerDomain';
 import {
   type Book,
   type Progress,
@@ -13,6 +14,7 @@ export class LibraryDB extends Dexie {
   personal_reviews!: Table<Review, string>;
   reading_progress!: Table<Progress, string>;
   quotes!: Table<Quote, string>;
+  entries!: Table<Entry, string>;
   settings!: Table<{ key: string; value: unknown }, string>;
   club_catalog_cache!: Table<ClubBook, string>;
   sync_queue!: Table<SyncOp, string>;
@@ -35,6 +37,7 @@ export class LibraryDB extends Dexie {
       private_conflicts: 'key,kind,entityId',
     });
     this.version(3).stores({ cloud_cache: 'table' });
+    this.version(4).stores({ entries: 'id,bookId,kind,deletedAt' });
   }
 }
 let db = new LibraryDB('bookclub-local');
@@ -51,5 +54,7 @@ export async function purgeTrash() {
   const books = new Set(
     (await db.personal_books.toArray()).filter((b) => b.deletedAt).map((b) => b.id),
   );
-  await db.quotes.bulkDelete(expired.filter((q) => !books.has(q.bookId)).map((q) => q.id));
+  await db.quotes.bulkDelete(
+    expired.filter((q) => !q.bookId || !books.has(q.bookId)).map((q) => q.id),
+  );
 }

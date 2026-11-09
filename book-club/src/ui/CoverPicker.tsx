@@ -19,6 +19,19 @@ export function InternetCover({
     [error, setError] = useState(''),
     [searched, setSearched] = useState(false);
   const generation = useRef(0);
+  useEffect(() => {
+    generation.current++;
+    setItems([]);
+    setError('');
+    setSearched(false);
+    setBusy(false);
+    if (q.trim().length < 2) return;
+    const timer = setTimeout(() => void search(), 550);
+    return () => {
+      clearTimeout(timer);
+      generation.current++;
+    };
+  }, [q]);
   useEffect(
     () => () => {
       generation.current++;
@@ -129,7 +142,7 @@ export function CoverPicker({
       <div>
         <button type="button" disabled={busy} onClick={() => input.current?.click()}>
           <ImagePlus size={17} />
-          {busy ? 'Готовим обложку…' : 'Изменить обложку'}
+          {busy ? 'Готовим обложку…' : 'С устройства'}
         </button>
         <input
           ref={input}
@@ -166,7 +179,7 @@ export function CoverPicker({
           onClick={() => setInternet(!internet)}
         >
           <Search size={17} />
-          Из интернета
+          Сменить обложку
         </button>
         {internet && (
           <InternetCover

@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { action } from '../cloud';
 import { resolveQuoteBook } from '../quoteBooks';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Plus,
-  Heart,
   Star,
   Copy,
   Trash2,
@@ -34,6 +31,8 @@ import { PublicContent } from './Social';
 import { QuoteBookPicker } from './QuoteBookPicker';
 import { DraftNote, useDraft } from './useDraft';
 import { Loading } from './shared';
+import { SourceDisclosure, ReactionButtons, DiscussionButton } from './SocialActions';
+import { useReadingDecision, PublicationPermission } from './ReadingParticipation';
 export function QuoteEditor({
   quote,
   book,
@@ -72,6 +71,8 @@ export function QuoteEditor({
   const { run, busy, error } = useTask();
   const v = draft.value?.quote;
   const newTitle = draft.value?.newTitle || '';
+  const parent = books.find((b) => b.id === v?.bookId);
+  const gate = useReadingDecision(parent?.clubBookId || draft.value?.clubChoice?.id);
   useEffect(() => {
     if (v?.bookId && !newTitle) {
       const book = books.find((b) => b.id === v.bookId);
@@ -112,13 +113,16 @@ export function QuoteEditor({
                   db.settings,
                 ],
                 async () => {
-                  const bookId = await resolveQuoteBook({
-                    title: newTitle,
-                    personalId: v.bookId,
-                    club: clubChoice,
-                    catalog: catalog.data || [],
-                    newId: newBookId,
-                  });
+                  const bookId =
+                    v.bookId || newTitle.trim()
+                      ? await resolveQuoteBook({
+                          title: newTitle,
+                          personalId: v.bookId || '',
+                          club: clubChoice,
+                          catalog: catalog.data || [],
+                          newId: newBookId,
+                        })
+                      : null;
                   await saveQuote({ ...v, bookId, updatedAt: now() }, true);
                 },
               );
@@ -134,6 +138,7 @@ export function QuoteEditor({
           <p className="quote-book-context">{book.title}</p>
         ) : (
           <QuoteBookPicker
+            optional
             value={newTitle}
             books={books}
             catalog={catalog.data || []}
@@ -188,6 +193,14 @@ export function QuoteEditor({
               onChange={(e) => setV({ ...v, comment: e.target.value })}
             />
           </Field>
+          <Field label="Источник вне книги — необязательно">
+            <input
+              maxLength={300}
+              value={v.attribution || ''}
+              onChange={(e) => setV({ ...v, attribution: e.target.value })}
+              placeholder="Например, автор или откуда фраза"
+            />
+          </Field>
         </details>
         <label className="check">
           <input
@@ -202,14 +215,23 @@ export function QuoteEditor({
             <input
               type="checkbox"
               checked={v.published}
+              disabled={!gate.canPublish && !v.published}
               onChange={(e) => setV({ ...v, published: e.target.checked })}
             />{' '}
             Поделиться цитатой с клубом
           </label>
         )}
+        <PublicationPermission bookId={parent?.clubBookId || clubChoice?.id} />
         <ErrorNote text={error} />
         <footer>
-          <button className="primary" disabled={busy || (!book && catalog.isLoading)}>
+          <button
+            className="primary"
+            disabled={
+              busy ||
+              (v.published && !gate.canPublish) ||
+              (!!newTitle.trim() && !v.bookId && catalog.isLoading)
+            }
+          >
             Сохранить цитату
           </button>
         </footer>
@@ -227,6 +249,11 @@ function QuotePublication({
   onChange: (value: boolean) => Promise<boolean>;
 }) {
   const [checked, setChecked] = useState(quote.published);
+  const book = useLiveQuery(
+    () => (quote.bookId ? getDB().personal_books.get(quote.bookId) : undefined),
+    [quote.bookId],
+  );
+  const gate = useReadingDecision(book?.clubBookId);
   useEffect(() => setChecked(quote.published), [quote.published]);
   return (
     <label className="check quote-publish">
@@ -234,7 +261,7 @@ function QuotePublication({
         type="checkbox"
         aria-label="Опубликовать в клубе"
         checked={checked}
-        disabled={disabled}
+        disabled={disabled || (!checked && !gate.canPublish)}
         onChange={(e) => {
           const value = e.target.checked;
           setChecked(value);
@@ -249,7 +276,6 @@ function QuotePublication({
 }
 export function Quotes() {
   const { identity } = useSession();
-  const query = useQueryClient();
   const quotes = useLiveQuery(() => getDB().quotes.toArray()) || [];
   const books = (useLiveQuery(() => getDB().personal_books.toArray()) || []).filter(
     (b) => !b.deletedAt,
@@ -287,6 +313,11 @@ export function Quotes() {
   const [filterSort, setFilterSort] = useState(sort);
   const [filterFavorite, setFilterFavorite] = useState(favorite);
   const [edit, setEdit] = useState<Quote | true | null>(null);
+  const selectedId = params.get('quote');
+  useEffect(() => {
+    const selected = quotes.find((q) => q.id === selectedId && !q.deletedAt);
+    if (selected) setEdit(selected);
+  }, [selectedId, quotes]);
   const { run, error, busy } = useTask();
   const publicTab = tab === 'club' || tab === 'liked';
   const counts = useMemo(() => {
@@ -302,11 +333,11 @@ export function Quotes() {
   const items = quotes
     .filter(
       (x) =>
-        bookMap.has(x.bookId) &&
+        (!x.bookId || bookMap.has(x.bookId)) &&
         (tab === 'trash' ? !!x.deletedAt : !x.deletedAt) &&
         (tab === 'trash' || (tab === 'saved' ? !!x.sourceId : !x.sourceId)) &&
         (!favorite || tab === 'trash' || x.favorite) &&
-        `${bookMap.get(x.bookId)?.title || ''} ${bookMap.get(x.bookId)?.authors || ''} ${x.text} ${x.comment} ${x.chapter}`
+        `${bookMap.get(x.bookId || '')?.title || ''} ${bookMap.get(x.bookId || '')?.authors || ''} ${x.text} ${x.comment} ${x.chapter} ${x.attribution || ''}`
           .toLowerCase()
           .includes(q.trim().toLowerCase()),
     )
@@ -436,30 +467,32 @@ export function Quotes() {
         <div className="quote-grid">
           {items.map((x) => {
             const target = likeTarget(x);
-            const liked =
-              target &&
-              likes.data?.some((l) => l.quote_id === target && l.member_id === identity?.id);
             const queued = pending.find((p) => p.kind === 'quote' && p.entityId === x.id);
             return (
               <article className="quote-card" key={x.id}>
                 <QuoteIcon className="quote-mark" size={28} />
                 <blockquote>{x.text}</blockquote>
-                <p className="quote-source">
-                  {bookMap.get(x.bookId)?.title}
-                  {x.page !== null ? ` · стр. ${x.page}` : ''}
-                  {x.chapter ? ` · ${x.chapter}` : ''}
-                </p>
+                <SourceDisclosure
+                  title={bookMap.get(x.bookId || '')?.title}
+                  bookId={bookMap.get(x.bookId || '')?.clubBookId}
+                  personalId={x.bookId}
+                  page={x.page}
+                  chapter={x.chapter}
+                  attribution={x.attribution}
+                  savedFrom={x.sourceAuthor}
+                />
                 {x.comment && <p className="prewrap muted">{x.comment}</p>}
-                {x.sourceAuthor && <small>Сохранено от {x.sourceAuthor}</small>}
                 <small className="muted">
                   {x.sourceId ? 'Сохранено' : 'Создано'} {dateLabel(x.createdAt)}
                   {queued
                     ? x.published
                       ? ' · Ожидает публикации'
                       : ' · Скрытие ожидает синхронизации'
-                    : x.published
+                    : x.published && publicIds.has(x.id)
                       ? ' · Опубликовано в клубе'
-                      : ''}
+                      : x.published
+                        ? ' · Публикация ещё не подтверждена'
+                        : ''}
                 </small>
                 {!x.deletedAt && identity && (
                   <QuotePublication
@@ -502,28 +535,11 @@ export function Quotes() {
                     </>
                   ) : (
                     <>
-                      {identity && target ? (
-                        <button
-                          aria-label="Нравится цитата"
-                          className={liked ? 'liked' : ''}
-                          disabled={busy || !!likes.error}
-                          onClick={() =>
-                            void run(async () => {
-                              await action('like', { quote_id: target, liked: !liked });
-                              await query.invalidateQueries({ queryKey: ['cloud'] });
-                            }, '')
-                          }
-                        >
-                          <Heart size={17} fill={liked ? 'currentColor' : 'none'} />
-                          {likes.isLoading ? '…' : likes.error ? '?' : likedCount(target)}
-                        </button>
-                      ) : (
-                        !x.sourceId && (
-                          <span className="like-count">
-                            <Heart size={16} />
-                            {identity && (shared.isLoading || likes.isLoading) ? '…' : 0}
-                          </span>
-                        )
+                      {identity && target && (
+                        <>
+                          <ReactionButtons kind="quote" id={target} />
+                          <DiscussionButton kind="quote" id={target} preview={x.text} />
+                        </>
                       )}
                       <button
                         aria-label="В избранное"
@@ -620,7 +636,10 @@ export function Quotes() {
       {edit && (
         <QuoteEditor
           quote={typeof edit === 'object' ? edit : undefined}
-          onClose={() => setEdit(null)}
+          onClose={() => {
+            setEdit(null);
+            update({ quote: '' });
+          }}
         />
       )}
     </>

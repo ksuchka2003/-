@@ -1,6 +1,12 @@
-import { Bookmark, BookOpen, CheckCheck, Pause, Library } from 'lucide-react';
+import { Bookmark, BookOpen, CheckCheck, Pause, Library, BookX } from 'lucide-react';
 import { personalStatuses, type Book } from '../domain';
-const icons = { planned: Bookmark, reading: BookOpen, finished: CheckCheck, paused: Pause };
+const icons = {
+  planned: Bookmark,
+  reading: BookOpen,
+  finished: CheckCheck,
+  paused: Pause,
+  abandoned: BookX,
+};
 export function ReadingStatus({
   value,
   onChange,

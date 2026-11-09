@@ -47,6 +47,57 @@ const synchronizer = (db: LibraryDB) =>
   });
 async function share(payload: unknown, version: number) {
   await actor(author);
+  const parentId = '80000000-0000-4000-8000-000000000009';
+  const content = payload as {
+    text: string;
+    page: number;
+    chapter: string;
+    comment: string;
+  } | null;
+  for (const [kind, id, value] of [
+    [
+      'book',
+      parentId,
+      {
+        id: parentId,
+        clubBookId: clubBook,
+        title: 'Книга-источник',
+        authors: 'Писатель',
+        totalPages: 300,
+        status: 'reading',
+        publishProgress: false,
+        publishReview: false,
+        deletedAt: null,
+      },
+    ],
+    [
+      'quote',
+      original,
+      {
+        id: original,
+        bookId: parentId,
+        text: content?.text || 'Исходный текст',
+        page: 17,
+        chapter: 'Глава 2',
+        comment: content?.comment || '',
+        published: !!payload,
+        deletedAt: null,
+      },
+    ],
+  ] as const) {
+    const old = (
+      await pg.query<{ revision: number }>(
+        'select revision from public.private_library_records where kind=$1 and entity_id=$2',
+        [kind, id],
+      )
+    ).rows[0];
+    await pg.query('select public.sync_private_library($1::jsonb,$2)', [
+      JSON.stringify([
+        { kind, entity_id: id, payload: value, base_revision: Number(old?.revision || 0) },
+      ]),
+      '80000000-0000-4000-8000-000000000001',
+    ]);
+  }
   await pg.query("select public.sync_public('quote',$1,$2::jsonb,$3)", [
     original,
     payload === null ? null : JSON.stringify(payload),
@@ -264,7 +315,7 @@ it('личная копия переживает правку, снятие пу
     published: false,
     deletedAt: null,
   });
-  expect(await second.personal_books.get(copy.bookId)).toMatchObject({ title: 'Книга-источник' });
+  expect(await second.personal_books.get(copy.bookId!)).toMatchObject({ title: 'Книга-источник' });
   // Даже при удалённом источнике свою копию можно редактировать и синхронизировать обратно.
   await second.quotes.update(copy.id, { comment: 'Мой комментарий', updatedAt: now() });
   await synchronizer(second).sync();

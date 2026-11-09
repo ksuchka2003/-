@@ -14,6 +14,18 @@ async function actor(id: string) {
 }
 async function status(id: string, value: string, notes = '') {
   await actor(id);
+  if (
+    value === 'reading' &&
+    (await rows("select to_regclass('public.reading_participation') as present"))[0].present
+  ) {
+    const cycle = (
+      await rows("select id from public.club_readings where book_id=$1 and status='active'", [book])
+    )[0];
+    if (cycle)
+      await db.query("select public.club_action('reading.participation',$1::jsonb)", [
+        JSON.stringify({ reading_id: cycle.id, choice: 'reading', version: Date.now() * 1000 }),
+      ]);
+  }
   const previous = (
     await rows(
       "select revision from public.private_library_records where kind='book' and entity_id=$1",
@@ -108,10 +120,13 @@ describe.sequential('Награды текущего чтения', () => {
     ).toEqual(finish);
   });
   it('не выдаёт последнему 💩, пока кто-то не закончил; после всех финишей даёт её последнему', async () => {
+    await status(admin, 'reading');
+    await status(bob, 'reading');
     await status(bob, 'finished');
     expect(
       (await rows('select * from public.club_reading_awards')).every((a) => a.kind !== 'last'),
     ).toBe(true);
+    await status(admin, 'reading');
     await status(admin, 'finished');
     expect(
       (await rows("select member_id from public.club_reading_awards where kind='last'"))[0]

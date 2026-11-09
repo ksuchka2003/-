@@ -4,6 +4,7 @@ import { createLibrarySynchronizer } from './privateSync';
 import type { LibraryRecord, LibraryReply } from './privateTypes';
 import type { PublicQuote, PublicReview } from './domain';
 import { enqueueBook, saveQuote, retract } from './local';
+import { saveEntry } from './entries';
 let owner: LibraryDB | undefined;
 let instance: ReturnType<typeof createLibrarySynchronizer> | undefined;
 async function reconcilePublicCopies(db: LibraryDB, memberId: string) {
@@ -23,6 +24,7 @@ async function reconcilePublicCopies(db: LibraryDB, memberId: string) {
       db.personal_reviews,
       db.reading_progress,
       db.quotes,
+      db.entries,
       db.sync_queue,
       db.settings,
     ],
@@ -42,6 +44,9 @@ async function reconcilePublicCopies(db: LibraryDB, memberId: string) {
         });
       for (const q of localQuotes)
         if (q.published && !books.find((b) => b.id === q.bookId)?.deletedAt) await saveQuote(q);
+      for (const entry of await db.entries.toArray())
+        if (entry.published && !books.find((b) => b.id === entry.bookId)?.deletedAt)
+          await saveEntry(entry);
     },
   );
 }

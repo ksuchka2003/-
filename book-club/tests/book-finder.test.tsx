@@ -63,7 +63,9 @@ it('существующая книга открывается без дубли
   const open = vi.fn(),
     select = vi.fn();
   render(<BookFinder catalog={[shared]} onExisting={open} onSelect={select} onManual={vi.fn()} />);
-  fireEvent.change(screen.getByLabelText('Найти книгу'), { target: { value: 'Дюна Герберт' } });
+  fireEvent.change(screen.getByLabelText('Найти в книгах клуба'), {
+    target: { value: 'Дюна Герберт' },
+  });
   const section = await screen.findByRole('region', { name: 'Уже у меня' });
   fireEvent.click(within(section).getByRole('button'));
   expect(open).toHaveBeenCalledWith(
@@ -72,23 +74,20 @@ it('существующая книга открывается без дубли
   expect(select).not.toHaveBeenCalled();
   expect(await getDB().personal_books.count()).toBe(1);
 });
-it('интернет-издание получает UUID клуба, ручной ввод доступен и при отказе сети', async () => {
+it('книга выбирается из клуба без интернет-запроса; ручной ввод работает без сети', async () => {
   const shared = club(),
     select = vi.fn(),
     manual = vi.fn();
-  vi.mocked(searchBooks).mockResolvedValue([meta()]);
   render(
     <BookFinder catalog={[shared]} onExisting={vi.fn()} onSelect={select} onManual={manual} />,
   );
-  fireEvent.change(screen.getByLabelText('Найти книгу'), { target: { value: 'Дюна' } });
-  const section = await screen.findByRole('region', { name: 'В интернете' });
-  fireEvent.click(within(section).getByRole('button'));
-  expect(select).toHaveBeenCalledWith(expect.objectContaining({ totalPages: 480 }), shared.id);
-  vi.mocked(searchBooks).mockRejectedValue(new Error('Сеть'));
-  fireEvent.change(screen.getByLabelText('Найти книгу'), {
+  fireEvent.change(screen.getByLabelText('Найти в книгах клуба'), { target: { value: 'Дюна' } });
+  fireEvent.click(within(screen.getByRole('region', { name: 'В клубе' })).getByRole('button'));
+  expect(select).toHaveBeenCalledWith(expect.objectContaining({ totalPages: 600 }), shared.id);
+  expect(searchBooks).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Найти в книгах клуба'), {
     target: { value: 'Неизвестная книга' },
   });
-  expect(await screen.findByRole('alert')).toHaveTextContent('добавить вручную');
   fireEvent.click(screen.getByRole('button', { name: 'Добавить вручную' }));
   expect(manual).toHaveBeenCalledWith('Неизвестная книга');
 });

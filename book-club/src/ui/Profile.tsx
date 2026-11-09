@@ -1,3 +1,5 @@
+import { Appearance } from './Appearance';
+import { Achievements } from './Achievements';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -79,6 +81,7 @@ function conflictLabel(c: LibraryConflict) {
         progress: 'Прогресс чтения',
         review: 'Отзыв',
         quote: 'Цитата',
+        entry: 'Заметка или мысль',
         setting: 'Настройка',
       }[c.kind],
   ).slice(0, 120);
@@ -233,6 +236,8 @@ export function Profile() {
             </button>
           </section>
         )}
+        <Appearance />
+        {identity && <Achievements memberId={identity.id} />}
         <section className="panel">
           <h2>Резервная копия</h2>
           <div className="actions">
@@ -267,8 +272,8 @@ export function Profile() {
           <section className="panel">
             <h2>Что видно в клубе</h2>
             <p>
-              Прогресс книг из каталога клуба виден участникам. Цитатами и отзывами можно поделиться
-              отдельно при редактировании. Личные заметки доступны только вам.
+              Прогресс книг из каталога клуба виден участникам. Цитатами, заметками, мыслями и
+              отзывами можно поделиться отдельно. По умолчанию записи доступны только вам.
             </p>
           </section>
         )}

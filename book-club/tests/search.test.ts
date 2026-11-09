@@ -5,26 +5,24 @@ afterEach(() => vi.unstubAllGlobals());
 it('резервная статья о книге даёт название и обложку даже без издания Open Library', async () => {
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockImplementation(async (url: string) => ({
-        ok: !url.includes('googleapis'),
-        json: async () =>
-          url.includes('wikipedia')
-            ? {
-                query: {
-                  pages: {
-                    '1': {
-                      title: 'Резервная книга',
-                      extract: '«Резервная книга» — роман писателя Ивана Петрова.',
-                      thumbnail: { source: 'https://upload.wikimedia.org/book.jpg' },
-                      langlinks: [{ lang: 'en', '*': 'Backup Novel' }],
-                    },
+    vi.fn().mockImplementation(async (url: string) => ({
+      ok: !url.includes('googleapis'),
+      json: async () =>
+        url.includes('wikipedia')
+          ? {
+              query: {
+                pages: {
+                  '1': {
+                    title: 'Резервная книга',
+                    extract: '«Резервная книга» — роман писателя Ивана Петрова.',
+                    thumbnail: { source: 'https://upload.wikimedia.org/book.jpg' },
+                    langlinks: [{ lang: 'en', '*': 'Backup Novel' }],
                   },
                 },
-              }
-            : { docs: [] },
-      })),
+              },
+            }
+          : { docs: [] },
+    })),
   );
   const found = await searchBooks('Резервная книга');
   expect(found[0]).toMatchObject({
@@ -37,26 +35,24 @@ it('резервная статья о книге даёт название и �
 it('не предлагает портрет писателя как книгу из резервного поиска', async () => {
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockImplementation(async (url: string) => ({
-        ok: !url.includes('googleapis'),
-        json: async () =>
-          url.includes('wikipedia')
-            ? {
-                query: {
-                  pages: {
-                    '1': {
-                      title: 'Писатель',
-                      extract: 'Иван Петров — писатель и переводчик.',
-                      thumbnail: { source: 'https://upload.wikimedia.org/portrait.jpg' },
-                      langlinks: [{ lang: 'en', '*': 'Ivan Petrov' }],
-                    },
+    vi.fn().mockImplementation(async (url: string) => ({
+      ok: !url.includes('googleapis'),
+      json: async () =>
+        url.includes('wikipedia')
+          ? {
+              query: {
+                pages: {
+                  '1': {
+                    title: 'Писатель',
+                    extract: 'Иван Петров — писатель и переводчик.',
+                    thumbnail: { source: 'https://upload.wikimedia.org/portrait.jpg' },
+                    langlinks: [{ lang: 'en', '*': 'Ivan Petrov' }],
                   },
                 },
-              }
-            : { docs: [] },
-      })),
+              },
+            }
+          : { docs: [] },
+    })),
   );
   await expect(searchBooks('Писатель Петров тест')).rejects.toThrow('совпадений нет');
 });

@@ -20,6 +20,14 @@ declare global {
     Telegram?: { WebApp: WebApp };
   }
 }
+export function applyTelegramTheme() {
+  const preference = document.documentElement.dataset.themePreference;
+  document.documentElement.dataset.theme =
+    preference === 'light' || preference === 'dark'
+      ? preference
+      : window.Telegram?.WebApp.colorScheme ||
+        (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+}
 export function initializeTelegram() {
   let cleanupSDK: (() => void) | undefined;
   try {
@@ -30,8 +38,7 @@ export function initializeTelegram() {
   }
   const app = window.Telegram?.WebApp;
   const theme = () => {
-    document.documentElement.dataset.theme =
-      app?.colorScheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTelegramTheme();
     document.documentElement.style.setProperty(
       '--tg-top',
       `${app?.contentSafeAreaInset?.top || app?.safeAreaInset?.top || 0}px`,

@@ -1,7 +1,9 @@
+import { Field } from './shared';
+import { EntryFeed } from './EntryFeed';
+import { Achievements } from './Achievements';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { Heart, BookmarkPlus, Users, ChevronRight } from 'lucide-react';
+import { BookmarkPlus, Users, ChevronRight } from 'lucide-react';
 import {
   type Profile,
   type PublicQuote,
@@ -10,11 +12,11 @@ import {
   personalStatuses,
   percent,
 } from '../domain';
-import { action } from '../cloud';
 import { quoteBookKey } from '../collection';
 import { copyPublicQuote } from '../local';
 import { RatingStars } from './RatingStars';
 import { ReadingAwards } from './ReadingAwards';
+import { ReactionButtons, DiscussionButton, SourceDisclosure } from './SocialActions';
 import {
   useCloud,
   CloudGate,
@@ -73,7 +75,6 @@ export function PublicContent({
   const likes = useCloud<{ quote_id: string; member_id: string }>('quote_likes');
   const { identity } = useSession();
   const { run, error, busy } = useTask();
-  const query = useQueryClient();
   const source = type === 'quotes' ? quotes : type === 'reviews' ? reviews : progress;
   const [pageSize, setPageSize] = useState(24);
   useEffect(() => setPageSize(24), [type, memberId, bookId, search, quoteBook, likedOnly, sort]);
@@ -127,53 +128,46 @@ export function PublicContent({
               <Link className="author" to={`/members/${item.member_id}`}>
                 {author(item.member_id)}
               </Link>
-              {item.book_id ? (
-                <Link className="quote-source" to={`/club/${item.book_id}`}>
-                  {item.title}
-                </Link>
-              ) : (
-                <p className="quote-source">{item.title}</p>
-              )}
+              {type !== 'quotes' &&
+                (item.book_id ? (
+                  <Link className="quote-source" to={`/club/${item.book_id}`}>
+                    {item.title}
+                  </Link>
+                ) : (
+                  <p className="quote-source">{item.title}</p>
+                ))}
               {type === 'quotes'
                 ? (() => {
                     const q = item as PublicQuote;
-                    const liked = likes.data?.some(
-                      (l) => l.quote_id === q.id && l.member_id === identity?.id,
-                    );
                     return (
                       <>
                         <blockquote>{q.text}</blockquote>
-                        <p className="muted">
-                          {q.page !== null ? `Страница ${q.page}` : ''} {q.chapter}
-                        </p>
+                        <SourceDisclosure
+                          title={q.title}
+                          bookId={q.book_id}
+                          page={q.page}
+                          chapter={q.chapter}
+                          attribution={q.source_label}
+                          savedFrom={q.source_author}
+                        />
                         {q.comment && <p className="prewrap">{q.comment}</p>}
-                        {q.source_author && <small>Источник: {q.source_author}</small>}
                         <div className="actions">
-                          <button
-                            className={liked ? 'liked' : ''}
-                            disabled={busy}
-                            onClick={() =>
-                              void run(async () => {
-                                await action('like', { quote_id: q.id, liked: !liked });
-                                await query.invalidateQueries({ queryKey: ['cloud'] });
-                              }, '')
-                            }
-                          >
-                            <Heart size={17} fill={liked ? 'currentColor' : 'none'} />{' '}
-                            {likeCounts.get(q.id) || 0}
-                          </button>
-                          <button
-                            disabled={busy}
-                            title="Копия останется у вас после удаления оригинала"
-                            onClick={() =>
-                              void run(
-                                () => copyPublicQuote(q, author(q.member_id)),
-                                'Независимая копия сохранена',
-                              )
-                            }
-                          >
-                            <BookmarkPlus size={17} /> Сохранить себе
-                          </button>
+                          <ReactionButtons kind="quote" id={q.id} />
+                          <DiscussionButton kind="quote" id={q.id} preview={q.text} />
+                          {q.member_id !== identity?.id && (
+                            <button
+                              disabled={busy}
+                              title="Копия останется у вас после удаления оригинала"
+                              onClick={() =>
+                                void run(
+                                  () => copyPublicQuote(q, author(q.member_id)),
+                                  'Независимая копия сохранена',
+                                )
+                              }
+                            >
+                              <BookmarkPlus size={17} /> Сохранить себе
+                            </button>
+                          )}
                         </div>
                       </>
                     );
@@ -186,6 +180,10 @@ export function PublicContent({
                           {r.rating !== null && (
                             <RatingStars value={r.rating} label="Оценка участника" />
                           )}
+                          <div className="actions">
+                            <ReactionButtons kind="review" id={r.id} />
+                            <DiscussionButton kind="review" id={r.id} preview={r.text} />
+                          </div>
                           {r.spoilers ? (
                             <details>
                               <summary>Показать отзыв со спойлерами</summary>
@@ -330,23 +328,32 @@ export function MemberDetail() {
             ))}
         </div>
       )}
-      <div className="tabs detail-tabs">
-        {[
-          ['progress', 'Книги'],
-          ['current', 'Сейчас читает'],
-          ['reviews', 'Отзывы'],
-          ['quotes', 'Цитаты'],
-        ].map(([k, v]) => (
-          <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
-            {v}
-          </button>
-        ))}
-      </div>
-      <PublicContent
-        type={tab === 'current' ? 'progress' : (tab as 'quotes' | 'reviews' | 'progress')}
-        memberId={id}
-        currentOnly={tab === 'current'}
-      />
+      <Achievements memberId={id!} />
+      <Field label="В профиле">
+        <select value={tab} onChange={(e) => setTab(e.target.value)}>
+          {[
+            ['progress', 'Книги'],
+            ['current', 'Сейчас читает'],
+            ['quotes', 'Цитаты'],
+            ['note', 'Заметки'],
+            ['thought', 'Мысли'],
+            ['reviews', 'Отзывы'],
+          ].map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {tab === 'note' || tab === 'thought' ? (
+        <EntryFeed key={tab} kind={tab} memberId={id} />
+      ) : (
+        <PublicContent
+          type={tab === 'current' ? 'progress' : (tab as 'quotes' | 'reviews' | 'progress')}
+          memberId={id}
+          currentOnly={tab === 'current'}
+        />
+      )}
     </CloudGate>
   );
 }

@@ -4,6 +4,7 @@ export const personalStatuses = {
   reading: 'Читаю',
   finished: 'Прочитано',
   paused: 'Отложено',
+  abandoned: 'Бросил',
 } as const;
 export const clubStatuses = {
   planned: 'Запланировано',
@@ -30,7 +31,9 @@ export const metadataSchema = z.object({
 export const bookSchema = metadataSchema.extend({
   id,
   clubBookId: id.nullable(),
-  status: z.enum(['planned', 'reading', 'finished', 'paused']),
+  status: z.enum(['planned', 'reading', 'finished', 'paused', 'abandoned']),
+  shelfIds: z.array(id).max(100).optional(),
+  completedAt: date.optional(),
   notes: z.string().max(50000),
   publishProgress: z.boolean(),
   publishReview: z.boolean(),
@@ -65,8 +68,9 @@ export const reviewSchema = z.object({
 });
 export const quoteSchema = z.object({
   id,
-  bookId: id,
+  bookId: id.nullable(),
   text: z.string().trim().min(1).max(20000),
+  attribution: z.string().max(300).optional(),
   page: z.number().int().min(0).nullable(),
   chapter: z.string().max(300),
   comment: z.string().max(10000),
@@ -103,7 +107,7 @@ export type Quote = z.infer<typeof quoteSchema>;
 export type SyncOp = {
   id: string;
   scope: string;
-  kind: 'progress' | 'review' | 'quote' | 'privacy';
+  kind: 'progress' | 'review' | 'quote' | 'privacy' | 'entry' | 'participation';
   entityId: string;
   payload: Record<string, unknown> | null;
   revision: string;
@@ -158,7 +162,7 @@ export type PublicProgress = {
 export type PublicReview = {
   id: string;
   member_id: string;
-  book_id: string;
+  book_id: string | null;
   title: string;
   rating: number | null;
   text: string;
@@ -177,6 +181,7 @@ export type PublicQuote = {
   updated_at: string;
   source_id?: string | null;
   source_author?: string | null;
+  source_label?: string;
 };
 export type BookStats = {
   book_id: string;

@@ -228,6 +228,8 @@ export function MeetingCard({
   meeting: Meeting;
   compact?: boolean;
 }) {
+  const books = useCloud<ClubBook>('club_books'),
+    links = useCloud<{ meeting_id: string; book_id: string }>('meeting_books');
   const clock = useClock();
   const { identity } = useSession();
   const [edit, setEdit] = useState(false);
@@ -265,6 +267,15 @@ export function MeetingCard({
             Открыть место или созвон <ExternalLink size={16} />
           </a>
         )}
+        <div className="meeting-book-links">
+          {links.data
+            ?.filter((l) => l.meeting_id === m.id)
+            .map((l) => (
+              <Link key={l.book_id} className="badge" to={'/club/' + l.book_id}>
+                {books.data?.find((b) => b.id === l.book_id)?.title || 'Книга встречи'} →
+              </Link>
+            ))}
+        </div>
         {m.description && (
           <p className={`prewrap ${compact ? 'clamp-description' : ''}`}>{m.description}</p>
         )}

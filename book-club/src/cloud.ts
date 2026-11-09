@@ -96,6 +96,11 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
     'club_quotes',
     'club_reviews',
     'club_book_stats',
+    'visible_reading_participation',
+    'club_entries',
+    'content_reactions',
+    'content_comments',
+    'club_achievements',
   ];
   const cacheable = cachedTables.includes(table);
   if (
@@ -114,6 +119,8 @@ export async function rows<T>(table: string, expectedMember?: string): Promise<T
     member_profiles: ['member_id'],
     member_privacy_settings: ['member_id'],
     quote_likes: ['quote_id', 'member_id'],
+    visible_reading_participation: ['reading_id', 'member_id'],
+    content_reactions: ['target_kind', 'target_id', 'member_id'],
     meeting_books: ['meeting_id', 'book_id'],
     meeting_attendance: ['meeting_id', 'member_id'],
     meeting_availability: ['day', 'member_id'],
@@ -169,27 +176,34 @@ export async function action(name: string, data: unknown, expectedMember?: strin
 }
 let syncing = false;
 export async function flushQueue(
-  send: (op: SyncOp) => Promise<unknown> = (op) => action('sync', op, op.scope),
+  send: (op: SyncOp) => Promise<unknown> = (op) =>
+    op.kind === 'participation'
+      ? action('reading.participation', { ...op.payload, version: op.version }, op.scope)
+      : action('sync', op, op.scope),
   scope = identity?.id,
+  only?: SyncOp['kind'][],
 ) {
   if (syncing || !navigator.onLine || !scope) return;
   syncing = true;
   const db = getDB();
   try {
     const ops = (await db.sync_queue.orderBy('createdAt').toArray())
-      .filter((op) => op.scope === scope)
+      .filter((op) => op.scope === scope && (!only || only.includes(op.kind)))
       .sort((a, b) => {
-        const priority = (op: SyncOp) => (op.kind === 'privacy' ? 0 : op.payload === null ? 1 : 2);
+        const priority = (op: SyncOp) =>
+          op.kind === 'privacy' ? 0 : op.kind === 'participation' ? 1 : op.payload === null ? 2 : 3;
         return priority(a) - priority(b) || a.createdAt.localeCompare(b.createdAt);
       });
     for (const op of ops) {
       try {
         await send(op);
-        await db.transaction('rw', [db.sync_queue, db.quotes], async () => {
+        await db.transaction('rw', [db.sync_queue, db.quotes, db.entries], async () => {
           if ((await db.sync_queue.get(op.id))?.revision === op.revision) {
             await db.sync_queue.delete(op.id);
             if (op.kind === 'quote' && op.payload === null)
               await db.quotes.update(op.entityId, { published: false });
+            if (op.kind === 'entry' && op.payload === null)
+              await db.entries.update(op.entityId, { published: false });
           }
         });
       } catch (e) {

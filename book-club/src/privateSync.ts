@@ -1,5 +1,6 @@
 import { liveQuery } from 'dexie';
 import { type LibraryDB } from './db';
+import { entrySchema } from './readerDomain';
 import {
   bookSchema,
   progressSchema,
@@ -26,6 +27,7 @@ const names: Record<LibraryKind, string> = {
   progress: 'reading_progress',
   review: 'personal_reviews',
   quote: 'quotes',
+  entry: 'entries',
   setting: 'settings',
 };
 export const libraryKey = (kind: LibraryKind, id: string) => `${kind}:${id}`;
@@ -46,6 +48,7 @@ function parse(kind: LibraryKind, payload: LibraryPayload): LibraryPayload {
     progress: progressSchema,
     review: reviewSchema,
     quote: quoteSchema,
+    entry: entrySchema,
   };
   if (kind === 'setting') {
     if (typeof payload.key !== 'string' || payload.key.startsWith('_') || payload.key === 'privacy')
@@ -110,6 +113,7 @@ async function putLocal(db: LibraryDB, kind: LibraryKind, id: string, payload: L
       await db.reading_progress.delete(id);
       await db.personal_reviews.delete(id);
       await db.quotes.where('bookId').equals(id).delete();
+      await db.entries.where('bookId').equals(id).delete();
     }
   }
 }
@@ -180,7 +184,7 @@ export function createLibrarySynchronizer(
         const kind = entry.kind;
         if (kind === 'progress' || kind === 'review')
           return snapshot.get(key)?.id || bases.get(key)?.entityId || cloud.get(key)?.entity_id;
-        if (kind === 'quote')
+        if (kind === 'quote' || kind === 'entry')
           return String(
             snapshot.get(key)?.payload?.bookId ||
               bases.get(key)?.payload?.bookId ||
@@ -490,7 +494,8 @@ export function createLibrarySynchronizer(
               if (
                 row.kind === 'progress' || row.kind === 'review'
                   ? row.id === conflict.entityId
-                  : row.kind === 'quote' && row.payload?.bookId === conflict.entityId
+                  : ['quote', 'entry'].includes(row.kind) &&
+                    row.payload?.bookId === conflict.entityId
               )
                 await db.table(names[row.kind]).delete(row.id);
           }

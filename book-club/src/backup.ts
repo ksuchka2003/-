@@ -10,6 +10,7 @@ import {
 } from './domain';
 import { retract } from './local';
 import type { LibraryRecord } from './privateTypes';
+import { entrySchema, shelfSchema, paletteLabels, type Shelf } from './readerDomain';
 export const backupSchema = z.object({
   format: z.literal('bookclub'),
   version: z.literal(1),
@@ -18,12 +19,20 @@ export const backupSchema = z.object({
   reviews: z.array(reviewSchema).max(10000),
   progress: z.array(progressSchema).max(10000),
   quotes: z.array(quoteSchema).max(50000),
+  entries: z.array(entrySchema).max(50000).default([]),
   settings: z.array(z.object({ key: z.string().max(100), value: z.unknown() })).max(100),
 });
 export async function exportBackup(db: LibraryDB = getDB()) {
   return db.transaction(
     'r',
-    [db.personal_books, db.personal_reviews, db.reading_progress, db.quotes, db.settings],
+    [
+      db.personal_books,
+      db.personal_reviews,
+      db.reading_progress,
+      db.quotes,
+      db.entries,
+      db.settings,
+    ],
     async () => {
       return {
         format: 'bookclub' as const,
@@ -33,6 +42,7 @@ export async function exportBackup(db: LibraryDB = getDB()) {
         reviews: await db.personal_reviews.toArray(),
         progress: await db.reading_progress.toArray(),
         quotes: await db.quotes.toArray(),
+        entries: await db.entries.toArray(),
         settings: (await db.settings.toArray()).filter((s) => !s.key.startsWith('_')),
       };
     },
@@ -44,14 +54,23 @@ export function parseBackup(raw: string) {
   const ids = new Set(b.books.map((x) => x.id));
   const clubIds = b.books.map((x) => x.clubBookId).filter(Boolean);
   if (new Set(clubIds).size !== clubIds.length) throw new Error('Книга клуба повторяется в файле');
-  for (const rows of [b.books, b.quotes])
+  for (const rows of [b.books, b.quotes, b.entries])
     if (new Set(rows.map((x) => x.id)).size !== rows.length)
       throw new Error('В файле повторяются UUID');
   for (const rows of [b.reviews, b.progress])
     if (new Set(rows.map((x) => x.bookId)).size !== rows.length)
       throw new Error('Повторяются данные книги');
-  for (const row of [...b.reviews, ...b.progress, ...b.quotes])
-    if (!ids.has(row.bookId)) throw new Error('Ссылка на отсутствующую книгу');
+  for (const row of [...b.reviews, ...b.progress, ...b.quotes, ...b.entries])
+    if (row.bookId && !ids.has(row.bookId)) throw new Error('Ссылка на отсутствующую книгу');
+  const shelves = z
+    .array(shelfSchema)
+    .max(100)
+    .parse(b.settings.find((s) => s.key === 'shelves')?.value || []);
+  if (new Set(shelves.map((s) => s.id)).size !== shelves.length)
+    throw new Error('Повторяются полки');
+  for (const book of b.books)
+    if (book.shelfIds?.some((id) => !shelves.some((s) => s.id === id)))
+      throw new Error('Ссылка на отсутствующую полку');
   for (const p of b.progress)
     validProgress(p.pages, b.books.find((x) => x.id === p.bookId)!.totalPages);
   return b;
@@ -70,6 +89,7 @@ export async function importBackup(
       db.personal_reviews,
       db.reading_progress,
       db.quotes,
+      db.entries,
       db.settings,
       db.sync_queue,
       db.private_sync_meta,
@@ -82,10 +102,12 @@ export async function importBackup(
           await retract('review', row.id, row.publishReview);
         }
         for (const row of await db.quotes.toArray()) await retract('quote', row.id, row.published);
+        for (const row of await db.entries.toArray()) await retract('entry', row.id, row.published);
         await db.personal_books.clear();
         await db.personal_reviews.clear();
         await db.reading_progress.clear();
         await db.quotes.clear();
+        await db.entries.clear();
         await db.settings.filter((s) => !s.key.startsWith('_')).delete();
         if (cloudRecords)
           await db.private_sync_meta.bulkPut(
@@ -112,6 +134,20 @@ export async function importBackup(
       // Импорт никогда не публикует данные. При объединении существующие UUID сохраняются.
       const added = new Set<string>();
       const mapping = new Map<string, string>();
+      const shelves = ((await db.settings.get('shelves'))?.value || []) as Shelf[];
+      const shelfMapping = new Map<string, string>();
+      for (const shelf of z
+        .array(shelfSchema)
+        .parse(b.settings.find((s) => s.key === 'shelves')?.value || [])) {
+        const existing = shelves.find(
+          (s) =>
+            s.id === shelf.id ||
+            s.name.toLocaleLowerCase('ru') === shelf.name.toLocaleLowerCase('ru'),
+        );
+        shelfMapping.set(shelf.id, existing?.id || shelf.id);
+        if (!existing) shelves.push(shelf);
+      }
+      if (shelves.length) await db.settings.put({ key: 'shelves', value: shelves });
       for (const book of b.books) {
         const existing =
           (await db.personal_books.get(book.id)) ||
@@ -120,7 +156,14 @@ export async function importBackup(
             : undefined);
         mapping.set(book.id, existing?.id || book.id);
         if (!existing) {
-          await db.personal_books.add({ ...book, publishProgress: false, publishReview: false });
+          await db.personal_books.add({
+            ...book,
+            ...(book.shelfIds
+              ? { shelfIds: book.shelfIds.map((id) => shelfMapping.get(id) || id) }
+              : {}),
+            publishProgress: false,
+            publishReview: false,
+          });
           added.add(book.id);
         }
       }
@@ -128,9 +171,20 @@ export async function importBackup(
       for (const p of b.progress) if (added.has(p.bookId)) await db.reading_progress.put(p);
       for (const q of b.quotes)
         if (!(await db.quotes.get(q.id)))
-          await db.quotes.add({ ...q, bookId: mapping.get(q.bookId)!, published: false });
+          await db.quotes.add({
+            ...q,
+            bookId: q.bookId ? mapping.get(q.bookId)! : null,
+            published: false,
+          });
+      for (const entry of b.entries)
+        if (!(await db.entries.get(entry.id)))
+          await db.entries.add({ ...entry, bookId: mapping.get(entry.bookId)!, published: false });
       for (const s of b.settings)
-        if (s.key === 'theme' && ['light', 'dark', 'system'].includes(String(s.value))) {
+        if (
+          (s.key === 'theme' && ['light', 'dark', 'system'].includes(String(s.value))) ||
+          (s.key === 'palette' && Object.hasOwn(paletteLabels, String(s.value))) ||
+          (s.key === 'bookLayout' && ['list', 'grid'].includes(String(s.value)))
+        ) {
           if (!(await db.settings.get(s.key))) await db.settings.add(s);
         }
     },

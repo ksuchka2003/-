@@ -17,12 +17,14 @@ export function QuoteBookPicker({
   onSelect,
   books,
   catalog,
+  optional = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSelect: (value: Choice) => void;
   books: Book[];
   catalog: ClubBook[];
+  optional?: boolean;
 }) {
   const id = useId(),
     [open, setOpen] = useState(false),
@@ -67,7 +69,7 @@ export function QuoteBookPicker({
     >
       <Field label="Название книги">
         <input
-          required
+          required={!optional}
           maxLength={300}
           role="combobox"
           autoComplete="off"

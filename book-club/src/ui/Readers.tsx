@@ -1,8 +1,11 @@
+import { ContentSection } from './ContentSection';
+import type { Participation } from '../readerDomain';
+import type { Reading } from '../domain';
 import { useState } from 'react';
 import type { Participant } from '../calendar';
 import { Link } from 'react-router-dom';
 import { type Profile, type PublicProgress, percent, personalStatuses } from '../domain';
-import { Avatar, PublicContent } from './Social';
+import { Avatar } from './Social';
 import { useCloud, Modal, ErrorNote, Loading, Cover } from './shared';
 import { ReadingAwards } from './ReadingAwards';
 export function BookReaders({ bookId, title }: { bookId: string; title: string }) {
@@ -10,7 +13,15 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
   const people = useCloud<Profile>('member_profiles');
   const members = useCloud<Participant>('meeting_participants');
   const [selected, setSelected] = useState<Profile | null>(null);
-  const [tab, setTab] = useState<'quotes' | 'reviews'>('quotes');
+  const decisions = useCloud<Participation>('visible_reading_participation'),
+    readings = useCloud<Reading>('club_readings');
+  const cycle = readings.data
+    ?.filter((r) => r.book_id === bookId)
+    .sort(
+      (a, b) =>
+        Number(b.status === 'active') - Number(a.status === 'active') ||
+        b.starts_on.localeCompare(a.starts_on),
+    )[0];
   const profiles = members.data?.length
     ? members.data.map(
         (m) =>
@@ -44,6 +55,9 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
             const p = progress.data?.find(
               (p) => p.book_id === bookId && p.member_id === person.member_id,
             );
+            const decision = decisions.data?.find(
+              (d) => d.reading_id === cycle?.id && d.member_id === person.member_id,
+            );
             const known = Number.isFinite(p?.pages) && !!p?.total_pages;
             return (
               <button
@@ -51,7 +65,6 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
                 className="reader-row"
                 onClick={() => {
                   setSelected(person);
-                  setTab('quotes');
                 }}
                 aria-label={`Чтение ${person.name}: ${title}`}
               >
@@ -60,7 +73,15 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
                 <span className="reader-body">
                   <b>{person.name}</b>
                   <ReadingAwards memberId={person.member_id} bookId={bookId} />
-                  <small>{p ? personalStatuses[p.status] : 'Нет отметки о чтении'}</small>
+                  <small>
+                    {decision?.choice === 'declined'
+                      ? 'Не будет читать'
+                      : decision?.choice === 'already_read'
+                        ? 'Уже читал до клуба'
+                        : p
+                          ? personalStatuses[p.status]
+                          : 'Ещё не выбрал участие'}
+                  </small>
                   {p && <small>{p.chapter ? `Глава: ${p.chapter}` : 'Глава не указана'}</small>}
                   {known && p ? (
                     <>
@@ -71,9 +92,9 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
                         {p.pages} / {p.total_pages} стр. · {percent(p.pages!, p.total_pages!)}%
                       </small>
                     </>
-                  ) : (
+                  ) : p ? (
                     <small>Страницы не указаны</small>
-                  )}
+                  ) : null}
                 </span>
               </button>
             );
@@ -89,20 +110,7 @@ export function BookReaders({ bookId, title }: { bookId: string; title: string }
           >
             Профиль участника →
           </Link>
-          <div className="tabs">
-            <button className={tab === 'quotes' ? 'active' : ''} onClick={() => setTab('quotes')}>
-              Цитаты
-            </button>
-            <button className={tab === 'reviews' ? 'active' : ''} onClick={() => setTab('reviews')}>
-              Мысли по прочитанному
-            </button>
-          </div>
-          <PublicContent
-            type={tab}
-            memberId={selected.member_id}
-            bookId={bookId}
-            sort={tab === 'quotes' ? 'likes' : 'newest'}
-          />
+          <ContentSection bookId={bookId} memberId={selected.member_id} />
         </Modal>
       )}
     </section>

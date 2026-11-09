@@ -1,6 +1,7 @@
+import { EntryFeed } from './EntryFeed';
 import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, ArrowUpRight, BookOpen, CalendarDays } from 'lucide-react';
@@ -39,6 +40,7 @@ import { BookReaders } from './Readers';
 import { clubBookFinished, clubCounts } from '../collection';
 import { bookCover } from '../covers';
 import { BookMemory, BookThoughtEditor } from './BookMemory';
+import { ClubReadingDecision } from './ReadingParticipation';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -86,6 +88,7 @@ export function MainBooks() {
                     <span className="book-open-label">Открыть книгу →</span>
                   </div>
                 </Link>
+                <ClubReadingDecision book={b} />
                 {own && (
                   <Link
                     className="button current-book-progress"
@@ -94,6 +97,10 @@ export function MainBooks() {
                     Обновить мой прогресс
                   </Link>
                 )}
+                <details className="book-extra home-readers">
+                  <summary>Прогресс участников</summary>
+                  <BookReaders bookId={b.id} title={b.title} />
+                </details>
               </article>
             );
           })}
@@ -348,6 +355,7 @@ export function Club() {
   );
 }
 export function ClubDetail() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -380,6 +388,7 @@ export function ClubDetail() {
           </p>
         </div>
         <div className="book-detail-actions">
+          <ClubReadingDecision book={b} />
           {own && !own.deletedAt && (
             <Link className="primary" to={`/books?book=${own.id}&action=progress`}>
               Обновить мой прогресс
@@ -424,6 +433,7 @@ export function ClubDetail() {
                     spoilers: false,
                     updatedAt: now(),
                   });
+                  navigate(`/books?book=${book.id}&action=edit&setup=1`);
                 }, 'Книга добавлена в личную библиотеку')
               }
             >
@@ -444,11 +454,13 @@ export function ClubDetail() {
           </details>
         )}
       </section>
-      <div className="tabs detail-tabs">
+      <div className="book-section-nav">
         {[
-          ['overview', 'После чтения'],
+          ['overview', 'О книге'],
           ['quotes', 'Цитаты'],
-          ['reviews', 'Мысли'],
+          ['reviews', 'Отзывы'],
+          ['thought', 'Мысли'],
+          ['note', 'Заметки'],
           ['progress', 'Читатели'],
         ].map(([k, v]) => (
           <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
@@ -473,6 +485,8 @@ export function ClubDetail() {
             </details>
           )}
         </>
+      ) : tab === 'thought' || tab === 'note' ? (
+        <EntryFeed key={tab} kind={tab} bookId={id} />
       ) : tab === 'progress' ? (
         <BookReaders bookId={id!} title={b.title} />
       ) : (

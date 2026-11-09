@@ -1,4 +1,4 @@
-import { openBookEditor } from './helpers';
+import { openBookEditor, writeEntry, expectEntry } from './helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function addBook(page: Page) {
   await page.goto('/#/books');
@@ -21,50 +21,36 @@ async function addBook(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.route('https://telegram.org/**', (route) => route.abort());
 });
-test('узкий экран: поиск названия по Enter, форма без переполнения и меню разделов', async ({
+test('узкий экран: ручное добавление не вызывает интернет-поиск, меню и форма без переполнения', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
-  await page.route('https://www.googleapis.com/books/**', (r) =>
-    r.fulfill({
-      json: {
-        items: [
-          {
-            volumeInfo: {
-              title: 'Найденное издание',
-              authors: ['Автор'],
-              pageCount: 280,
-              industryIdentifiers: [{ type: 'ISBN_10', identifier: '536700198X' }],
-            },
-          },
-        ],
-      },
-    }),
-  );
-  await page.route('https://openlibrary.org/**', (r) => r.fulfill({ json: {} }));
+  let searches = 0;
+  await page.route('https://www.googleapis.com/books/**', (r) => {
+    searches++;
+    return r.abort();
+  });
+  await page.route('https://openlibrary.org/**', (r) => {
+    searches++;
+    return r.abort();
+  });
   await page.goto('/#/books');
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  const lookup = dialog.getByLabel('Найти книгу');
-  await lookup.fill('Найденное издание');
-  await lookup.press('Enter');
-  await expect(dialog.locator('.lookup-results button')).toHaveCount(1);
-  await dialog.locator('.lookup-results button').click();
-  await dialog.getByText('Изменить данные книги', { exact: true }).click();
-  await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Найденное издание');
+  await dialog.getByLabel('Найти в книгах клуба').fill('Новая книга');
+  await dialog.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
+  await expect(dialog.getByLabel('Название', { exact: true })).toHaveValue('Новая книга');
   await dialog.getByText('Данные издания — необязательно', { exact: true }).click();
   await expect(dialog.getByLabel('ISBN', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByLabel('Обложка (HTTPS-ссылка)')).toHaveCount(0);
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
+  expect(searches).toBe(0);
   await page.getByRole('button', { name: 'Ещё', exact: true }).click();
   await page.getByRole('dialog').getByRole('link', { name: 'Участники', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Участники', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Назад', exact: true })).toHaveCount(0);
-  await page.locator('.bottom-nav').getByRole('link', { name: 'Мои книги', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Мои книги' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
 test('книга: добавление, редактирование, сохранение после перезагрузки, удаление', async ({
   page,
 }) => {
@@ -74,13 +60,13 @@ test('книга: добавление, редактирование, сохра
   await page.reload();
   await openBookEditor(page, 'Дюна');
   const dialog = page.getByRole('dialog');
-  await dialog.getByText('Отзыв, оценка и заметки', { exact: true }).click();
-  await dialog.getByLabel('Приватные заметки').fill('Личная мысль');
+
   await dialog.getByLabel('Прочитано страниц').fill('240');
   await dialog.getByRole('button', { name: 'Сохранить книгу' }).click();
   await expect(page.getByText('50%', { exact: true })).toBeVisible();
+  await writeEntry(page, 'Дюна', 'Личная мысль');
   await openBookEditor(page, 'Дюна');
-  await expect(dialog.getByLabel('Приватные заметки')).toHaveValue('Личная мысль');
+
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: 'В корзину', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Пока нет книг' })).toBeVisible();
@@ -88,9 +74,7 @@ test('книга: добавление, редактирование, сохра
   await expect(page.getByRole('heading', { name: 'Дюна', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Восстановить книгу', exact: true }).click();
   await page.getByRole('button', { name: 'К библиотеке', exact: true }).click();
-  await openBookEditor(page, 'Дюна');
-  await dialog.getByText('Отзыв, оценка и заметки', { exact: true }).click();
-  await expect(dialog.getByLabel('Приватные заметки')).toHaveValue('Личная мысль');
+  await expectEntry(page, 'Дюна', 'Личная мысль');
 });
 
 test('черновики книги и цитаты переживают закрытие и перезагрузку, сохранённый черновик очищается', async ({
@@ -164,7 +148,10 @@ test('цитаты: создание, избранное, корзина и во
   await expect(dialog).not.toBeVisible();
   await page.setViewportSize({ width: 320, height: 760 });
   await expect(page.getByText('Стоит обсудить', { exact: true })).toBeVisible();
-  await expect(page.getByText('Дюна · стр. 15 · Глава 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Стр. 15', { exact: true })).not.toBeVisible();
+  await page.locator('.source-disclosure summary').click();
+  await expect(page.getByText('Стр. 15', { exact: true })).toBeVisible();
+  await expect(page.getByText('Глава 1', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'В избранное', exact: true }).click();
   await page.getByRole('button', { name: 'Фильтры цитат', exact: true }).click();
   await page.getByLabel('Только избранное', { exact: true }).check();

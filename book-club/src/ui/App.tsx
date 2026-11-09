@@ -1,3 +1,4 @@
+import { useAppearance } from './Appearance';
 import { useEffect, useState, Component, type ReactNode } from 'react';
 import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -70,6 +71,7 @@ function Shell({
   error: string;
   onRetry: () => void;
 }) {
+  useAppearance();
   const [toast, setToast] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
   const query = useQueryClient();
@@ -82,7 +84,10 @@ function Shell({
   const sync = async () => {
     const db = getDB();
     try {
-      if (identity) await accountSync().sync();
+      if (identity) {
+        await flushQueue(undefined, identity.id, ['participation']);
+        await accountSync().sync();
+      }
       await flushQueue();
       if (identity) await query.invalidateQueries({ queryKey: ['cloud'] });
     } catch (error) {

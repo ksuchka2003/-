@@ -249,6 +249,8 @@ describe('личные данные', () => {
     await saveBook({ ...b, publishProgress: true }, 50, r);
     expect(await getDB().sync_queue.count()).toBe(0);
     await saveBook({ ...b, publishReview: true }, 50, r, true);
+    expect((await getDB().sync_queue.toArray())[0].payload).toBeNull();
+    await saveBook({ ...b, status: 'abandoned', publishReview: true }, 50, r, true);
     const ops = await getDB().sync_queue.toArray();
     expect(ops).toHaveLength(1);
     expect(ops[0].kind).toBe('review');

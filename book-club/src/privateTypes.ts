@@ -1,4 +1,4 @@
-export type LibraryKind = 'book' | 'progress' | 'review' | 'quote' | 'setting';
+export type LibraryKind = 'book' | 'progress' | 'review' | 'quote' | 'entry' | 'setting';
 export type LibraryPayload = Record<string, unknown> | null;
 export type LibraryRecord = {
   kind: LibraryKind;

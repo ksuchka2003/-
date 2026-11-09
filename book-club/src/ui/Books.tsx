@@ -1,10 +1,11 @@
+import { clubDay } from '../calendar';
+import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Search, SlidersHorizontal, Trash2, ChevronDown, RotateCcw } from 'lucide-react';
 import { getDB } from '../db';
 import { personalCounts } from '../collection';
-import { clubDay } from '../calendar';
 import { BookFinder } from './BookFinder';
 import { PersonalBook, PersonalThought } from './PersonalBook';
 import { QuoteEditor } from './Quotes';
@@ -14,6 +15,8 @@ import { QuickProgress } from './QuickProgress';
 import { bookCover } from '../covers';
 import { CoverPicker, InternetCover } from './CoverPicker';
 import { RatingStars } from './RatingStars';
+import { similarClubBooks } from '../bookMatches';
+import { ShelfManager, ShelfPicker, useShelves } from './Shelves';
 import { ReadingStatus } from './ReadingStatus';
 import {
   now,
@@ -22,7 +25,6 @@ import {
   percent,
   type Book,
   type Metadata,
-  type Review,
   type ClubBook,
 } from '../domain';
 import { searchBooks } from '../bookSearch';
@@ -34,7 +36,6 @@ import {
   useTask,
   ErrorNote,
   Loading,
-  useSession,
   useCloud,
   SearchField,
 } from './shared';
@@ -243,57 +244,52 @@ export function BookEditor({
   book,
   onClose,
   onExisting,
+  setup = false,
 }: {
   book?: Book;
   onClose: () => void;
   onExisting?: (b: Book) => void;
+  setup?: boolean;
 }) {
-  type BookDraft = {
+  type Draft = {
     book: Book;
     pages: number;
     chapter: string;
-    startedOn: string;
-    finishedOn: string;
-    review: Review;
+    startedOn?: string;
+    finishedOn?: string;
     manual?: boolean;
   };
-  const [initial, setInitial] = useState<BookDraft | null>(() => {
-    if (book) return null;
-    const b: Book = {
-      ...blank(),
-      id: uid(),
-      clubBookId: null,
-      status: 'planned',
-      notes: '',
-      publishProgress: false,
-      publishReview: false,
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    return {
-      book: b,
-      pages: 0,
-      chapter: '',
-      startedOn: '',
-      finishedOn: '',
-      review: { bookId: b.id, rating: null, text: '', spoilers: false, updatedAt: now() },
-    };
-  });
+  const [initial, setInitial] = useState<Draft | null>(() =>
+    book
+      ? null
+      : {
+          book: {
+            ...blank(),
+            id: uid(),
+            clubBookId: null,
+            status: 'planned',
+            notes: '',
+            publishProgress: false,
+            publishReview: false,
+            createdAt: now(),
+            updatedAt: now(),
+          },
+          pages: 0,
+          chapter: '',
+        },
+  );
   const draft = useDraft('book:' + (book?.id || 'new'), initial);
-  const { busy, error, run } = useTask();
-  const { identity } = useSession();
-  const club = useCloud<ClubBook>('club_books');
-  const [coverBusy, setCoverBusy] = useState(false);
-  const [loadError, setLoadError] = useState('');
-  const [manual, setManual] = useState(false);
+  const { run, busy, error } = useTask(),
+    club = useCloud<ClubBook>('club_books');
+  const [loadError, setLoadError] = useState(''),
+    [coverBusy, setCoverBusy] = useState(false),
+    [duplicate, setDuplicate] = useState(false);
   useEffect(() => {
     let active = true;
     if (book)
-      void Promise.all([
-        getDB().reading_progress.get(book.id),
-        getDB().personal_reviews.get(book.id),
-      ])
-        .then(([p, r]) => {
+      void getDB()
+        .reading_progress.get(book.id)
+        .then((p) => {
           if (active)
             setInitial({
               book,
@@ -301,182 +297,165 @@ export function BookEditor({
               chapter: p?.chapter || '',
               startedOn: p?.startedOn || '',
               finishedOn: p?.finishedOn || '',
-              review: r || {
-                bookId: book.id,
-                rating: null,
-                text: '',
-                spoilers: false,
-                updatedAt: now(),
-              },
             });
         })
         .catch(() => {
-          if (active)
-            setLoadError('Не удалось прочитать книгу. Закройте форму и попробуйте ещё раз.');
+          if (active) setLoadError('Не удалось открыть книгу');
         });
     return () => {
       active = false;
     };
-  }, [book]);
-  if (!draft.value || loadError)
+  }, [book?.id]);
+  if (!draft.value || !initial || loadError)
     return (
-      <Modal title={book ? 'Моя книга' : 'Добавить книгу'} onClose={onClose}>
+      <Modal title="Моя книга" onClose={onClose}>
         {loadError ? <ErrorNote text={loadError} /> : <Loading />}
       </Modal>
     );
-  const { book: value, pages, chapter, startedOn, finishedOn, review } = draft.value;
+  const value = draft.value.book,
+    pages = draft.value.pages;
   const setValue = (next: SetStateAction<Book>) =>
     draft.setValue((old) => ({ ...old, book: typeof next === 'function' ? next(old.book) : next }));
-  const setPages = (pages: number) => draft.setValue((old) => ({ ...old, pages }));
-  const setChapter = (chapter: string) => draft.setValue((old) => ({ ...old, chapter }));
-  const setStartedOn = (startedOn: string) => draft.setValue((old) => ({ ...old, startedOn }));
-  const setFinishedOn = (finishedOn: string) => draft.setValue((old) => ({ ...old, finishedOn }));
-  const setReview = (review: Review) => draft.setValue((old) => ({ ...old, review }));
-  const editingMetadata = manual || !!draft.value.manual;
-  const chooseAnotherBook = () => {
+  const similar = !value.clubBookId ? similarClubBooks(value.title, club.data || []) : [];
+  const save = async (clubId?: string | null) => {
+    let reused = false;
     if (
-      (value.notes || review.text || pages > 0) &&
-      !confirm('Выбрать другую книгу? Несохранённые заметки и прогресс этой книги будут сброшены.')
+      (await run(async () => {
+        const chosenId = clubId === undefined ? value.clubBookId : clubId;
+        if (chosenId) {
+          const own = await getDB().personal_books.where('clubBookId').equals(chosenId).first();
+          if (own && own.id !== value.id) {
+            reused = true;
+            await draft.clear();
+            onExisting?.(own);
+            return;
+          }
+        }
+        await saveBookEdition(initial, draft.value!, !!book, chosenId);
+        await draft.clear();
+      }, 'Книга сохранена')) &&
+      !reused
     )
-      return;
-    setManual(false);
-    draft.setValue(initial!);
+      onClose();
   };
-  if (!book && !editingMetadata && !value.title.trim())
+  if (duplicate)
+    return (
+      <Modal title="Похожая книга есть в клубе" onClose={() => setDuplicate(false)}>
+        <p className="section-hint">
+          Связать с клубом? Ваша обложка, страницы и заполненные данные останутся вашими.
+        </p>
+        <div className="lookup-results">
+          {similar.map((b) => (
+            <button key={b.id} onClick={() => void save(b.id)} disabled={busy}>
+              <Cover small title={b.title} cover={b.cover} />
+              <span>
+                <b>{b.title}</b>
+                <small>{b.authors}</small>
+                <small>Читать клубную книгу</small>
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="notice">
+          У отдельной книги не будет связи с каталогом: её прогресс, записи и оценка не появятся в
+          карточке этой книги клуба.
+        </p>
+        <button disabled={busy} onClick={() => void save(null)}>
+          Создать отдельную книгу
+        </button>
+        <ErrorNote text={error} />
+      </Modal>
+    );
+  if (!book && !value.title.trim() && !draft.value.manual)
     return (
       <Modal title="Добавить книгу" onClose={onClose}>
         <BookFinder
           catalog={club.data || []}
           onExisting={(b) => onExisting?.(b)}
-          onManual={(title) => {
-            setManual(true);
-            draft.setValue((old) => ({ ...old, manual: true, book: { ...old.book, title } }));
-          }}
+          onManual={(title) =>
+            draft.setValue((old) => ({ ...old, manual: true, book: { ...old.book, title } }))
+          }
           onSelect={(metadata, clubId) => setValue({ ...value, ...metadata, clubBookId: clubId })}
         />
+        <ErrorNote text={club.error?.message} />
       </Modal>
     );
   return (
-    <Modal title={book ? 'Моя книга' : 'Добавить книгу'} onClose={onClose}>
+    <Modal
+      title={setup ? 'Настроить моё издание' : book ? 'Издание и обложка' : 'Добавить книгу'}
+      onClose={onClose}
+    >
       <form
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
-          if (
-            await run(
-              () =>
-                saveBook(
-                  { ...value, updatedAt: now() },
-                  pages,
-                  { ...review, updatedAt: now() },
-                  true,
-                  {
-                    chapter,
-                    startedOn: startedOn || undefined,
-                    finishedOn: finishedOn || undefined,
-                  },
-                ),
-              'Книга сохранена',
-            )
-          ) {
-            await draft.clear();
-            onClose();
-          }
+          if (similar.length) setDuplicate(true);
+          else void save();
         }}
       >
         <DraftNote draft={draft} />
-        {!book && editingMetadata && (
-          <button type="button" className="text-button" onClick={chooseAnotherBook}>
-            К поиску книги
-          </button>
-        )}
-        {!book && !editingMetadata && (
-          <div className="chosen-book">
-            <Cover title={value.title} cover={bookCover(value)} small />
-            <div>
-              <h3>{value.title}</h3>
-              <p>{value.authors}</p>
-              <small>{value.totalPages > 0 ? value.totalPages + ' стр.' : ''}</small>
-              <button type="button" onClick={chooseAnotherBook}>
-                Выбрать другую
-              </button>
-            </div>
-          </div>
-        )}
-        <details
-          className={
-            book || editingMetadata ? 'metadata-editor metadata-always' : 'metadata-editor'
+        <CoverPicker
+          title={value.title}
+          authors={value.authors}
+          cover={bookCover(value, club.data?.find((b) => b.id === value.clubBookId)?.cover)}
+          hasCustom={!!value.coverData || !!value.cover}
+          shared={!!value.clubBookId}
+          onBusy={setCoverBusy}
+          onChange={(coverData) => setValue((old) => ({ ...old, coverData }))}
+          onUrl={(cover) => setValue(({ coverData, ...old }) => ({ ...old, cover }))}
+          onReset={() =>
+            setValue(({ coverData, ...old }) => ({
+              ...old,
+              cover: club.data?.find((b) => b.id === old.clubBookId)?.cover || '',
+            }))
           }
-          open={!!book || editingMetadata}
-          onToggle={(e) => {
-            if (e.currentTarget.open && !book)
-              draft.setValue((old) => (old.manual ? old : { ...old, manual: true }));
-          }}
-        >
-          <summary>Изменить данные книги</summary>
-          <CoverPicker
-            title={value.title}
-            authors={value.authors}
-            cover={bookCover(value, club.data?.find((b) => b.id === value.clubBookId)?.cover)}
-            hasCustom={
-              !!value.coverData ||
-              !!(
-                value.clubBookId &&
-                value.cover &&
-                value.cover !== club.data?.find((b) => b.id === value.clubBookId)?.cover
-              )
-            }
-            shared={!!value.clubBookId}
-            onBusy={setCoverBusy}
-            onChange={(data) => setValue((old) => ({ ...old, coverData: data }))}
-            onUrl={(cover) => setValue(({ coverData, ...old }) => ({ ...old, cover }))}
-            onReset={() =>
-              setValue((old) => {
-                const { coverData, ...rest } = old;
-                return {
-                  ...rest,
-                  cover: club.data?.find((b) => b.id === old.clubBookId)?.cover || old.cover,
-                };
-              })
-            }
+        />
+        <Field label="Страниц в моём издании">
+          <input
+            type="number"
+            min={0}
+            max={1000000}
+            value={value.totalPages || ''}
+            placeholder="Можно указать позже"
+            onChange={(e) => setValue({ ...value, totalPages: Number(e.target.value) })}
           />
-          <MetadataFields compact value={value} onChange={(b) => setValue({ ...value, ...b })} />
-        </details>
-        <details className="book-extra" open={!!book}>
+        </Field>
+        <MetadataFields compact value={value} onChange={(v) => setValue({ ...value, ...v })} />
+        {!!similar.length && (
+          <aside className="similar-books">
+            <p>Есть похожие книги в клубе</p>
+            {similar.slice(0, 3).map((b) => (
+              <button type="button" key={b.id} onClick={() => setDuplicate(true)}>
+                <Cover small title={b.title} cover={b.cover} />
+                <span>
+                  {b.title}
+                  <small>{b.authors}</small>
+                </span>
+              </button>
+            ))}
+          </aside>
+        )}
+        <details className="book-extra">
           <summary>Моё чтение</summary>
-          <div className="form-grid">
-            <Field label="Страниц в моём издании">
-              <input
-                type="number"
-                min={0}
-                max={1000000}
-                value={value.totalPages || ''}
-                placeholder="Можно не указывать"
-                onChange={(e) => setValue({ ...value, totalPages: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Прочитано страниц">
-              <input
-                type="number"
-                min={0}
-                max={value.totalPages}
-                value={pages || ''}
-                placeholder="0"
-                onChange={(e) => setPages(Number(e.target.value))}
-              />
-            </Field>
-          </div>
           <ReadingStatus
             value={value.status}
             onChange={(status) => {
               if (status !== 'all' && status !== 'unfinished') setValue({ ...value, status });
             }}
           />
+          <Field label="Прочитано страниц">
+            <input
+              type="number"
+              min={0}
+              max={value.totalPages || 0}
+              value={pages || ''}
+              onChange={(e) => draft.setValue((old) => ({ ...old, pages: Number(e.target.value) }))}
+            />
+          </Field>
           <Field label="Текущая глава">
             <input
               maxLength={300}
-              value={chapter}
-              onChange={(e) => setChapter(e.target.value)}
-              placeholder="Например, глава 7"
+              value={draft.value.chapter}
+              onChange={(e) => draft.setValue((old) => ({ ...old, chapter: e.target.value }))}
             />
           </Field>
           <details className="book-extra">
@@ -486,92 +465,49 @@ export function BookEditor({
                 <input
                   type="date"
                   max={clubDay()}
-                  value={startedOn}
-                  onChange={(e) => setStartedOn(e.target.value)}
+                  value={draft.value.startedOn || ''}
+                  onChange={(e) => draft.setValue((old) => ({ ...old, startedOn: e.target.value }))}
                 />
               </Field>
               <Field label="Закончил(а) читать">
                 <input
                   type="date"
-                  min={startedOn || undefined}
+                  min={draft.value.startedOn || undefined}
                   max={clubDay()}
-                  value={finishedOn}
-                  onChange={(e) => setFinishedOn(e.target.value)}
+                  value={draft.value.finishedOn || ''}
+                  onChange={(e) =>
+                    draft.setValue((old) => ({ ...old, finishedOn: e.target.value }))
+                  }
                 />
               </Field>
             </div>
-            {value.clubBookId && (
-              <p className="muted">Эти даты используются в статистике чтения клуба.</p>
-            )}
           </details>
-          {identity && value.clubBookId && (
-            <p className="muted">Прогресс этой книги виден участникам клуба.</p>
-          )}
-        </details>
-        <details className="book-extra">
-          <summary>Отзыв, оценка и заметки</summary>
-          <RatingStars
-            value={review.rating}
-            onChange={(rating) => setReview({ ...review, rating })}
-          />
-          <Field label="Мой отзыв">
-            <textarea
-              rows={3}
-              maxLength={30000}
-              value={review.text}
-              onChange={(e) => setReview({ ...review, text: e.target.value })}
-            />
-          </Field>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={review.spoilers}
-              onChange={(e) => setReview({ ...review, spoilers: e.target.checked })}
-            />
-            Содержит спойлеры
-          </label>
-          {identity && value.clubBookId && (
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={value.publishReview}
-                onChange={(e) => setValue({ ...value, publishReview: e.target.checked })}
-              />
-              Поделиться отзывом и оценкой в клубе
-            </label>
-          )}
-          <Field label="Приватные заметки">
-            <textarea
-              rows={3}
-              maxLength={50000}
-              value={value.notes}
-              onChange={(e) => setValue({ ...value, notes: e.target.value })}
-            />
-          </Field>
         </details>
         <ErrorNote text={error} />
         <footer>
-          <button disabled={busy || coverBusy} className="primary">
-            {busy ? 'Сохраняем…' : 'Сохранить книгу'}
+          <button className="primary" disabled={busy || coverBusy}>
+            Сохранить книгу
           </button>
           {book && (
             <button
-              className="danger"
               type="button"
+              className="danger"
               disabled={busy}
-              onClick={async () => {
+              onClick={() => {
                 if (
                   confirm(
-                    'Переместить книгу в корзину? Заметки, отзыв, прогресс и цитаты сохранятся. Публикации будут сняты после синхронизации.',
+                    'Переместить книгу в корзину? Записи сохранятся, публикации будут сняты после синхронизации.',
                   )
                 )
-                  if (await run(() => trashBook(book.id), 'Книга в корзине')) {
-                    await draft.clear();
-                    onClose();
-                  }
+                  void run(() => trashBook(book.id), 'Книга в корзине').then(async (ok) => {
+                    if (ok) {
+                      await draft.clear();
+                      onClose();
+                    }
+                  });
               }}
             >
-              <Trash2 size={16} />В корзину
+              В корзину
             </button>
           )}
         </footer>
@@ -601,6 +537,12 @@ function QuickReadingStatus({ book, onClose }: { book: Book; onClose: () => void
 }
 export function MyBooks() {
   const catalog = useCloud<ClubBook>('club_books');
+  const shelves = useShelves(),
+    [manageShelves, setManageShelves] = useState(false),
+    [shelfBook, setShelfBook] = useState<Book | null>(null);
+  const layout =
+    useLiveQuery(async () => (await getDB().settings.get('bookLayout'))?.value) || 'list';
+  const reviews = useLiveQuery(() => getDB().personal_reviews.toArray()) || [];
   const allBooks = useLiveQuery(() => getDB().personal_books.toArray()) || [];
   const books = allBooks.filter((b) => !b.deletedAt);
   const trashed = allBooks.filter((b) => !!b.deletedAt);
@@ -619,8 +561,10 @@ export function MyBooks() {
   const quoteOpen = linked && params.get('action') === 'quote';
   const thoughtOpen = linked && params.get('action') === 'thought';
   const closeAction = () => {
+    if (!mounted.current) return;
     const next = new URLSearchParams(params);
     next.delete('action');
+    next.delete('setup');
     setParams(next, { replace: true });
   };
   const { run, error, busy } = useTask();
@@ -636,13 +580,21 @@ export function MyBooks() {
     const next = new URLSearchParams(params);
     next.delete('book');
     next.delete('action');
+    next.delete('setup');
     if (mounted.current && params.has('book')) setParams(next, { replace: true });
   };
   const progress = useLiveQuery(() => getDB().reading_progress.toArray()) || [];
+  const shelf = params.get('shelf') || '';
   const q = params.get('q') || '';
-  const status = ['all', 'reading', 'finished', 'unfinished', 'planned', 'paused'].includes(
-    params.get('status') || '',
-  )
+  const status = [
+    'all',
+    'reading',
+    'finished',
+    'unfinished',
+    'planned',
+    'paused',
+    'abandoned',
+  ].includes(params.get('status') || '')
     ? params.get('status')!
     : 'all';
   const sort = params.get('sort') === 'title' ? 'title' : 'updated';
@@ -662,6 +614,7 @@ export function MyBooks() {
   const filtered = books
     .filter(
       (b) =>
+        (!shelf || b.shelfIds?.includes(shelf)) &&
         (status === 'all' ||
           (status === 'unfinished' ? b.status !== 'finished' : b.status === status)) &&
         `${b.title} ${b.authors}`.toLowerCase().includes(q.toLowerCase()),
@@ -743,6 +696,34 @@ export function MyBooks() {
         </>
       ) : (
         <>
+          <div className="library-controls">
+            <Field label="Полка">
+              <select value={shelf} onChange={(e) => updateFilter('shelf', e.target.value)}>
+                <option value="">Вся коллекция</option>
+                {shelves.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <button onClick={() => setManageShelves(true)}>Мои полки</button>
+            <button
+              aria-label="Вид библиотеки"
+              onClick={() =>
+                void run(
+                  () =>
+                    getDB().settings.put({
+                      key: 'bookLayout',
+                      value: layout === 'grid' ? 'list' : 'grid',
+                    }),
+                  'Вид изменён',
+                )
+              }
+            >
+              {layout === 'grid' ? 'Список' : 'Карточки'}
+            </button>
+          </div>
           {books.length > 0 && (
             <div className="shelf-tabs" role="group" aria-label="Книги на полке">
               {(
@@ -805,6 +786,7 @@ export function MyBooks() {
                     next.delete('q');
                     next.delete('status');
                     next.delete('sort');
+                    next.delete('shelf');
                     setParams(next, { replace: true });
                   }}
                 >
@@ -813,7 +795,7 @@ export function MyBooks() {
               )}
             </Empty>
           ) : (
-            <div className="book-list">
+            <div className={layout === 'grid' ? 'book-list book-grid' : 'book-list'}>
               {filtered.map((b) => {
                 const p = progress.find((x) => x.bookId === b.id)?.pages || 0;
                 return (
@@ -844,26 +826,35 @@ export function MyBooks() {
                         <h3>{b.title}</h3>
                         <p>{b.authors || 'Автор не указан'}</p>
                       </button>
-                      <button
-                        className="progress-open"
-                        aria-label={`Обновить прогресс: ${b.title}`}
-                        onClick={() => openBook(b, 'progress')}
-                      >
-                        {b.totalPages > 0 && (
-                          <div className="progress">
-                            <i style={{ width: `${percent(p, b.totalPages)}%` }} />
-                          </div>
-                        )}
-                        <small>
-                          {b.totalPages > 0 ? (
-                            <>
-                              {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
-                            </>
-                          ) : (
-                            'Количество страниц не указано'
+                      {b.status === 'finished' && reviews.find((r) => r.bookId === b.id)?.rating ? (
+                        <RatingStars value={reviews.find((r) => r.bookId === b.id)!.rating} />
+                      ) : (
+                        <button
+                          className="progress-open"
+                          aria-label={`Обновить прогресс: ${b.title}`}
+                          onClick={() => openBook(b, 'progress')}
+                        >
+                          {b.totalPages > 0 && (
+                            <div className="progress">
+                              <i style={{ width: `${percent(p, b.totalPages)}%` }} />
+                            </div>
                           )}
-                        </small>
-                      </button>
+                          <small>
+                            {b.totalPages > 0 ? (
+                              <>
+                                {p} из {b.totalPages} стр. <b>{percent(p, b.totalPages)}%</b>
+                              </>
+                            ) : (
+                              'Количество страниц не указано'
+                            )}
+                          </small>
+                        </button>
+                      )}
+                      {shelf && (
+                        <button className="text-button" onClick={() => setShelfBook(b)}>
+                          Переместить на полку
+                        </button>
+                      )}
                     </div>
                   </article>
                 );
@@ -875,13 +866,14 @@ export function MyBooks() {
       {(edit || editorOpen) && (
         <BookEditor
           key={linked?.id || 'new'}
+          setup={params.get('setup') === '1'}
           book={editorOpen ? linked : edit === true ? undefined : edit || undefined}
           onExisting={(b) => {
             setEdit(null);
             if (b.deletedAt) setParams({ view: 'trash' });
             else openBook(b);
           }}
-          onClose={closeBook}
+          onClose={params.get('setup') === '1' ? closeAction : closeBook}
         />
       )}
       {progressOpen && <QuickProgress bookId={linked.id} onClose={closeBook} />}
@@ -931,6 +923,17 @@ export function MyBooks() {
             </button>
           </footer>
         </Modal>
+      )}
+      {manageShelves && (
+        <ShelfManager
+          onClose={() => setManageShelves(false)}
+          onDeleted={(id) => {
+            if (id === shelf) updateFilter('shelf', '');
+          }}
+        />
+      )}
+      {shelfBook && (
+        <ShelfPicker book={shelfBook} fromShelf={shelf} onClose={() => setShelfBook(null)} />
       )}
       {quick && <QuickReadingStatus book={quick} onClose={() => setQuick(null)} />}
     </>

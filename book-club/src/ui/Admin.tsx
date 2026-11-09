@@ -26,8 +26,15 @@ import { AdminBooks, AdminProposals } from './AdminBooks';
 import { AdminMembers, type ManagedMember } from './AdminMembers';
 import { AdminNotifications } from './AdminNotifications';
 import { MeetingEditor, meetingDateLabel } from './Meetings';
+import { AdminReadingReport } from './AdminReadingReport';
 
 const sections = [
+  {
+    key: 'reports',
+    title: 'Отчёты по чтению',
+    description: 'Участники, время обновлений и реакции',
+    icon: BookOpen,
+  },
   { key: 'books', title: 'Книги клуба', description: 'Каталог и текущее чтение', icon: BookOpen },
   {
     key: 'meetings',
@@ -186,6 +193,7 @@ export function Admin() {
       ) : (
         <section className="management-section" aria-label={section.title} key={section.key}>
           {section.key === 'books' && <AdminBooks />}
+          {section.key === 'reports' && <AdminReadingReport />}
           {section.key === 'meetings' && <AdminMeetings />}
           {section.key === 'proposals' && <AdminProposals />}
           {section.key === 'members' && <AdminMembers />}

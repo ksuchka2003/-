@@ -628,6 +628,7 @@ export function MyBooks() {
     <>
       <div className="page-heading">
         <div>
+          <p className="eyebrow">Личная коллекция</p>
           <h1>{trash ? 'Корзина книг' : 'Мои книги'}</h1>
         </div>
         {(trashed.length > 0 || trash) && (

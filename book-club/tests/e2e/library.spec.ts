@@ -231,5 +231,6 @@ test('книга с одним названием и обычная тексто
   await expect(page.getByRole('dialog').locator('input[type=file]')).toHaveCount(0);
   await page.getByLabel('Текст цитаты').fill('Истории объединяют людей.');
   await page.getByRole('button', { name: 'Сохранить цитату' }).click();
-  await expect(page.getByText('Истории объединяют людей.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.locator('blockquote')).toHaveText('Истории объединяют людей.');
 });

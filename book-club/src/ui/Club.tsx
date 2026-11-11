@@ -41,6 +41,7 @@ import { clubBookFinished, clubCounts } from '../collection';
 import { bookCover } from '../covers';
 import { BookMemory, BookThoughtEditor } from './BookMemory';
 import { ClubReadingDecision } from './ReadingParticipation';
+import { BotanicalSprig } from './EditorialArt';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -66,8 +67,17 @@ export function MainBooks() {
                   aria-label={`Открыть книгу «${b.title}»`}
                   to={`/club/${b.id}`}
                 >
-                  <Cover title={b.title} cover={bookCover(own, b.cover)} />
-                  <div>
+                  <div className="featured-cover">
+                    <BotanicalSprig />
+                    <span className="book-edition-mark" aria-hidden="true">
+                      между
+                      <br />
+                      строк
+                    </span>
+                    <Cover title={b.title} cover={bookCover(own, b.cover)} />
+                  </div>
+                  <div className="featured-copy">
+                    <span className="eyebrow featured-label">Книга клуба</span>
                     <h2>{b.title}</h2>
                     <p>{b.authors}</p>
                     {r?.ends_on && (
@@ -115,18 +125,23 @@ export function Home() {
   const upcoming = nextClubMeeting(meetings.data || [], clock);
   return (
     <>
-      <div className="page-heading">
-        <h1>Книжный клуб</h1>
+      <div className="page-heading home-heading">
+        <div>
+          <p className="eyebrow">Между страницами и разговорами</p>
+          <h1>Книжный клуб</h1>
+          <p className="home-subtitle">У каждого своя страница.</p>
+        </div>
+        <BotanicalSprig />
       </div>
       <CloudGate>
-        <div className="section-title">
+        <div className="section-title editorial-section">
           <h2>Читаем сейчас</h2>
           <Link to="/club">
             Все книги <ArrowUpRight size={15} />
           </Link>
         </div>
         <MainBooks />
-        <div className="section-title">
+        <div className="section-title editorial-section">
           <h2>Следующая встреча</h2>
           <Link to="/meetings">
             Все встречи <ArrowUpRight size={15} />
@@ -240,10 +255,13 @@ export function Club() {
   return (
     <>
       <div className="page-heading">
-        <h1>Клуб</h1>
+        <div>
+          <p className="eyebrow">Общая коллекция</p>
+          <h1>Клуб</h1>
+        </div>
       </div>
       <CloudGate>
-        <div className="tabs" aria-label="Разделы библиотеки">
+        <div className="tabs club-library-tabs" aria-label="Разделы библиотеки">
           <button className={tab === 'reading' ? 'active' : ''} onClick={() => setTab('reading')}>
             Читаем{current.length ? ` · ${current.length}` : ''}
           </button>
@@ -290,7 +308,7 @@ export function Club() {
           <>
             {!!all.length && (
               <>
-                <div className="toolbar">
+                <div className="toolbar club-search">
                   <SearchField label="Поиск книг клуба" value={q} onChange={setQ} />
                 </div>
                 <div
@@ -328,7 +346,7 @@ export function Club() {
             {!visible.length ? (
               <Empty title={q || all.length ? 'Книги не найдены' : 'В коллекции пока нет книг'} />
             ) : (
-              <div className="book-list">
+              <div className="book-list club-catalog">
                 {visible.map((b) => (
                   <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
                     <Cover title={b.title} cover={b.cover} />

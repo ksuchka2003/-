@@ -238,6 +238,19 @@ export function MeetingCard({
   const reflections = useCloud<MeetingReflection>('meeting_reflections');
   return (
     <article className={`meeting-card ${m.cancelled ? 'cancelled' : ''}`}>
+      <div className="meeting-date-stamp" aria-hidden="true">
+        <b>
+          {new Date(m.starts_at).toLocaleDateString('ru-RU', {
+            day: '2-digit',
+            timeZone: 'Europe/Moscow',
+          })}
+        </b>
+        <span>
+          {new Date(m.starts_at)
+            .toLocaleDateString('ru-RU', { month: 'short', timeZone: 'Europe/Moscow' })
+            .replace('.', '')}
+        </span>
+      </div>
       <div className="meeting-body">
         <div className="section-title">
           <h2>{m.title}</h2>
@@ -326,7 +339,10 @@ export function Meetings() {
   return (
     <>
       <div className="page-heading">
-        <h1>Встречи клуба</h1>
+        <div>
+          <p className="eyebrow">Продолжение разговора</p>
+          <h1>Встречи клуба</h1>
+        </div>
         {identity?.role === 'admin' && (
           <button className="primary" onClick={() => setEdit(true)}>
             <Plus size={18} />

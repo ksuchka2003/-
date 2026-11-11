@@ -319,7 +319,7 @@ it('отчёт считает только новые обновления пр�
   await sync('progress', personal, { bookId: personal, pages: 15, updatedAt: now() });
   await sync('book', personal, { ...book, totalPages: 600 });
   await sync('progress', personal, { bookId: personal, pages: 30, updatedAt: now() });
-  const last = { bookId: personal, pages: 45, updatedAt: now() };
+  const last = { bookId: personal, pages: 45, updatedAt: yesterday + 'T21:30:00.000Z' };
   await sync('progress', personal, last);
   await sync('progress', personal, last);
   const other = uid();
@@ -335,6 +335,7 @@ it('отчёт считает только новые обновления пр�
   expect(report.activity).toMatchObject({ pages_logged: 45, updates: 3, corrections: 2 });
   expect(report.periods.find((p: any) => p.label.startsWith('День')).pages).toBe(20);
   expect(report.periods.find((p: any) => p.label.startsWith('Вечер')).pages).toBe(10);
+  expect(report.periods.find((p: any) => p.label.startsWith('Ночь')).pages).toBe(15);
   expect(JSON.stringify(report)).not.toContain('Личная тайна');
   expect(report.readers.find((p: any) => p.member_id === alice)).toMatchObject({
     pages: 45,

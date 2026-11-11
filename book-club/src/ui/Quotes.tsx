@@ -350,7 +350,10 @@ export function Quotes() {
   return (
     <>
       <div className="page-heading">
-        <h1>Цитаты</h1>
+        <div>
+          <p className="eyebrow">Слова, которые остались</p>
+          <h1>Цитаты</h1>
+        </div>
         <div className="quote-create-actions">
           <button className="primary" onClick={() => setEdit(true)}>
             <Plus size={18} />

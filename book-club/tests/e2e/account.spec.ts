@@ -1726,7 +1726,7 @@ test('все книги: поиск, фильтр прочитанного, ре
         .getByRole('button', { name: 'Все цитаты', exact: true })
         .evaluate((el) => getComputedStyle(el).backgroundColor),
     )
-    .toBe('rgb(38, 45, 39)');
+    .toBe('rgb(43, 39, 36)');
   await page.screenshot({ path: '../../work/book-memory-dark.png', fullPage: true });
   await page.evaluate(() => (window.Telegram!.WebApp.colorScheme = 'light'));
   await page.emulateMedia({ colorScheme: 'light' });
@@ -2362,4 +2362,140 @@ test('администратор открывает отчёт по книге �
   await page.setViewportSize({ width: 320, height: 640 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/reader-admin-report.png', fullPage: true });
+});
+
+test('редакционный дизайн: локальные кириллические шрифты, сетка обложек и карточка без пересечений', async ({
+  page,
+  context,
+}) => {
+  const api = backend(),
+    id = '20000000-0000-4000-8000-000000000071',
+    fonts: string[] = [];
+  const base = {
+    description: '',
+    genre: '',
+    year: null,
+    isbn: '',
+    cover: '',
+    default_pages: 300,
+    status: 'planned',
+  };
+  api.extra.club_books = [
+    {
+      ...base,
+      id,
+      title: 'Очень длинное название книги для узкого экрана',
+      authors: 'Автор с длинным именем',
+    },
+    {
+      ...base,
+      id: '20000000-0000-4000-8000-000000000072',
+      title: 'Вторая книга',
+      authors: 'Другой автор',
+    },
+    {
+      ...base,
+      id: '20000000-0000-4000-8000-000000000073',
+      title: 'Третья книга',
+      authors: 'Автор',
+    },
+  ];
+  page.on('request', (r) => {
+    if (r.resourceType() === 'font') fonts.push(r.url());
+  });
+  await api.connect(context);
+  await context.addInitScript(() => {
+    window.Telegram!.WebApp.contentSafeAreaInset = { top: 32, bottom: 24 };
+  });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/#/club?tab=all');
+  await expect(page.locator('.club-catalog .cover')).toHaveCount(3);
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate(() =>
+      document.fonts.check('500 32px "Cormorant Garamond"', 'Книжный клуб'),
+    ),
+  ).toBe(true);
+  expect(
+    await page
+      .getByRole('heading', { name: 'Клуб', exact: true })
+      .evaluate((el) => getComputedStyle(el).fontFamily),
+  ).toContain('Cormorant');
+  expect(fonts.length).toBeGreaterThan(0);
+  expect(fonts.every((url) => new URL(url).hostname === '127.0.0.1')).toBe(true);
+  const cover = page.locator('.club-catalog .cover').first();
+  const box = (await cover.boundingBox())!;
+  expect(box.height / box.width).toBeCloseTo(1.5, 1);
+  expect(
+    await page
+      .locator('.mobile-header')
+      .evaluate((el) => parseFloat(getComputedStyle(el).paddingTop)),
+  ).toBeGreaterThanOrEqual(50);
+  expect(
+    await page
+      .locator('.bottom-nav')
+      .evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom)),
+  ).toBeGreaterThanOrEqual(31);
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.goto('/#/club/' + id);
+    const jacket = (await page.locator('.book-detail-compact > .cover').boundingBox())!;
+    const heading = (await page.locator('.book-detail-heading').boundingBox())!;
+    expect(jacket.x + jacket.width).toBeLessThanOrEqual(heading.x);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.goto('/#/club?tab=all');
+  }
+});
+
+test('редакционный дизайн: контраст текста и основной кнопки во всех палитрах и темах', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  await page.goto('/#/profile');
+  const contrast = async () =>
+    page.getByRole('link', { name: 'Управление клубом', exact: true }).evaluate((el) => {
+      const luminance = (value: string) => {
+        const rgb = value
+          .match(/[\d.]+/g)!
+          .slice(0, 3)
+          .map(Number)
+          .map((n) => {
+            const v = n / 255;
+            return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+          });
+        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+      };
+      const ratio = (a: string, b: string) => {
+        const x = luminance(a),
+          y = luminance(b);
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+      };
+      const button = getComputedStyle(el),
+        body = getComputedStyle(document.body);
+      return {
+        button: ratio(button.color, button.backgroundColor),
+        body: ratio(body.color, body.backgroundColor),
+      };
+    });
+  for (const palette of ['library', 'forest', 'clay', 'ink']) {
+    await page.getByLabel('Палитра', { exact: true }).selectOption(palette);
+    await expect(page.locator('html')).toHaveAttribute('data-palette', palette);
+    for (const theme of ['light', 'dark']) {
+      await page.getByLabel('Тема', { exact: true }).selectOption(theme);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect
+        .poll(async () => (await contrast()).body, { message: palette + ' ' + theme + ' body' })
+        .toBeGreaterThanOrEqual(4.5);
+      await expect
+        .poll(async () => (await contrast()).button, { message: palette + ' ' + theme + ' button' })
+        .toBeGreaterThanOrEqual(4.5);
+    }
+  }
 });

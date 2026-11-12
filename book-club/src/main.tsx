@@ -7,6 +7,7 @@ import './style.css';
 import './fonts.css';
 import './editorial.css';
 import './collage.css';
+import './collage-details.css';
 const client = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000, refetchOnWindowFocus: false } },
 });

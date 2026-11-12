@@ -1,0 +1,314 @@
+/* Small physical details: tape, tucked pages and ink sketches. No new stacking
+   contexts on content cards: their comment dialogs must stay above navigation. */
+.paper-tape,
+.margin-doodle,
+.journal-tail,
+.sidebar-collage {
+  pointer-events: none;
+  user-select: none;
+}
+.paper-tape {
+  position: absolute;
+  display: block;
+  width: 46px;
+  height: 15px;
+  background: color-mix(in srgb, var(--paper-piece) 69%, transparent);
+  background-image: repeating-linear-gradient(92deg, transparent 0 3px, #ffffff14 3px 4px);
+  border-block: 1px solid color-mix(in srgb, var(--muted) 12%, transparent);
+  clip-path: polygon(
+    3% 0,
+    98% 3%,
+    96% 18%,
+    100% 34%,
+    96% 51%,
+    99% 70%,
+    96% 100%,
+    0 96%,
+    3% 76%,
+    0 57%,
+    4% 37%,
+    0 19%
+  );
+}
+.heading-collage > .paper-tape {
+  width: 43px;
+  right: 15px;
+  top: 3px;
+  transform: rotate(20deg);
+  z-index: 1;
+}
+.featured-cover > .featured-tape {
+  left: -4px;
+  top: 0;
+  transform: rotate(-24deg);
+  z-index: 2;
+}
+.paper-page-heading > .heading-reader {
+  position: absolute;
+  width: 51px;
+  right: 105px;
+  bottom: -3px;
+}
+.cover-open,
+.club-catalog .book-card {
+  position: relative;
+}
+.cover-open > .cover-tape {
+  display: none;
+  left: 8px;
+  top: -5px;
+  transform: rotate(-12deg);
+}
+.personal-book-card:nth-child(3n + 1) .cover-tape {
+  display: block;
+}
+.book-grid .cover-open > .cover-tape {
+  left: auto;
+  right: 10px;
+  top: 1px;
+  transform: rotate(15deg);
+}
+.catalog-tape {
+  display: none;
+  top: -6px;
+  left: 13px;
+  transform: rotate(-11deg);
+  z-index: 1;
+}
+.club-catalog .book-card:nth-child(4n + 1) > .catalog-tape {
+  display: block;
+}
+.club-catalog .book-card:nth-child(8n + 5) > .catalog-tape {
+  left: auto;
+  right: 12px;
+  transform: rotate(14deg);
+}
+.quote-card:nth-child(3n + 1)::before {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  width: 38px;
+  height: 12px;
+  top: -5px;
+  left: 21px;
+  background: color-mix(in srgb, var(--paper-piece) 70%, transparent);
+  transform: rotate(-17deg);
+  clip-path: polygon(
+    2% 0,
+    98% 2%,
+    95% 24%,
+    100% 46%,
+    96% 72%,
+    99% 100%,
+    0 97%,
+    3% 73%,
+    0 49%,
+    4% 23%
+  );
+}
+.margin-doodle {
+  display: block;
+  color: var(--muted);
+  opacity: 0.66;
+  width: 115px;
+  height: auto;
+}
+.journal-tail {
+  position: relative;
+  width: 220px;
+  height: 104px;
+  margin: 38px auto 4px;
+}
+.journal-tail > .paper-fragment {
+  width: 162px;
+  height: 55px;
+  right: 8px;
+  bottom: 9px;
+  transform: rotate(-5deg);
+  opacity: 0.8;
+}
+.journal-tail > .paper-tape {
+  left: 37px;
+  bottom: 42px;
+  transform: rotate(-17deg);
+}
+.journal-tail > .margin-doodle {
+  position: absolute;
+  width: 95px;
+  left: 0;
+  bottom: 13px;
+}
+.journal-tail > .reader-illustration {
+  position: absolute;
+  width: 100px;
+  right: 15px;
+  bottom: 12px;
+}
+.book-detail-compact,
+.personal-book-summary,
+.profile-header,
+.journal-profile-panel {
+  position: relative;
+}
+.book-detail-compact > .book-detail-paper {
+  width: 145px;
+  height: 218px;
+  left: -6px;
+  top: 8px;
+  transform: rotate(-7deg);
+}
+.book-detail-compact > .cover,
+.book-detail-heading,
+.personal-book-summary > .cover,
+.personal-book-summary > div:last-child,
+.profile-header > .avatar,
+.profile-header > div:last-child {
+  position: relative;
+}
+.book-detail-tape {
+  left: 11px;
+  top: 7px;
+  transform: rotate(-15deg);
+  z-index: 1;
+}
+.personal-book-paper {
+  width: 112px;
+  height: 164px;
+  left: -3px;
+  top: -2px;
+  transform: rotate(-7deg);
+}
+.personal-book-tape {
+  left: 10px;
+  top: -7px;
+  transform: rotate(-16deg);
+}
+.book-dossier-doodle {
+  width: 95px;
+  margin: 26px auto 3px;
+}
+.modal .illustrated-empty > .heading-collage {
+  width: 104px;
+  height: 100px;
+  margin-bottom: 12px;
+}
+.modal .illustrated-empty > .heading-collage .reader-illustration {
+  width: 100px;
+}
+.personal-progress > small {
+  display: block;
+  margin-bottom: 10px;
+}
+.profile-corner-paper {
+  width: 67px;
+  height: 40px;
+  top: -10px;
+  right: 12px;
+  transform: rotate(5deg);
+}
+.profile-corner-tape {
+  width: 32px;
+  height: 12px;
+  top: -10px;
+  right: 24px;
+  transform: rotate(-9deg);
+}
+.journal-profile-panel {
+  padding-top: 32px;
+}
+.avatar-paper {
+  width: 84px;
+  height: 86px;
+  top: -5px;
+  left: -5px;
+  transform: rotate(-9deg);
+}
+.avatar-tape {
+  width: 34px;
+  top: -9px;
+  left: 17px;
+  transform: rotate(-15deg);
+}
+.editorial-section > h2 {
+  position: relative;
+}
+.editorial-section > h2::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 6px;
+  bottom: -7px;
+  height: 5px;
+  width: 70px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--paper-piece) 75%, transparent);
+  transform: rotate(-1.5deg);
+  clip-path: polygon(
+    0 24%,
+    12% 0,
+    26% 20%,
+    43% 4%,
+    59% 18%,
+    79% 0,
+    100% 19%,
+    98% 83%,
+    76% 100%,
+    53% 80%,
+    24% 100%,
+    1% 82%
+  );
+}
+.sidebar-collage {
+  display: none;
+}
+@media (min-width: 901px) and (min-height: 720px) {
+  .sidebar-collage {
+    display: block;
+    position: relative;
+    width: 145px;
+    height: 105px;
+    margin: 0 auto 17px;
+  }
+  .sidebar-collage > .paper-fragment {
+    width: 115px;
+    height: 65px;
+    bottom: 0;
+    left: 8px;
+    transform: rotate(-6deg);
+  }
+  .sidebar-collage > .reader-illustration {
+    width: 110px;
+    position: absolute;
+    bottom: 4px;
+    right: 5px;
+  }
+}
+@media (max-width: 600px) {
+  .book-detail-compact > .book-detail-paper {
+    width: 121px;
+    height: 177px;
+    left: -4px;
+    top: 9px;
+  }
+  .personal-book-paper {
+    width: 99px;
+    height: 149px;
+    left: -2px;
+  }
+  .book-detail-tape,
+  .personal-book-tape {
+    width: 36px;
+    height: 13px;
+  }
+  .profile-page-heading .heading-collage {
+    width: 90px;
+  }
+  .journal-tail {
+    margin-top: 30px;
+  }
+}
+@media (max-width: 389px) {
+  .paper-page-heading > .heading-reader {
+    display: none;
+  }
+}

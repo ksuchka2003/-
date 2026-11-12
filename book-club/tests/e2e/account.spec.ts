@@ -2511,9 +2511,9 @@ test('бумажные коллажи не перекрывают заголов
   await api.connect(context);
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
-    for (const route of ['/', '/club', '/members', '/books', '/quotes', '/meetings']) {
+    for (const route of ['/', '/club', '/members', '/books', '/quotes', '/meetings', '/profile']) {
       await page.goto('/#' + route);
-      await expect(page.locator('.reader-illustration').first()).toBeVisible();
+      await expect(page.locator('.reader-illustration:visible').first()).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       await expect
         .poll(() =>
@@ -2547,6 +2547,12 @@ test('бумажные коллажи не перекрывают заголов
       const art = page.locator('.page-heading > .heading-collage');
       if (await art.count()) {
         const picture = (await art.boundingBox())!;
+        const title = (await page.locator('.page-heading h1').boundingBox())!;
+        expect(title.x + title.width).toBeLessThanOrEqual(picture.x);
+      }
+      const marginReader = page.locator('.page-heading > .heading-reader:visible');
+      if (await marginReader.count()) {
+        const picture = (await marginReader.boundingBox())!;
         const title = (await page.locator('.page-heading h1').boundingBox())!;
         expect(title.x + title.width).toBeLessThanOrEqual(picture.x);
       }

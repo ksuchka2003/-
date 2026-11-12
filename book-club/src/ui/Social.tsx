@@ -4,7 +4,7 @@ import { Achievements } from './Achievements';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BookmarkPlus, ChevronRight } from 'lucide-react';
-import { HeadingCollage, PaperFragment } from './EditorialArt';
+import { HeadingCollage, PaperFragment, PaperTape } from './EditorialArt';
 import {
   type Profile,
   type PublicQuote,
@@ -308,6 +308,8 @@ export function MemberDetail() {
   return (
     <CloudGate>
       <div className="profile-header">
+        <PaperFragment className="avatar-paper" />
+        <PaperTape className="avatar-tape" />
         <Avatar profile={p} />
         <div>
           <h1>{p.name}</h1>

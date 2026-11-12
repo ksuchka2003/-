@@ -41,7 +41,7 @@ import { clubBookFinished, clubCounts } from '../collection';
 import { bookCover } from '../covers';
 import { BookMemory, BookThoughtEditor } from './BookMemory';
 import { ClubReadingDecision } from './ReadingParticipation';
-import { BotanicalSprig, HeadingCollage, PaperFragment } from './EditorialArt';
+import { BotanicalSprig, HeadingCollage, PaperFragment, PaperTape } from './EditorialArt';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -69,6 +69,7 @@ export function MainBooks() {
                 >
                   <div className="featured-cover">
                     <PaperFragment />
+                    <PaperTape className="featured-tape" />
                     <BotanicalSprig />
                     <span className="book-edition-mark" aria-hidden="true">
                       между
@@ -351,6 +352,7 @@ export function Club() {
               <div className="book-list club-catalog">
                 {visible.map((b) => (
                   <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
+                    <PaperTape className="catalog-tape" />
                     <Cover title={b.title} cover={b.cover} />
                     <div>
                       <span className="badge">
@@ -396,6 +398,8 @@ export function ClubDetail() {
   return (
     <CloudGate>
       <section className="book-detail book-detail-compact">
+        <PaperFragment className="book-detail-paper" />
+        <PaperTape className="book-detail-tape" />
         <Cover title={b.title} cover={bookCover(own, b.cover)} />
         <div className="book-detail-heading">
           <span className="badge">{clubStatuses[b.status]}</span>

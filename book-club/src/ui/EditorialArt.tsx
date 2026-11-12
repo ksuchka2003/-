@@ -2,6 +2,38 @@ import readersAtlas from '../assets/illustrations/readers-atlas.png';
 
 export type ReaderScene = 'reader' | 'coffee' | 'conversation' | 'headphones';
 
+export function PaperTape({ className = '' }: { className?: string }) {
+  return <span className={`paper-tape ${className}`} aria-hidden="true" />;
+}
+
+export function MarginDoodle({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      className={`margin-doodle ${className}`}
+      viewBox="0 0 140 68"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 48L43 43L63 50L28 57Z M9 48V54L28 63L63 56V50M28 57V63M15 43L43 39L66 46M20 38L45 35L63 40M76 27C74 45 78 51 90 51C100 51 103 42 102 27ZM102 30C116 27 114 41 102 41M72 55C83 61 104 60 110 54M82 19C73 11 88 8 83 2M94 19C88 13 100 9 95 4M119 18L122 11L124 18L132 20L124 22L122 29L120 22L114 20Z" />
+        <path d="M7 65C42 67 78 65 108 64" opacity=".4" />
+      </g>
+    </svg>
+  );
+}
+
+export function JournalTail({ scene = 'headphones' }: { scene?: ReaderScene }) {
+  return (
+    <div className="journal-tail" aria-hidden="true">
+      <PaperFragment ruled />
+      <PaperTape />
+      <MarginDoodle />
+      <ReaderIllustration scene={scene} />
+    </div>
+  );
+}
+
 /** Artwork is decoration, never a profile picture or user publication. */
 export function ReaderIllustration({
   scene = 'reader',
@@ -50,6 +82,7 @@ export function HeadingCollage({ scene = 'reader' }: { scene?: ReaderScene }) {
     <span className={`heading-collage heading-collage-${scene}`} aria-hidden="true">
       <PaperFragment />
       <PaperFragment className="paper-layer" ruled />
+      <PaperTape />
       <ReaderIllustration scene={scene} />
     </span>
   );

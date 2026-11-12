@@ -1,4 +1,5 @@
 import { useAppearance } from './Appearance';
+import { ReaderIllustration, PaperFragment } from './EditorialArt';
 import { useEffect, useState, Component, type ReactNode } from 'react';
 import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -175,6 +176,10 @@ function Shell({
             )}
           </nav>
           <div className="sidebar-footer">
+            <div className="sidebar-collage" aria-hidden="true">
+              <PaperFragment />
+              <ReaderIllustration scene="headphones" />
+            </div>
             <span className="status-dot" />
             {identity ? 'Закрытый клуб' : 'Личная библиотека'}
           </div>

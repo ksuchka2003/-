@@ -1,4 +1,5 @@
 import { clubDay } from '../calendar';
+import { PaperFragment, PaperTape, ReaderIllustration, JournalTail } from './EditorialArt';
 import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -632,6 +633,9 @@ export function MyBooks() {
           <p className="eyebrow">Личная коллекция</p>
           <h1>{trash ? 'Корзина книг' : 'Мои книги'}</h1>
         </div>
+        {!trash && !trashed.length && (
+          <ReaderIllustration scene="headphones" className="heading-reader" />
+        )}
         {(trashed.length > 0 || trash) && (
           <button onClick={() => setParams(trash ? {} : { view: 'trash' })}>
             {trash ? (
@@ -817,6 +821,7 @@ export function MyBooks() {
                         )}
                         title={b.title}
                       />
+                      <PaperTape className="cover-tape" />
                     </button>
                     <div>
                       <button
@@ -868,6 +873,7 @@ export function MyBooks() {
           )}
         </>
       )}
+      {!trash && filtered.length > 0 && <JournalTail scene="headphones" />}
       {(edit || editorOpen) && (
         <BookEditor
           key={linked?.id || 'new'}
@@ -944,4 +950,3 @@ export function MyBooks() {
     </>
   );
 }
-import { PaperFragment } from './EditorialArt';

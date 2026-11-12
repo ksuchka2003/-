@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PaperFragment, PaperTape, MarginDoodle } from './EditorialArt';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDB } from '../db';
@@ -62,6 +63,8 @@ export function PersonalBook({
   return (
     <Modal title="Моя книга" onClose={onClose}>
       <div className="personal-book-summary">
+        <PaperFragment className="personal-book-paper" />
+        <PaperTape className="personal-book-tape" />
         <Cover title={book.title} cover={bookCover(book)} />
         <div>
           <span className="badge">{personalStatuses[book.status]}</span>
@@ -131,6 +134,7 @@ export function PersonalBook({
               </button>
               {section === 'note' && book.notes && (
                 <article className="quote-card">
+                  <PaperFragment className="quote-paper" ruled />
                   <span className="badge">Личная заметка из прежней версии</span>
                   <p className="prewrap">{book.notes}</p>
                   <button onClick={() => setEditor('legacy')}>Открыть как отдельную заметку</button>
@@ -139,11 +143,13 @@ export function PersonalBook({
               {!entries.length && !(section === 'note' && book.notes) && (
                 <Empty
                   title={section === 'note' ? 'Здесь будут ваши заметки' : 'Здесь будут ваши мысли'}
+                  illustration={section === 'note' ? 'coffee' : 'headphones'}
                 />
               )}
               <div className="stack">
                 {entries.map((e) => (
                   <article className="quote-card" key={e.id}>
+                    <PaperFragment className="quote-paper" ruled={e.kind === 'note'} />
                     <p className="prewrap">{e.text}</p>
                     <SourceDisclosure
                       title={book.title}
@@ -191,10 +197,13 @@ export function PersonalBook({
               <button className="primary section-add" onClick={() => setEditor('quote')}>
                 Добавить цитату
               </button>
-              {!data.quotes.length && <Empty title="Здесь будут ваши цитаты" />}
+              {!data.quotes.length && (
+                <Empty title="Здесь будут ваши цитаты" illustration="reader" />
+              )}
               <div className="stack">
                 {data.quotes.map((q) => (
                   <article className="quote-card" key={q.id}>
+                    <PaperFragment className="quote-paper" />
                     <blockquote>{q.text}</blockquote>
                     {q.comment && <p className="prewrap">{q.comment}</p>}
                     <SourceDisclosure
@@ -227,6 +236,7 @@ export function PersonalBook({
           )}
         </>
       )}
+      <MarginDoodle className="book-dossier-doodle" />
     </Modal>
   );
 }

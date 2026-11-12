@@ -1,10 +1,11 @@
 import { Appearance } from './Appearance';
+import { HeadingCollage, PaperFragment, PaperTape } from './EditorialArt';
 import { Achievements } from './Achievements';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { Download, Upload, ShieldCheck, RefreshCw, Settings2 } from 'lucide-react';
+import { Download, Upload, RefreshCw, Settings2 } from 'lucide-react';
 import { getDB, LibraryDB } from '../db';
 import {
   type Profile as ProfileData,
@@ -136,15 +137,17 @@ export function Profile() {
   }
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading collage-page-heading profile-page-heading">
         <div>
           <h1>Мой профиль</h1>
         </div>
-        <ShieldCheck size={26} />
+        <HeadingCollage scene="coffee" />
       </div>
       <ErrorNote text={error || profiles.error?.message || privacy.error?.message} />
       <div className="settings-grid">
-        <section className="panel">
+        <section className="panel journal-profile-panel">
+          <PaperFragment className="profile-corner-paper" ruled />
+          <PaperTape className="profile-corner-tape" />
           <h2>{p?.name || 'Личная библиотека'}</h2>
           {identity ? (
             <>

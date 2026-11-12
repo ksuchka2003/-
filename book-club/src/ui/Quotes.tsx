@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
+import { PaperFragment, ReaderIllustration } from './EditorialArt';
 import { useSearchParams } from 'react-router-dom';
 import { resolveQuoteBook } from '../quoteBooks';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -355,6 +356,7 @@ export function Quotes() {
           <p className="eyebrow">Слова, которые остались</p>
           <h1>Цитаты</h1>
         </div>
+        <ReaderIllustration scene="coffee" className="heading-reader" />
         <div className="quote-create-actions">
           <button className="primary" onClick={() => setEdit(true)}>
             <Plus size={18} />
@@ -651,4 +653,3 @@ export function Quotes() {
     </>
   );
 }
-import { PaperFragment } from './EditorialArt';

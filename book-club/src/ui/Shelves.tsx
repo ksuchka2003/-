@@ -121,15 +121,45 @@ export function ShelfPicker({
 }) {
   const shelves = useShelves(),
     [selected, setSelected] = useState(book.shelfIds || []),
-    [to, setTo] = useState('');
+    [to, setTo] = useState(''),
+    [createName, setCreateName] = useState('');
   const { run, busy, error } = useTask();
+  const creation = (
+    <form
+      className="inline-shelf-create"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const shelf = { id: uid(), name: createName };
+        if (await run(() => saveShelf(shelf), 'Полка создана')) {
+          setSelected((old) => [...old, shelf.id]);
+          setCreateName('');
+        }
+      }}
+    >
+      <Field label="Новая полка">
+        <input
+          required
+          maxLength={80}
+          value={createName}
+          placeholder="Например, Любимое"
+          onChange={(e) => setCreateName(e.target.value)}
+        />
+      </Field>
+      <button type="submit" className="primary" disabled={busy || !createName.trim()}>
+        Создать полку
+      </button>
+    </form>
+  );
   return (
     <Modal title="Полки книги" onClose={onClose}>
       <p className="form-context">{book.title}</p>
       {!shelves.length ? (
-        <p className="section-hint">
-          Создайте полки в «Моих книгах». Одна книга может быть на нескольких полках.
-        </p>
+        <>
+          <p className="section-hint">
+            Создайте первую полку здесь, затем нажмите «Сохранить полки», чтобы добавить книгу.
+          </p>
+          {creation}
+        </>
       ) : (
         <form
           onSubmit={async (e) => {
@@ -160,6 +190,12 @@ export function ShelfPicker({
             </button>
           </footer>
         </form>
+      )}
+      {shelves.length > 0 && (
+        <details className="book-extra">
+          <summary>Создать ещё полку</summary>
+          {creation}
+        </details>
       )}
       {fromShelf && shelves.some((s) => s.id !== fromShelf) && (
         <details className="book-extra">

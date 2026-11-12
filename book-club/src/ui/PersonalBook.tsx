@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActionMenu } from './ActionMenu';
 import { useSectionSwipe } from './useSectionSwipe';
 import { Pencil, Bookmark, Plus } from 'lucide-react';
-import { PaperFragment, PaperTape } from './EditorialArt';
+import { PaperFragment } from './EditorialArt';
 import { PaletteMotif } from './PaletteMotif';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -78,15 +78,10 @@ export function PersonalBook({
           <button onClick={onEdit}>
             <Pencil size={18} /> Издание и обложка
           </button>
-          <button onClick={() => setEditor('shelves')}>
-            <Bookmark size={18} /> На полки
-          </button>
         </ActionMenu>
       }
     >
       <div className="personal-book-summary">
-        <PaperFragment className="personal-book-paper" />
-        <PaperTape className="personal-book-tape" />
         <Cover title={book.title} cover={bookCover(book)} />
         <div>
           <span className="badge">{personalStatuses[book.status]}</span>
@@ -97,6 +92,9 @@ export function PersonalBook({
               Клубная книга →
             </Link>
           )}
+          <button type="button" className="shelf-assign" onClick={() => setEditor('shelves')}>
+            <Bookmark size={17} aria-hidden="true" /> На полки
+          </button>
         </div>
       </div>
       {!data ? (

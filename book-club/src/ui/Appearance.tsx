@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDB } from '../db';
-import { paletteLabels, type Palette } from '../readerDomain';
+import { paletteLabels, activePalette, type Palette } from '../readerDomain';
 import { useTask, ErrorNote } from './shared';
 import { PaperSelect } from './PaperSelect';
 import { applyTelegramTheme } from '../telegram';
@@ -11,8 +11,7 @@ export function useAppearance() {
   const theme = useLiveQuery(async () => (await getDB().settings.get('theme'))?.value) as
     string | undefined;
   useEffect(() => {
-    document.documentElement.dataset.palette =
-      palette && palette in paletteLabels ? palette : 'library';
+    document.documentElement.dataset.palette = activePalette(palette);
   }, [palette]);
   useEffect(() => {
     document.documentElement.dataset.themePreference = ['light', 'dark'].includes(theme || '')
@@ -30,7 +29,7 @@ export function Appearance() {
       <PaperSelect
         label="Палитра"
         disabled={busy}
-        value={String(values[0]?.value || 'library')}
+        value={activePalette(values[0]?.value)}
         onChange={(value) => void run(() => getDB().settings.put({ key: 'palette', value }), '')}
         options={Object.entries(paletteLabels).map(([value, label]) => ({
           value,

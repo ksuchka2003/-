@@ -2,6 +2,7 @@ import { clubDay } from '../calendar';
 import { ActionMenu } from './ActionMenu';
 import { BookJacket } from './BookJacket';
 import { PaperSelect } from './PaperSelect';
+import { PaletteMotif } from './PaletteMotif';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
 import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
@@ -735,26 +736,24 @@ export function MyBooks() {
             </ActionMenu>
           </div>
           {books.length > 0 && (
-            <div className="shelf-tabs" role="group" aria-label="Книги на полке">
-              {(
-                [
-                  ['all', 'Все', counts.total],
-                  ['reading', 'Читаю', counts.reading],
-                  ['finished', 'Прочитано', counts.finished],
-                  ['unfinished', 'Не прочитано', counts.unfinished],
-                ] as const
-              ).map(([key, label, count]) => (
-                <button
-                  type="button"
-                  key={key}
-                  className={status === key ? 'active' : ''}
-                  aria-pressed={status === key}
-                  onClick={() => updateFilter('status', key)}
-                >
-                  {label} <b>{count}</b>
-                </button>
-              ))}
-            </div>
+            <section className="library-numbers" aria-label="Статистика моей библиотеки">
+              <PaletteMotif className="board-corner-motif" />
+              <dl className="library-scoreboard">
+                {(
+                  [
+                    ['all', 'В коллекции', counts.total],
+                    ['reading', 'Читаю', counts.reading],
+                    ['finished', 'Прочитано', counts.finished],
+                    ['unfinished', 'Не прочитано', counts.unfinished],
+                  ] as const
+                ).map(([key, label, count]) => (
+                  <div key={key}>
+                    <dt>{label}</dt>
+                    <dd>{count}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
           )}
           {books.length > 0 && (
             <div className="toolbar books-toolbar">
@@ -766,9 +765,7 @@ export function MyBooks() {
               <button
                 type="button"
                 aria-label="Фильтры книг"
-                className={
-                  sort !== 'updated' || ['planned', 'paused'].includes(status) ? 'selected' : ''
-                }
+                className={sort !== 'updated' || status !== 'all' ? 'selected' : ''}
                 onClick={() => {
                   setFilterStatus(status);
                   setFilterSort(sort);
@@ -779,10 +776,22 @@ export function MyBooks() {
               </button>
             </div>
           )}
-          {['planned', 'paused'].includes(status) && (
+          {(status !== 'all' || sort !== 'updated') && (
             <p className="active-shelf-filter">
-              {personalStatuses[status as Book['status']]}{' '}
-              <button type="button" onClick={() => updateFilter('status', 'all')}>
+              {status === 'unfinished'
+                ? 'Не прочитано'
+                : personalStatuses[status as Book['status']] || 'Все книги'}
+              {sort === 'title' ? ' · По названию' : ''}{' '}
+              <button
+                type="button"
+                aria-label="Сбросить фильтры книг"
+                onClick={() => {
+                  const next = new URLSearchParams(params);
+                  next.delete('status');
+                  next.delete('sort');
+                  setParams(next, { replace: true });
+                }}
+              >
                 Сбросить
               </button>
             </p>
@@ -825,14 +834,21 @@ export function MyBooks() {
                       />
                     </button>
                     <div>
-                      <button
-                        className={`badge quick-status ${b.status}`}
-                        aria-label={`Изменить статус: ${b.title}`}
-                        onClick={() => setQuick(b)}
-                      >
-                        {personalStatuses[b.status]}
-                        <ChevronDown size={14} />
-                      </button>
+                      <div className="book-row-heading">
+                        <button
+                          className={`badge quick-status ${b.status}`}
+                          aria-label={`Изменить статус: ${b.title}`}
+                          onClick={() => setQuick(b)}
+                        >
+                          {personalStatuses[b.status]}
+                          <ChevronDown size={14} />
+                        </button>
+                        {shelf && (
+                          <ActionMenu label="Действия с книгой в списке">
+                            <button onClick={() => setShelfBook(b)}>Переместить на полку</button>
+                          </ActionMenu>
+                        )}
+                      </div>
                       <button className="personal-book-open" onClick={() => openBook(b)}>
                         <h3>{b.title}</h3>
                         <p>{b.authors || 'Автор не указан'}</p>
@@ -859,11 +875,6 @@ export function MyBooks() {
                               'Количество страниц не указано'
                             )}
                           </small>
-                        </button>
-                      )}
-                      {shelf && (
-                        <button className="text-button" onClick={() => setShelfBook(b)}>
-                          Переместить на полку
                         </button>
                       )}
                     </div>

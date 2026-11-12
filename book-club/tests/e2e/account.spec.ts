@@ -1172,11 +1172,16 @@ test('UX: полка показывает одну панель счётчико
   }
   await api.connect(context);
   await page.goto('/#/books');
-  const tabs = page.getByRole('group', { name: 'Книги на полке', exact: true });
-  await expect(tabs.getByRole('button', { name: 'Все 4', exact: true })).toBeVisible();
-  await expect(tabs.getByRole('button')).toHaveCount(4);
+  const board = page.getByRole('region', { name: 'Статистика моей библиотеки', exact: true });
+  await expect(board).toContainText('В коллекции4');
+  await expect(board.getByRole('button')).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Фильтр статуса', exact: true })).toHaveCount(0);
-  await tabs.getByRole('button', { name: 'Читаю 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Фильтры книг', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'Фильтр статуса', exact: true })
+    .getByRole('button', { name: 'Читаю', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Показать книги', exact: true }).click();
   await expect(page.locator('.personal-book-card')).toHaveCount(1);
   await page.getByRole('button', { name: 'Фильтры книг', exact: true }).click();
   const filter = page.getByRole('dialog', { name: 'Фильтры книг', exact: true });
@@ -1774,7 +1779,9 @@ test('все книги: поиск, фильтр прочитанного, ре
     )
     .toBe(true);
   await page.goto('/#/books');
-  await expect(page.getByRole('button', { name: 'Прочитано 1', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Статистика моей библиотеки', exact: true }),
+  ).toContainText('Прочитано1');
   await page.screenshot({ path: '../../work/personal-counts-mobile.png', fullPage: true });
   await openBookEditor(page, 'Давняя книга');
   await page.getByLabel('Текущая глава').fill('Эпилог');
@@ -2274,13 +2281,13 @@ test('полки, перемещение и карточки книг; личн�
     .locator('.personal-book-card')
     .getByRole('heading', { name: 'Книга на полке', exact: true })
     .click();
-  await openActions(page.getByRole('dialog'), 'Действия с книгой');
   await page.getByRole('button', { name: 'На полки', exact: true }).click();
   await page.getByLabel('Любимое', { exact: true }).check();
   await page.getByRole('button', { name: 'Сохранить полки', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
   await choosePaper(page, 'Полка', { label: 'Любимое' });
   await expect(page.locator('.personal-book-card')).toHaveCount(1);
+  await openActions(page.locator('.personal-book-card'), 'Действия с книгой в списке');
   await page.getByRole('button', { name: 'Переместить на полку', exact: true }).click();
   await page.getByText('Переместить с текущей полки', { exact: true }).click();
   await choosePaper(page, 'Куда переместить', { label: 'На лето' });
@@ -2294,9 +2301,9 @@ test('полки, перемещение и карточки книг; личн�
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '../../work/reader-shelves-grid.png', fullPage: true });
   await page.goto('/#/profile');
-  await choosePaper(page, 'Палитра', 'ink');
+  await choosePaper(page, 'Палитра', 'sea');
   await choosePaper(page, 'Тема', 'dark');
-  await expect(page.locator('html')).toHaveAttribute('data-palette', 'ink');
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'sea');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect
     .poll(
@@ -2304,9 +2311,9 @@ test('полки, перемещение и карточки книг; личн�
         [...api.records.values()].find((r) => r.kind === 'setting' && r.entity_id === 'palette')
           ?.payload?.value,
     )
-    .toBe('ink');
+    .toBe('sea');
   await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-palette', 'ink');
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'sea');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
@@ -2505,7 +2512,7 @@ test('редакционный дизайн: контраст текста и о
       };
     });
   const paperColors = new Set<string>();
-  for (const palette of ['library', 'forest', 'clay', 'ink', 'wine', 'beer', 'coffee', 'sea']) {
+  for (const palette of ['library', 'forest', 'beer', 'coffee', 'sea']) {
     await choosePaper(page, 'Палитра', palette);
     await expect(page.locator('html')).toHaveAttribute('data-palette', palette);
     for (const theme of ['light', 'dark']) {
@@ -2538,7 +2545,7 @@ test('редакционный дизайн: контраст текста и о
         .toBeGreaterThanOrEqual(4.5);
     }
   }
-  expect(paperColors.size).toBe(16);
+  expect(paperColors.size).toBe(10);
 });
 
 test('восемь сюжетов используются без повторов и не перекрывают заголовки или кнопки', async ({
@@ -2629,7 +2636,7 @@ test('восемь сюжетов используются без повторо
   }
 });
 
-test('плоский книжный интерфейс без логотипа и отдельных вставок сохраняет читателей и сетку каталога', async ({
+test('плоский интерфейс без рамок и текстур сохраняет читателей и сетку обложек', async ({
   page,
   context,
 }) => {
@@ -2655,6 +2662,9 @@ test('плоский книжный интерфейс без логотипа �
         page.locator('.creative-insert, .scrapbook-image, .book-edition-mark'),
       ).toHaveCount(0);
       await expect(page.locator('body')).not.toContainText(/между\s+строк/i);
+      expect(
+        await page.locator('body').evaluate((el) => getComputedStyle(el).backgroundImage),
+      ).toBe('none');
       await expect(page.locator('.reader-illustration:visible').first()).toBeVisible();
       expect(
         await page
@@ -2667,7 +2677,11 @@ test('плоский книжный интерфейс без логотипа �
               return (
                 s.boxShadow === 'none' &&
                 s.borderRadius === '0px' &&
-                !s.backgroundImage.includes('gradient(')
+                s.borderTopWidth === '0px' &&
+                s.borderRightWidth === '0px' &&
+                s.borderBottomWidth === '0px' &&
+                s.borderLeftWidth === '0px' &&
+                s.backgroundImage === 'none'
               );
             }),
           ),
@@ -2679,6 +2693,11 @@ test('плоский книжный интерфейс без логотипа �
         await expect(page.locator('.club-catalog .book-card')).toHaveCount(8);
         const cover = (await page.locator('.club-catalog .cover').first().boundingBox())!;
         expect(cover.height / cover.width).toBeCloseTo(1.5, 1);
+        await expect(
+          page.locator(
+            '.club-catalog .jacket-paper, .club-catalog .jacket-tape, .club-catalog .jacket-motif',
+          ),
+        ).toHaveCount(0);
       }
     }
   }
@@ -2807,14 +2826,20 @@ test('клуб переключает карточки и список, сохр
   }));
   await api.connect(context);
   await page.goto('/#/club?tab=all');
-  const view = page.getByRole('group', { name: 'Вид книг клуба', exact: true });
-  await expect(view.getByRole('button', { name: 'Карточки', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await view.getByRole('button', { name: 'Список', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Вид клуба: Список', exact: true }),
+  ).not.toBeVisible();
+  await openActions(page, 'Настройки каталога клуба');
+  await expect(
+    page.getByRole('button', { name: 'Вид клуба: Карточки', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Вид клуба: Список', exact: true }).click();
   await expect(page.locator('.club-catalog')).toHaveClass(/catalog-list/);
-  await expect(page.locator('.club-catalog .jacket-paper')).toHaveCount(2);
+  await expect(
+    page.locator(
+      '.club-catalog .jacket-paper, .club-catalog .jacket-tape, .club-catalog .jacket-motif',
+    ),
+  ).toHaveCount(0);
   for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -2830,7 +2855,8 @@ test('клуб переключает карточки и список, сохр
   await expect(page.getByLabel('Поиск книг клуба')).toHaveValue('Первая');
   await page.reload();
   await expect(page.locator('.club-catalog')).toHaveClass(/catalog-list/);
-  await view.getByRole('button', { name: 'Карточки', exact: true }).click();
+  await openActions(page, 'Настройки каталога клуба');
+  await page.getByRole('button', { name: 'Вид клуба: Карточки', exact: true }).click();
   await expect(page.locator('.club-catalog')).toHaveClass(/catalog-grid/);
 });
 
@@ -2858,4 +2884,36 @@ test('бумажный выбор в фильтрах закрывает тол�
   await filters.getByRole('button', { name: 'Показать цитаты', exact: true }).click();
   expect(page.url()).toContain('sort=likes');
   await expect(filters).not.toBeVisible();
+});
+
+test('книга открывает полки видимой кнопкой, первая полка создаётся и назначается там же', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  await page.goto('/#/books');
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByRole('button', { name: 'Добавить вручную', exact: true }).click();
+  await page.getByLabel('Название', { exact: true }).fill('На моей полке');
+  await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await page
+    .locator('.personal-book-card')
+    .getByRole('heading', { name: 'На моей полке', exact: true })
+    .click();
+  const book = page.getByRole('dialog', { name: 'Моя книга', exact: true });
+  await expect(book.getByRole('button', { name: 'На полки', exact: true })).toBeVisible();
+  await book.getByRole('button', { name: 'На полки', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'Полки книги', exact: true });
+  await picker.getByLabel('Новая полка', { exact: true }).fill('Мои любимые');
+  await picker.getByRole('button', { name: 'Создать полку', exact: true }).click();
+  await expect(picker.getByLabel('Мои любимые', { exact: true })).toBeChecked();
+  await picker.getByRole('button', { name: 'Сохранить полки', exact: true }).click();
+  await book.getByRole('button', { name: 'Назад', exact: true }).click();
+  await choosePaper(page, 'Полка', { label: 'Мои любимые' });
+  await expect(page.locator('.personal-book-card')).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator('.personal-book-card').getByRole('heading')).toHaveText(
+    'На моей полке',
+  );
 });

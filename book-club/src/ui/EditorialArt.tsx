@@ -41,12 +41,8 @@ export function BookmarkTab() {
 export function PaperFrame() {
   return (
     <span className="profile-paper-frame" aria-hidden="true">
-      {[0, 1, 2, 3].map((corner) => (
-        <span className="paper-frame-corner" key={corner} />
-      ))}
       <PaletteMotif className="paper-frame-motif" />
       <BotanicalSprig className="forest-vine" />
-      <BookplateSticker className="paper-frame-sticker" />
     </span>
   );
 }

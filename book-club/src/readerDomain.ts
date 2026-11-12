@@ -58,13 +58,17 @@ export const choiceLabels: Record<ReadingChoice, string> = {
 };
 export const entryLabels = { note: 'Заметка', thought: 'Мысль' } as const;
 export type Palette = 'library' | 'forest' | 'clay' | 'ink' | 'wine' | 'beer' | 'coffee' | 'sea';
-export const paletteLabels: Record<Palette, string> = {
+export const paletteLabels = {
   library: 'Тёплая библиотека',
   forest: 'Лесная',
-  clay: 'Терракотовая',
-  ink: 'Чернильная',
-  wine: 'Винная',
   beer: 'Пивная',
   coffee: 'Кофейная',
   sea: 'Морская',
-};
+} as const;
+export function activePalette(value: unknown): keyof typeof paletteLabels {
+  if (typeof value === 'string' && Object.hasOwn(paletteLabels, value))
+    return value as keyof typeof paletteLabels;
+  if (value === 'clay') return 'coffee';
+  if (value === 'ink') return 'sea';
+  return 'library';
+}

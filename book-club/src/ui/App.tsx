@@ -265,6 +265,9 @@ function Shell({
                 }
               />
             </Routes>
+            <div className="page-tail-decor" aria-hidden="true">
+              <PaletteMotif />
+            </div>
           </main>
         </div>
         <nav className="bottom-nav">

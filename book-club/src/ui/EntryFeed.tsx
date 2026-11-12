@@ -67,6 +67,7 @@ export function EntryFeed({
               <ReactionButtons kind={kind} id={e.id} />
               <DiscussionButton kind={kind} id={e.id} preview={e.text} />
             </div>
+            <PaletteMotif className="quote-corner-motif" />
           </article>
         ))}
       </div>
@@ -79,3 +80,4 @@ export function EntryFeed({
   );
 }
 import { PaperFragment } from './EditorialArt';
+import { PaletteMotif } from './PaletteMotif';

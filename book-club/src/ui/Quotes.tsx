@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
 import { PaperSelect } from './PaperSelect';
+import { PaletteMotif } from './PaletteMotif';
 import { ActionMenu } from './ActionMenu';
 import { useSearchParams } from 'react-router-dom';
 import { resolveQuoteBook } from '../quoteBooks';
@@ -585,6 +586,7 @@ export function Quotes() {
                     </>
                   )}
                 </div>
+                <PaletteMotif className="quote-corner-motif" />
               </article>
             );
           })}

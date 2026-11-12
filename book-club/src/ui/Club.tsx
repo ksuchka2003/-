@@ -1,5 +1,6 @@
 import { EntryFeed } from './EntryFeed';
 import { BookJacket } from './BookJacket';
+import { ActionMenu } from './ActionMenu';
 import { PaletteMotif } from './PaletteMotif';
 import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
 import { useState } from 'react';
@@ -321,12 +322,12 @@ export function Club() {
               <>
                 <div className="toolbar club-search">
                   <SearchField label="Поиск книг клуба" value={q} onChange={setQ} />
-                  <div className="catalog-view" role="group" aria-label="Вид книг клуба">
+                  <ActionMenu label="Настройки каталога клуба">
                     {(['grid', 'list'] as const).map((value) => (
                       <button
                         type="button"
                         key={value}
-                        className="paper-button"
+                        aria-label={`Вид клуба: ${value === 'grid' ? 'Карточки' : 'Список'}`}
                         aria-pressed={layout === value}
                         onClick={() =>
                           void saveLayout(
@@ -343,7 +344,7 @@ export function Club() {
                         {value === 'grid' ? 'Карточки' : 'Список'}
                       </button>
                     ))}
-                  </div>
+                  </ActionMenu>
                 </div>
                 <div
                   className="tabs collection-tabs"
@@ -439,8 +440,6 @@ export function ClubDetail() {
   return (
     <CloudGate>
       <section className="book-detail book-detail-compact">
-        <PaperFragment className="book-detail-paper" />
-        <PaperTape className="book-detail-tape" />
         <Cover title={b.title} cover={bookCover(own, b.cover)} />
         <div className="book-detail-heading">
           <span className="badge">{clubStatuses[b.status]}</span>

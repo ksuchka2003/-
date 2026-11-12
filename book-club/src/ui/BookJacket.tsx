@@ -1,8 +1,7 @@
 import { Cover } from './shared';
-import { PaperFragment, PaperTape, BookmarkTab } from './EditorialArt';
-import { PaletteMotif } from './PaletteMotif';
+import { BookmarkTab } from './EditorialArt';
 
-/** The same tucked paper and bookmark work at both card and list sizes. */
+/** Plain covers in lists and cards; only the reading bookmark stays. */
 export function BookJacket({
   title,
   cover,
@@ -14,10 +13,7 @@ export function BookJacket({
 }) {
   return (
     <div className="book-jacket">
-      <PaperFragment className="jacket-paper" />
       <Cover title={title} cover={cover || ''} />
-      <PaperTape className="jacket-tape" />
-      <PaletteMotif className="jacket-motif" />
       {reading && <BookmarkTab />}
     </div>
   );

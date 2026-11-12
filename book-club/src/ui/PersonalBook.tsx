@@ -166,7 +166,6 @@ export function PersonalBook({
                     title={
                       section === 'note' ? 'Здесь будут ваши заметки' : 'Здесь будут ваши мысли'
                     }
-                    illustration={section === 'note' ? 'coffee' : 'headphones'}
                   />
                 )}
                 <div className="stack">
@@ -221,9 +220,7 @@ export function PersonalBook({
                   <Plus size={17} />
                   Добавить цитату
                 </button>
-                {!data.quotes.length && (
-                  <Empty title="Здесь будут ваши цитаты" illustration="reader" />
-                )}
+                {!data.quotes.length && <Empty title="Здесь будут ваши цитаты" />}
                 <div className="stack">
                   {data.quotes.map((q) => (
                     <article className="quote-card" key={q.id}>

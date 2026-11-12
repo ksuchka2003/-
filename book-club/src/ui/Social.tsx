@@ -246,7 +246,7 @@ export function Members() {
         <div>
           <h1>Участники</h1>
         </div>
-        <HeadingCollage scene="conversation" />
+        <HeadingCollage scene="discussion" />
       </div>
       <CloudGate>
         {!!profiles.data?.length && (

@@ -97,13 +97,16 @@
   max-width: none;
   inset: 0 auto auto 0;
 }
-.reader-coffee > img {
+.reader-coffee > img,
+.reader-writing > img {
   transform: translateX(-50%);
 }
-.reader-conversation > img {
+.reader-conversation > img,
+.reader-discussion > img {
   transform: translateY(-50%);
 }
-.reader-headphones > img {
+.reader-headphones > img,
+.reader-boardgames > img {
   transform: translate(-50%, -50%);
 }
 :root[data-theme='dark'] .reader-illustration {

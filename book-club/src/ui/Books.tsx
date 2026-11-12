@@ -1,6 +1,12 @@
 import { clubDay } from '../calendar';
 import { ActionMenu } from './ActionMenu';
-import { PaperFragment, PaperTape, ReaderIllustration, BookmarkTab } from './EditorialArt';
+import {
+  PaperFragment,
+  PaperTape,
+  ReaderIllustration,
+  BookmarkTab,
+  BotanicalSprig,
+} from './EditorialArt';
 import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -787,10 +793,7 @@ export function MyBooks() {
             </p>
           )}
           {!filtered.length ? (
-            <Empty
-              title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'}
-              illustration={!q && !books.length ? 'headphones' : undefined}
-            >
+            <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'}>
               {books.length > 0 && (
                 <button
                   onClick={() => {
@@ -825,6 +828,7 @@ export function MyBooks() {
                         title={b.title}
                       />
                       <PaperTape className="cover-tape" />
+                      <BotanicalSprig className="catalog-sprig" />
                       {b.status === 'reading' && <BookmarkTab />}
                     </button>
                     <div>

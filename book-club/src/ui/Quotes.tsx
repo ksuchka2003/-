@@ -357,7 +357,7 @@ export function Quotes() {
           <p className="eyebrow">Слова, которые остались</p>
           <h1>Цитаты</h1>
         </div>
-        <ReaderIllustration scene="coffee" className="heading-reader" />
+        <ReaderIllustration scene="writing" className="heading-reader" />
         <div className="quote-create-actions">
           <button className="primary" onClick={() => setEdit(true)}>
             <Plus size={18} />
@@ -454,7 +454,6 @@ export function Quotes() {
         </CloudGate>
       ) : !items.length ? (
         <Empty
-          illustration={!q && !favorite && tab !== 'trash' ? 'coffee' : undefined}
           title={
             tab === 'trash'
               ? 'Корзина пуста'

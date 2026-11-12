@@ -225,6 +225,175 @@ body {
 .action-menu-panel {
   border-color: var(--line);
 }
+/* Keep functional focus, field boundaries, progress bars and active tabs.
+   Reading surfaces use spacing instead of full-width dividers. */
+.home-readers.book-extra,
+.tabs,
+.book-extra,
+.modal .book-extra,
+.account-details,
+.stats,
+.stats > div,
+.member-list .member-card,
+.reader-row,
+.reading-session,
+.more-menu a,
+.modal footer,
+.modal .lookup-results button,
+.modal .cover-picker,
+.meeting-card .meeting-book-links .badge {
+  border: 0;
+}
+.member-list {
+  gap: 8px;
+}
+.bottom-nav,
+.sidebar {
+  border: 0;
+}
+.segmented {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  gap: 12px;
+}
+.segmented > button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  min-height: 44px;
+}
+.segmented > button[aria-pressed='true'] {
+  background: var(--soft);
+  color: var(--green);
+}
+.tabs > button,
+.tabs > button.active {
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+}
+.tabs.collection-tabs > button,
+.tabs.collection-tabs > button.active {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  min-height: 44px;
+  padding-inline: 6px;
+}
+.tabs.collection-tabs > button.active {
+  color: var(--green);
+  border-bottom-color: var(--green);
+}
+.quote-card blockquote {
+  border: 0;
+}
+.more-reader {
+  width: min(180px, 55%);
+  margin: 22px auto 0;
+}
+.sidebar-collage > .margin-doodle {
+  position: absolute;
+  width: 100px;
+  right: 10px;
+  bottom: 14px;
+  opacity: 0.45;
+}
+.heading-collage > .heading-sprig {
+  position: absolute;
+  width: 35px;
+  height: 58px;
+  left: -3px;
+  bottom: 3px;
+  color: var(--muted);
+  opacity: 0.28;
+  transform: rotate(-18deg);
+  z-index: -1;
+}
+.bookplate-sticker {
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  color: var(--muted);
+}
+.profile-paper-frame > .paper-frame-sticker {
+  position: absolute;
+  width: 24px;
+  height: 30px;
+  right: 13px;
+  top: 14px;
+  opacity: 0.36;
+  transform: rotate(8deg);
+}
+.profile-paper-frame > .paper-frame-sprig {
+  width: 43px;
+  height: 62px;
+  opacity: 0.32;
+}
+.catalog-sprig {
+  display: none;
+  position: absolute;
+  width: 30px;
+  height: 49px;
+  right: -7px;
+  top: 5px;
+  color: var(--muted);
+  opacity: 0.27;
+  pointer-events: none;
+  user-select: none;
+}
+.book-grid .personal-book-card:nth-child(6n + 2) .catalog-sprig,
+.club-catalog .book-card:nth-child(6n + 2) > .catalog-sprig {
+  display: block;
+}
+.book-grid .cover-open::before {
+  content: '';
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  bottom: 0;
+  right: 0;
+  background: var(--paper-piece);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 2;
+}
+.meetings-page-heading > .primary {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 4px;
+}
+.paper-page-heading:has(> .heading-reader) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  row-gap: 12px;
+  align-items: center;
+}
+.paper-page-heading:has(> .heading-reader) > div:first-of-type {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+.paper-page-heading > .heading-reader {
+  position: relative;
+  display: block;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  width: 100px;
+  right: auto;
+  bottom: auto;
+  align-self: center;
+}
+.paper-page-heading:has(> .heading-reader) > .primary,
+.paper-page-heading:has(> .heading-reader) > .quote-create-actions {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+}
 @media (max-width: 600px) {
   .book-detail-compact > .book-detail-paper {
     width: 119px;

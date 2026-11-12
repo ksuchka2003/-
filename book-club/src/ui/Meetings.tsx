@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PaperFragment, ReaderIllustration } from './EditorialArt';
+import { PaperFragment, HeadingCollage } from './EditorialArt';
 import { meetingCountdown, meetingEnd } from '../collection';
 import { MeetingDiscussion } from './MeetingDiscussion';
 import { Link } from 'react-router-dom';
@@ -252,7 +252,6 @@ export function MeetingCard({
             .toLocaleDateString('ru-RU', { month: 'short', timeZone: 'Europe/Moscow' })
             .replace('.', '')}
         </span>
-        <ReaderIllustration scene="conversation" />
       </div>
       <div className="meeting-body">
         <div className="section-title">
@@ -341,12 +340,12 @@ export function Meetings() {
     );
   return (
     <>
-      <div className="page-heading paper-page-heading">
-        <PaperFragment className="heading-paper" />
+      <div className="page-heading collage-page-heading meetings-page-heading">
         <div>
           <p className="eyebrow">Продолжение разговора</p>
           <h1>Встречи клуба</h1>
         </div>
+        <HeadingCollage scene="conversation" />
         {identity?.role === 'admin' && (
           <button className="primary" onClick={() => setEdit(true)}>
             <Plus size={18} />
@@ -369,10 +368,7 @@ export function Meetings() {
         ) : (
           !meetings.error &&
           (!listed.length ? (
-            <Empty
-              title={past ? 'Прошедших встреч нет' : 'Предстоящих встреч пока нет'}
-              illustration="conversation"
-            />
+            <Empty title={past ? 'Прошедших встреч нет' : 'Предстоящих встреч пока нет'} />
           ) : (
             <div className="stack">
               {listed.map((m) => (

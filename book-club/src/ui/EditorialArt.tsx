@@ -1,6 +1,16 @@
 import readersAtlas from '../assets/illustrations/readers-atlas.png';
+import clubLifeAtlas from '../assets/illustrations/club-life-atlas.png';
 
-export type ReaderScene = 'reader' | 'coffee' | 'conversation' | 'headphones';
+export type ReaderScene =
+  | 'reader'
+  | 'coffee'
+  | 'conversation'
+  | 'headphones'
+  | 'carrying'
+  | 'writing'
+  | 'discussion'
+  | 'boardgames';
+const clubLifeScenes: readonly ReaderScene[] = ['carrying', 'writing', 'discussion', 'boardgames'];
 
 export function PaperTape({ className = '' }: { className?: string }) {
   return <span className={`paper-tape ${className}`} aria-hidden="true" />;
@@ -34,21 +44,31 @@ export function PaperFrame() {
         <span className="paper-frame-corner" key={corner} />
       ))}
       <BotanicalSprig className="paper-frame-sprig" />
+      <BookplateSticker className="paper-frame-sticker" />
     </span>
   );
 }
 
 /** Artwork is decoration, never a profile picture or user publication. */
 export function ReaderIllustration({
-  scene = 'reader',
+  scene,
   className = '',
 }: {
-  scene?: ReaderScene;
+  scene: ReaderScene;
   className?: string;
 }) {
   return (
-    <span className={`reader-illustration reader-${scene} ${className}`} aria-hidden="true">
-      <img src={readersAtlas} alt="" decoding="async" draggable="false" />
+    <span
+      className={`reader-illustration reader-${scene} ${className}`}
+      data-reader-scene={scene}
+      aria-hidden="true"
+    >
+      <img
+        src={clubLifeScenes.includes(scene) ? clubLifeAtlas : readersAtlas}
+        alt=""
+        decoding="async"
+        draggable="false"
+      />
     </span>
   );
 }
@@ -81,14 +101,36 @@ export function PaperFragment({
   );
 }
 
-export function HeadingCollage({ scene = 'reader' }: { scene?: ReaderScene }) {
+export function HeadingCollage({ scene }: { scene: ReaderScene }) {
   return (
     <span className={`heading-collage heading-collage-${scene}`} aria-hidden="true">
       <PaperFragment />
       <PaperFragment className="paper-layer" ruled />
       <PaperTape />
+      <BotanicalSprig className="heading-sprig" />
       <ReaderIllustration scene={scene} />
     </span>
+  );
+}
+
+export function BookplateSticker({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      className={`bookplate-sticker ${className}`}
+      viewBox="0 0 32 40"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M2 3H30V37H2Z" fill="var(--paper-piece)" />
+      <path d="M5 6H27V34H5Z" stroke="currentColor" strokeWidth=".65" strokeDasharray="1 2.5" />
+      <path
+        d="M9 15C12 13 14 14 16 16C18 14 21 13 24 15V25C21 23 19 24 16 26C13 24 11 23 9 25ZM16 16V26M11 18L14 19M18 19L22 18M11 21L14 22M18 22L22 21"
+        stroke="currentColor"
+        strokeWidth=".8"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

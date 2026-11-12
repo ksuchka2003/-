@@ -158,7 +158,7 @@ export function Home() {
         ) : upcoming ? (
           <MeetingCard compact meeting={upcoming} />
         ) : (
-          <Empty title="Пока нет предстоящих встреч" illustration="conversation" />
+          <Empty title="Пока нет предстоящих встреч" />
         )}
       </CloudGate>
     </>
@@ -264,7 +264,7 @@ export function Club() {
           <p className="eyebrow">Общая коллекция</p>
           <h1>Клуб</h1>
         </div>
-        <HeadingCollage scene="conversation" />
+        <HeadingCollage scene="carrying" />
       </div>
       <CloudGate>
         <div className="tabs club-library-tabs" aria-label="Разделы библиотеки">
@@ -356,6 +356,7 @@ export function Club() {
                 {visible.map((b) => (
                   <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
                     <PaperTape className="catalog-tape" />
+                    <BotanicalSprig className="catalog-sprig" />
                     <Cover title={b.title} cover={b.cover} />
                     {current.some((x) => x.book.id === b.id) && <BookmarkTab />}
                     <div>

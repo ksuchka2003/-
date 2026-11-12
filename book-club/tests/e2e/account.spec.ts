@@ -2508,17 +2508,32 @@ test('редакционный дизайн: контраст текста и о
   }
 });
 
-test('бумажные коллажи не перекрывают заголовки и добавление записей на телефоне', async ({
+test('восемь сюжетов используются без повторов и не перекрывают заголовки или кнопки', async ({
   page,
   context,
 }) => {
   const api = backend();
   await api.connect(context);
+  const scenes: Record<string, string> = {
+    '/': 'reader',
+    '/club': 'carrying',
+    '/members': 'discussion',
+    '/books': 'headphones',
+    '/quotes': 'writing',
+    '/meetings': 'conversation',
+    '/profile': 'coffee',
+  };
   for (const width of [320, 390]) {
+    const seen = new Set<string>();
     await page.setViewportSize({ width, height: 844 });
     for (const route of ['/', '/club', '/members', '/books', '/quotes', '/meetings', '/profile']) {
       await page.goto('/#' + route);
-      await expect(page.locator('.reader-illustration:visible').first()).toBeVisible();
+      const picture = page.locator('main .reader-illustration');
+      await expect(picture).toHaveCount(1);
+      await expect(picture).toBeVisible();
+      await expect(picture).toHaveAttribute('data-reader-scene', scenes[route]);
+      expect(seen.has(scenes[route])).toBe(false);
+      seen.add(scenes[route]);
       await page.evaluate(() => document.fonts.ready);
       await expect
         .poll(() =>
@@ -2568,6 +2583,16 @@ test('бумажные коллажи не перекрывают заголов
         await expect(page.getByRole('dialog')).not.toBeVisible();
       }
     }
+    await page.getByRole('button', { name: 'Ещё', exact: true }).click();
+    const more = page.getByRole('dialog', { name: 'Разделы клуба', exact: true });
+    await expect(more.locator('.reader-illustration')).toHaveCount(1);
+    await expect(more.locator('.reader-illustration')).toHaveAttribute(
+      'data-reader-scene',
+      'boardgames',
+    );
+    seen.add('boardgames');
+    expect(seen.size).toBe(8);
+    await more.getByRole('button', { name: 'Назад', exact: true }).click();
   }
 });
 

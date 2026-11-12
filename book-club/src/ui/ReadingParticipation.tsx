@@ -47,7 +47,13 @@ export function PublicationPermission({ bookId }: { bookId?: string | null }) {
     </p>
   );
 }
-export function ClubReadingDecision({ book }: { book: ClubBook }) {
+export function ClubReadingDecision({
+  book,
+  compact = false,
+}: {
+  book: ClubBook;
+  compact?: boolean;
+}) {
   const decision = useReadingDecision(book.id);
   const own = useLiveQuery(
     () => getDB().personal_books.where('clubBookId').equals(book.id).first(),
@@ -108,12 +114,14 @@ export function ClubReadingDecision({ book }: { book: ClubBook }) {
                 ? 'Прочитано'
                 : decision.choice === 'reading' && own?.status === 'abandoned'
                   ? 'Бросил'
-                  : choiceLabels[decision.choice]}
+                  : compact
+                    ? 'Мой статус'
+                    : choiceLabels[decision.choice]}
               <ChevronDown size={15} aria-hidden="true" />
             </button>
           </div>
           {decision.pending && <small role="status">Статус ожидает синхронизации</small>}
-          {decision.choice === 'declined' && (
+          {decision.choice === 'declined' && !compact && (
             <p className="section-hint">Можно следить за клубом и присоединиться позже.</p>
           )}
         </>

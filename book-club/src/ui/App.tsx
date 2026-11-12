@@ -1,6 +1,5 @@
 import { useAppearance } from './Appearance';
 import { ReaderIllustration, PaperFragment } from './EditorialArt';
-import { PaletteMotif } from './PaletteMotif';
 import { useEffect, useState, Component, type ReactNode } from 'react';
 import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,6 +27,8 @@ import type { LibrarySyncState } from '../privateTypes';
 import { message } from '../domain';
 import { Session, Modal, BackLink } from './shared';
 import { ClubIntro } from './ClubIntro';
+import { cachedIntro } from '../clubIntro';
+import { PageDecoration } from './PageDecoration';
 import { Home, Club, ClubDetail } from './Club';
 import { MyBooks } from './Books';
 import { Quotes } from './Quotes';
@@ -172,10 +173,6 @@ function Shell({
             )}
           </nav>
           <div className="sidebar-footer">
-            <div className="sidebar-collage" aria-hidden="true">
-              <PaperFragment />
-              <PaletteMotif className="sidebar-palette-motif" />
-            </div>
             <span className="status-dot" />
             {identity ? 'Закрытый клуб' : 'Личная библиотека'}
           </div>
@@ -265,9 +262,7 @@ function Shell({
                 }
               />
             </Routes>
-            <div className="page-tail-decor" aria-hidden="true">
-              <PaletteMotif />
-            </div>
+            <PageDecoration name={location.pathname} />
           </main>
         </div>
         <nav className="bottom-nav">
@@ -321,6 +316,8 @@ function Shell({
   );
 }
 function Bootstrap() {
+  const [held, setHeld] = useState(false);
+  const [intro, setIntro] = useState(cachedIntro);
   const [ready, setReady] = useState(false);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [error, setError] = useState('');
@@ -333,8 +330,10 @@ function Bootstrap() {
     (async () => {
       let who = currentIdentity();
       try {
-        if (configured && initData()) who = await authenticate();
-        else if (configured)
+        if (configured && initData()) {
+          who = await authenticate();
+          if (active) setIntro(cachedIntro());
+        } else if (configured)
           setError('Для доступа к клубу откройте приложение через вашего Telegram-бота.');
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : 'Ошибка входа');
@@ -370,7 +369,8 @@ function Bootstrap() {
     setError('');
     setAttempt((a) => a + 1);
   };
-  if (ready && !identity && (configured || initData()) && !localMode)
+  if (!ready || held) return <ClubIntro intro={intro} ready={ready} held={held} onHold={setHeld} />;
+  if (!identity && (configured || initData()) && !localMode)
     return (
       <main className="login-screen">
         <BookOpen size={32} />
@@ -383,7 +383,7 @@ function Bootstrap() {
         <small>В локальном режиме данные доступны только на этом устройстве.</small>
       </main>
     );
-  return ready ? <Shell identity={identity} error={error} onRetry={retry} /> : <ClubIntro />;
+  return <Shell identity={identity} error={error} onRetry={retry} />;
 }
 export function App() {
   return (

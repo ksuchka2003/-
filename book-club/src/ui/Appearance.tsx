@@ -4,6 +4,7 @@ import { getDB } from '../db';
 import { paletteLabels, activePalette, type Palette } from '../readerDomain';
 import { useTask, ErrorNote } from './shared';
 import { PaperSelect } from './PaperSelect';
+import { rememberAppearance } from '../appearance';
 import { applyTelegramTheme } from '../telegram';
 export function useAppearance() {
   const palette = useLiveQuery(async () => (await getDB().settings.get('palette'))?.value) as
@@ -11,12 +12,17 @@ export function useAppearance() {
   const theme = useLiveQuery(async () => (await getDB().settings.get('theme'))?.value) as
     string | undefined;
   useEffect(() => {
-    document.documentElement.dataset.palette = activePalette(palette);
+    if (palette !== undefined) {
+      document.documentElement.dataset.palette = activePalette(palette);
+      rememberAppearance(palette, document.documentElement.dataset.themePreference);
+    }
   }, [palette]);
   useEffect(() => {
+    if (theme === undefined) return;
     document.documentElement.dataset.themePreference = ['light', 'dark'].includes(theme || '')
       ? theme
       : 'system';
+    rememberAppearance(document.documentElement.dataset.palette, theme);
     applyTelegramTheme();
   }, [theme]);
 }

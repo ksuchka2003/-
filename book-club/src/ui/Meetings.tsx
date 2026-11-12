@@ -1,3 +1,4 @@
+import { useDraftForm, DraftNote } from './useDraft';
 import { useEffect, useState } from 'react';
 import { PaperFragment, HeadingCollage } from './EditorialArt';
 import { meetingCountdown, meetingEnd } from '../collection';
@@ -38,21 +39,26 @@ export const meetingDateLabel = (date: string) =>
 export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose: () => void }) {
   const books = useCloud<ClubBook>('club_books');
   const links = useCloud<{ meeting_id: string; book_id: string }>('meeting_books');
-  const [v, setV] = useState<Meeting>(
-    meeting || {
-      id: uid(),
-      title: '',
-      starts_at: '',
-      place: '',
-      description: '',
-      cancelled: false,
-      version: 1,
-      duration_minutes: 120,
-      venue_url: '',
-    },
-  );
-  const [ids, setIds] = useState<string[] | null>(null);
-  const [initial] = useState(v);
+  const [value, setValue, draft] = useDraftForm('admin:meeting:' + (meeting?.id || 'new'), {
+    meeting:
+      meeting ||
+      ({
+        id: uid(),
+        title: '',
+        starts_at: '',
+        place: '',
+        description: '',
+        cancelled: false,
+        version: 1,
+        duration_minutes: 120,
+        venue_url: '',
+      } as Meeting),
+    ids: null as string[] | null,
+  });
+  const v = value.meeting,
+    ids = value.ids;
+  const setV = (meeting: Meeting) => setValue((old) => ({ ...old, meeting }));
+  const setIds = (ids: string[]) => setValue((old) => ({ ...old, ids }));
   const [bookSearch, setBookSearch] = useState('');
   const selected =
     ids || links.data?.filter((l) => l.meeting_id === meeting?.id).map((l) => l.book_id) || [];
@@ -65,6 +71,7 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
       await run(
         async () => {
           await action('admin.meeting', { ...value, book_ids: selected });
+          await draft.clear();
           await query.invalidateQueries({ queryKey: ['cloud'] });
         },
         value.cancelled ? 'Встреча отменена' : 'Встреча сохранена',
@@ -73,23 +80,8 @@ export function MeetingEditor({ meeting, onClose }: { meeting?: Meeting; onClose
       onClose();
   };
   return (
-    <Modal
-      title={meeting ? 'Редактировать встречу' : 'Создать встречу'}
-      onClose={() =>
-        confirmClose(
-          JSON.stringify(v) !== JSON.stringify(initial) ||
-            (ids !== null &&
-              JSON.stringify([...ids].sort()) !==
-                JSON.stringify(
-                  (links.data || [])
-                    .filter((l) => l.meeting_id === meeting?.id)
-                    .map((l) => l.book_id)
-                    .sort(),
-                )),
-          onClose,
-        )
-      }
-    >
+    <Modal title={meeting ? 'Редактировать встречу' : 'Создать встречу'} onClose={onClose}>
+      <DraftNote draft={draft} onLeave={onClose} />
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -238,7 +230,9 @@ export function MeetingCard({
   const questions = useCloud<MeetingQuestion>('meeting_questions');
   const reflections = useCloud<MeetingReflection>('meeting_reflections');
   return (
-    <article className={`meeting-card ${m.cancelled ? 'cancelled' : ''}`}>
+    <article
+      className={`meeting-card ${compact ? 'compact' : ''} ${m.cancelled ? 'cancelled' : ''}`}
+    >
       <div className="meeting-date-stamp" aria-hidden="true">
         <PaperFragment className="date-paper" ruled />
         <b>

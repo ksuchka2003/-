@@ -1,3 +1,4 @@
+import { useDraftForm, DraftNote } from './useDraft';
 import { useState } from 'react';
 import { PaperSelect } from './PaperSelect';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -24,23 +25,30 @@ export function ShelfManager({
   onClose: () => void;
   onDeleted?: (id: string) => void;
 }) {
-  const shelves = useShelves(),
-    [id, setId] = useState<string | null>(null),
-    [name, setName] = useState('');
+  const shelves = useShelves();
+  const [value, setValue, draft] = useDraftForm('shelf:manager', {
+    id: null as string | null,
+    name: '',
+    newId: uid(),
+  });
+  const id = value.id,
+    name = value.name;
+  const setId = (id: string | null) => setValue((old) => ({ ...old, id }));
+  const setName = (name: string) => setValue((old) => ({ ...old, name }));
   const { run, busy, error } = useTask();
   return (
     <Modal title="Мои полки" onClose={onClose}>
+      <DraftNote draft={draft} onLeave={onClose} />
       <form
         onSubmit={async (e) => {
           e.preventDefault();
           if (
             await run(
-              () => saveShelf({ id: id || uid(), name }),
+              () => saveShelf({ id: id || value.newId, name }),
               id ? 'Полка переименована' : 'Полка создана',
             )
           ) {
-            setId(null);
-            setName('');
+            await draft.reset({ id: null, name: '', newId: uid() });
           }
         }}
       >
@@ -119,10 +127,20 @@ export function ShelfPicker({
   fromShelf?: string;
   onClose: () => void;
 }) {
-  const shelves = useShelves(),
-    [selected, setSelected] = useState(book.shelfIds || []),
-    [to, setTo] = useState(''),
-    [createName, setCreateName] = useState('');
+  const shelves = useShelves();
+  const [value, setValue, draft] = useDraftForm('shelf:book:' + book.id, {
+    selected: book.shelfIds || [],
+    to: '',
+    createName: '',
+  });
+  const { selected, to, createName } = value;
+  const setSelected = (selected: string[] | ((old: string[]) => string[])) =>
+    setValue((old) => ({
+      ...old,
+      selected: typeof selected === 'function' ? selected(old.selected) : selected,
+    }));
+  const setTo = (to: string) => setValue((old) => ({ ...old, to }));
+  const setCreateName = (createName: string) => setValue((old) => ({ ...old, createName }));
   const { run, busy, error } = useTask();
   const creation = (
     <form
@@ -152,6 +170,7 @@ export function ShelfPicker({
   );
   return (
     <Modal title="Полки книги" onClose={onClose}>
+      <DraftNote draft={draft} onLeave={onClose} />
       <p className="form-context">{book.title}</p>
       {!shelves.length ? (
         <>
@@ -164,7 +183,10 @@ export function ShelfPicker({
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            if (await run(() => setBookShelves(book.id, selected), 'Полки сохранены')) onClose();
+            if (await run(() => setBookShelves(book.id, selected), 'Полки сохранены')) {
+              await draft.clear();
+              onClose();
+            }
           }}
         >
           <fieldset className="shelf-choice-list">
@@ -214,8 +236,10 @@ export function ShelfPicker({
           <button
             disabled={busy || !to}
             onClick={async () => {
-              if (await run(() => moveBookShelf(book.id, fromShelf, to), 'Книга перемещена'))
+              if (await run(() => moveBookShelf(book.id, fromShelf, to), 'Книга перемещена')) {
+                await draft.clear();
                 onClose();
+              }
             }}
           >
             Переместить книгу

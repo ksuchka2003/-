@@ -10,7 +10,6 @@ export function CollectionCounts({
   const entries: [string, string, number][] = [
     ['all', 'В коллекции', counts.total],
     ['finished', 'Прочитано', counts.finished],
-    ['unfinished', 'Не прочитано', counts.unfinished],
     ...(counts.reading === undefined
       ? []
       : [['reading', 'Читаю', counts.reading] as [string, string, number]]),

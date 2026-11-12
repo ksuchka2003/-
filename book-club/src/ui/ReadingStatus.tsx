@@ -16,9 +16,7 @@ export function ReadingStatus({
   onChange: (value: Book['status'] | 'all' | 'unfinished') => void;
   filter?: boolean;
 }) {
-  const entries = filter
-    ? { all: 'Все', ...personalStatuses, unfinished: 'Не прочитано' }
-    : personalStatuses;
+  const entries = filter ? { all: 'Все', ...personalStatuses } : personalStatuses;
   return (
     <div
       className="reading-status"

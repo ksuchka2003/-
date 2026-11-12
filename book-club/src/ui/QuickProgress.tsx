@@ -1,3 +1,4 @@
+import { useDraft, DraftNote } from './useDraft';
 import { useEffect, useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDB } from '../db';
@@ -7,11 +8,14 @@ import { Modal, Field, Loading, ErrorNote, useTask } from './shared';
 
 export function QuickProgress({ bookId, onClose }: { bookId: string; onClose: () => void }) {
   const book = useLiveQuery(() => getDB().personal_books.get(bookId), [bookId]);
-  const [values, setValues] = useState<{ pages: number; total: number; chapter: string } | null>(
+  const [initial, setInitial] = useState<{ pages: number; total: number; chapter: string } | null>(
     null,
   );
   const [loadError, setLoadError] = useState('');
-  const base = useRef<typeof values>(null);
+  const draft = useDraft('progress:' + bookId, initial);
+  const values = draft.value,
+    setValues = draft.setValue;
+  const base = useRef<typeof initial>(null);
   const { run, busy, error } = useTask();
   useEffect(() => {
     let active = true;
@@ -20,7 +24,7 @@ export function QuickProgress({ bookId, onClose }: { bookId: string; onClose: ()
         if (active && b) {
           const initial = { pages: p?.pages || 0, total: b.totalPages, chapter: p?.chapter || '' };
           base.current = initial;
-          setValues(initial);
+          setInitial(initial);
         } else if (active) setLoadError('Книга уже удалена');
       })
       .catch(() => {
@@ -44,8 +48,10 @@ export function QuickProgress({ bookId, onClose }: { bookId: string; onClose: ()
           ),
         finished ? 'Книга прочитана' : 'Прогресс сохранён',
       ))
-    )
+    ) {
+      await draft.clear();
       onClose();
+    }
   };
   return (
     <Modal title="Мой прогресс" onClose={onClose}>
@@ -62,6 +68,7 @@ export function QuickProgress({ bookId, onClose }: { bookId: string; onClose: ()
             void save();
           }}
         >
+          <DraftNote draft={draft} onLeave={onClose} />
           <h3 className="progress-book-title">{book.title}</h3>
           <Field label="Прочитано страниц">
             <input

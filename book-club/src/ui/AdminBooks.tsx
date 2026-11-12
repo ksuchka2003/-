@@ -1,3 +1,4 @@
+import { useDraftForm, DraftNote } from './useDraft';
 import { PaperSelect } from './PaperSelect';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -31,10 +32,11 @@ import type { BookPoll } from './Polls';
 
 function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) {
   const [id] = useState(book?.id || uid());
-  const [v, setV] = useState<Metadata>(
-    book
+  const [value, setValue, draft] = useDraftForm('admin:book:' + (book?.id || 'new'), {
+    id,
+    metadata: book
       ? { ...book, totalPages: book.default_pages }
-      : {
+      : ({
           title: '',
           authors: '',
           description: '',
@@ -43,24 +45,20 @@ function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) 
           isbn: '',
           cover: '',
           totalPages: 0,
-        },
-  );
+        } as Metadata),
+    status: book?.status || 'planned',
+  });
+  const v = value.metadata,
+    status = value.status;
+  const setV = (metadata: Metadata) => setValue((old) => ({ ...old, metadata }));
+  const setStatus = (status: typeof value.status) => setValue((old) => ({ ...old, status }));
   const [form, setForm] = useState(!!book);
-  const [status, setStatus] = useState(book?.status || 'planned');
-  const [initial] = useState({ metadata: v, status });
   const { run, busy, error } = useTask();
   const query = useQueryClient();
   return (
-    <Modal
-      title={book ? 'Книга клуба' : 'Добавить в клуб'}
-      onClose={() =>
-        confirmClose(
-          status !== initial.status || JSON.stringify(v) !== JSON.stringify(initial.metadata),
-          onClose,
-        )
-      }
-    >
-      {!form ? (
+    <Modal title={book ? 'Книга клуба' : 'Добавить в клуб'} onClose={onClose}>
+      <DraftNote draft={draft} onLeave={onClose} />
+      {!form && !draft.restored ? (
         <>
           <BookLookup
             onSelect={(value) => {
@@ -78,7 +76,8 @@ function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) 
             e.preventDefault();
             if (
               await run(async () => {
-                await action('admin.book', { ...v, id, status });
+                await action('admin.book', { ...v, id: value.id, status });
+                await draft.clear();
                 await query.invalidateQueries({ queryKey: ['cloud'] });
               }, 'Книга сохранена')
             )
@@ -145,9 +144,17 @@ function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) 
 function ReviewProposal({ proposal, onClose }: { proposal: Proposal; onClose: () => void }) {
   const polls = useCloud<BookPoll>('visible_book_polls');
   const poll = polls.data?.find((p) => p.id === proposal.id);
-  const [v, setV] = useState(proposal.metadata);
-  const [reason, setReason] = useState('');
-  const [rejecting, setRejecting] = useState(false);
+  const [value, setValue, draft] = useDraftForm('admin:proposal:' + proposal.id, {
+    metadata: proposal.metadata,
+    reason: '',
+    rejecting: false,
+  });
+  const v = value.metadata,
+    reason = value.reason,
+    rejecting = value.rejecting;
+  const setV = (metadata: Metadata) => setValue((old) => ({ ...old, metadata }));
+  const setReason = (reason: string) => setValue((old) => ({ ...old, reason }));
+  const setRejecting = (rejecting: boolean) => setValue((old) => ({ ...old, rejecting }));
   const { run, busy, error } = useTask();
   const query = useQueryClient();
   const send = async () => {
@@ -160,6 +167,7 @@ function ReviewProposal({ proposal, onClose }: { proposal: Proposal; onClose: ()
             metadata: v,
             reason: rejecting ? reason : '',
           });
+          await draft.clear();
           await query.invalidateQueries({ queryKey: ['cloud'] });
         },
         rejecting ? 'Предложение отклонено' : 'Книга добавлена в каталог',
@@ -168,15 +176,8 @@ function ReviewProposal({ proposal, onClose }: { proposal: Proposal; onClose: ()
       onClose();
   };
   return (
-    <Modal
-      title="Предложение книги"
-      onClose={() =>
-        confirmClose(
-          !!reason.trim() || JSON.stringify(v) !== JSON.stringify(proposal.metadata),
-          onClose,
-        )
-      }
-    >
+    <Modal title="Предложение книги" onClose={onClose}>
+      <DraftNote draft={draft} onLeave={onClose} />
       <div className="chosen-book">
         <Cover title={v.title} cover={v.cover} small />
         <div>
@@ -240,14 +241,12 @@ function ReadingEditor({
   book: ClubBook;
   onClose: () => void;
 }) {
-  const [v, setV] = useState(reading);
+  const [v, setV, draft] = useDraftForm('admin:reading:' + reading.id, reading);
   const { run, busy, error } = useTask();
   const query = useQueryClient();
   return (
-    <Modal
-      title="Настройки чтения"
-      onClose={() => confirmClose(JSON.stringify(v) !== JSON.stringify(reading), onClose)}
-    >
+    <Modal title="Настройки чтения" onClose={onClose}>
+      <DraftNote draft={draft} onLeave={onClose} />
       <p className="form-context">{book.title}</p>
       <form
         onSubmit={async (e) => {
@@ -255,6 +254,7 @@ function ReadingEditor({
           if (
             await run(async () => {
               await action('admin.reading', v);
+              await draft.clear();
               await query.invalidateQueries({ queryKey: ['cloud'] });
             })
           )

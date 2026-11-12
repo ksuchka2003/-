@@ -226,7 +226,6 @@ function CommentThread({
                     {profiles.data?.find((p) => p.member_id === c.member_id)?.name ||
                       'Участник клуба'}
                   </Link>
-                  <small>{dateLabel(c.created_at)}</small>
                 </div>
                 <p className="prewrap">{c.text}</p>
                 <div className="actions">

@@ -1,7 +1,6 @@
 import { useId, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { Modal, SearchField } from './shared';
-import { PaletteMotif } from './PaletteMotif';
 import type { Palette } from '../readerDomain';
 
 export type PaperOption = { value: string; label: string; motif?: Palette };
@@ -45,7 +44,6 @@ export function PaperSelect({
       >
         <span id={selectedId}>{selected}</span>
         <ChevronDown size={17} aria-hidden="true" />
-        <PaletteMotif className="paper-control-motif" />
       </button>
       {open && (
         <Modal title={label} onClose={() => setOpen(false)}>
@@ -71,9 +69,6 @@ export function PaperSelect({
                 }}
               >
                 <span>{option.label}</span>
-                {option.motif && (
-                  <PaletteMotif palette={option.motif} className="palette-option-motif" />
-                )}
                 {option.value === value && <Check size={18} aria-hidden="true" />}
               </button>
             ))}

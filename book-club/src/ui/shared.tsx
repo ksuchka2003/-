@@ -14,6 +14,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, BookOpen, LoaderCircle, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { PageDecoration } from './PageDecoration';
 import { type Identity, rows } from '../cloud';
 import { message } from '../domain';
 export const Session = createContext<{
@@ -133,6 +134,7 @@ export function Modal({
           {actions}
         </header>
         {children}
+        <PageDecoration name={title} />
       </section>
     </div>
   );

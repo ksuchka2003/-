@@ -41,7 +41,7 @@ export async function writeEntry(page: Page, title: string, text: string, though
   await page
     .getByRole('button', { name: thought ? 'Сохранить мысль' : 'Сохранить заметку', exact: true })
     .click();
-  await expect(card.getByText(text, { exact: true })).toBeVisible();
+  await expect(card.locator('p.prewrap').filter({ hasText: text })).toBeVisible();
   await card.getByRole('button', { name: 'Назад', exact: true }).click();
 }
 export async function expectEntry(page: Page, title: string, text: string, thought = false) {
@@ -51,6 +51,6 @@ export async function expectEntry(page: Page, title: string, text: string, thoug
     .click();
   const card = page.getByRole('dialog', { name: 'Моя книга', exact: true });
   await card.getByRole('button', { name: thought ? /^Мысли/ : /^Заметки/ }).click();
-  await expect(card.getByText(text, { exact: true })).toBeVisible();
+  await expect(card.locator('p.prewrap').filter({ hasText: text })).toBeVisible();
   await card.getByRole('button', { name: 'Назад', exact: true }).click();
 }

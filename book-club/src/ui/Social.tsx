@@ -6,7 +6,6 @@ import { Link, useParams } from 'react-router-dom';
 import { BookmarkPlus, ChevronRight } from 'lucide-react';
 import { HeadingCollage, PaperFragment, PaperTape, PaperFrame } from './EditorialArt';
 import { PaperSelect } from './PaperSelect';
-import { PaletteMotif } from './PaletteMotif';
 import {
   type Profile,
   type PublicQuote,
@@ -223,8 +222,6 @@ export function PublicContent({
                         </>
                       );
                     })()}
-              <small className="muted">{dateLabel(item.updated_at)}</small>
-              <PaletteMotif className="quote-corner-motif" />
             </article>
           ))}
         </div>
@@ -247,7 +244,7 @@ export function Members() {
     <>
       <div className="page-heading collage-page-heading">
         <div>
-          <h1>Участники</h1>
+          <h1>Читатели</h1>
         </div>
         <HeadingCollage scene="discussion" />
       </div>

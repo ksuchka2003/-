@@ -1,7 +1,7 @@
+import { useDraftForm, DraftNote } from './useDraft';
 import { EntryFeed } from './EntryFeed';
 import { BookJacket } from './BookJacket';
 import { ActionMenu } from './ActionMenu';
-import { PaletteMotif } from './PaletteMotif';
 import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
 import { useState } from 'react';
 import { useSectionSwipe } from './useSectionSwipe';
@@ -81,11 +81,9 @@ export function MainBooks() {
                     <PaperFragment />
                     <PaperTape className="featured-tape" />
                     <BookmarkTab />
-                    <PaletteMotif className="featured-palette-motif" />
                     <Cover title={b.title} cover={bookCover(own, b.cover)} />
                   </div>
                   <div className="featured-copy">
-                    <span className="eyebrow featured-label">Книга клуба</span>
                     <h2>{b.title}</h2>
                     <p>{b.authors}</p>
                     {r?.ends_on && (
@@ -103,20 +101,21 @@ export function MainBooks() {
                         </small>
                       </>
                     )}
-                    <ArrowUpRight className="book-open-icon" size={20} aria-hidden="true" />
                   </div>
                 </Link>
-                <ClubReadingDecision book={b} />
-                {own && (
-                  <Link
-                    className="button current-book-progress"
-                    to={`/books?book=${own.id}&action=progress`}
-                  >
-                    Обновить мой прогресс
-                  </Link>
-                )}
+                <div className="home-book-actions">
+                  <ClubReadingDecision book={b} compact />
+                  {own && (
+                    <Link
+                      className="button current-book-progress"
+                      to={`/books?book=${own.id}&action=progress`}
+                    >
+                      Мой прогресс
+                    </Link>
+                  )}
+                </div>
                 <details className="book-extra home-readers">
-                  <summary>Прогресс участников</summary>
+                  <summary>Как читают другие</summary>
                   <BookReaders bookId={b.id} title={b.title} />
                 </details>
               </article>
@@ -174,20 +173,24 @@ export function ProposalEditor({
   onClose: () => void;
   existing?: { id: string; metadata: Metadata };
 }) {
-  const [v, setV] = useState<Metadata>(
-    existing?.metadata || {
-      title: '',
-      authors: '',
-      description: '',
-      genre: '',
-      year: null,
-      isbn: '',
-      cover: '',
-      totalPages: 0,
-    },
-  );
-  const [id] = useState(existing?.id || uid());
-  const [draft, setDraft] = useState(false);
+  const [value, setValue, localDraft] = useDraftForm('proposal:' + (existing?.id || 'new'), {
+    id: existing?.id || uid(),
+    metadata:
+      existing?.metadata ||
+      ({
+        title: '',
+        authors: '',
+        description: '',
+        genre: '',
+        year: null,
+        isbn: '',
+        cover: '',
+        totalPages: 0,
+      } as Metadata),
+  });
+  const v = value.metadata,
+    id = value.id;
+  const setV = (metadata: Metadata) => setValue((old) => ({ ...old, metadata }));
   const { run, busy, error } = useTask();
   const query = useQueryClient();
   return (
@@ -199,26 +202,21 @@ export function ProposalEditor({
         onSubmit={async (e) => {
           e.preventDefault();
           if (
-            await run(
-              async () => {
-                await action('proposal', { id, metadata: v, status: draft ? 'draft' : 'pending' });
-                await query.invalidateQueries({ queryKey: ['cloud'] });
-              },
-              draft ? 'Черновик сохранён' : 'Заявка отправлена',
-            )
+            await run(async () => {
+              await action('proposal', { id, metadata: v, status: 'pending' });
+              await localDraft.clear();
+              await query.invalidateQueries({ queryKey: ['cloud'] });
+            }, 'Заявка отправлена')
           )
             onClose();
         }}
       >
+        <DraftNote draft={localDraft} onLeave={onClose} />
         <BookLookup onSelect={setV} />
         <MetadataFields value={v} onChange={setV} />
-        <label className="check">
-          <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} />{' '}
-          Сохранить черновик
-        </label>
         <ErrorNote text={error} />
         <button className="primary" disabled={busy}>
-          {draft ? 'Сохранить' : 'Отправить на рассмотрение'}
+          Отправить на рассмотрение
         </button>
       </form>
     </Modal>
@@ -234,9 +232,7 @@ export function Club() {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') || '',
     tab = params.get('tab') === 'all' ? 'all' : 'reading',
-    filter = ['finished', 'unfinished'].includes(params.get('filter') || '')
-      ? params.get('filter')!
-      : 'all';
+    filter = ['finished'].includes(params.get('filter') || '') ? params.get('filter')! : 'all';
   const changeParam = (name: string, value: string) =>
     setParams(
       (old) => {
@@ -252,6 +248,7 @@ export function Club() {
     setFilter = (value: string) => changeParam('filter', value);
   const [opened, setOpened] = useState<string | null>(null);
   const [proposal, setProposal] = useState(false);
+  const [polls, setPolls] = useState(false);
   const all = books.data || [];
   const history = readings.data || [];
   const current = currentClubBooks(all, history);
@@ -273,13 +270,47 @@ export function Club() {
         <HeadingCollage scene="carrying" />
       </div>
       <CloudGate>
-        <div className="tabs club-library-tabs" aria-label="Разделы библиотеки">
-          <button className={tab === 'reading' ? 'active' : ''} onClick={() => setTab('reading')}>
-            Читаем{current.length ? ` · ${current.length}` : ''}
-          </button>
-          <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
-            Все книги{all.length ? ` · ${all.length}` : ''}
-          </button>
+        <div className="club-catalog-nav">
+          <div className="tabs club-library-tabs" aria-label="Разделы библиотеки">
+            <button className={tab === 'reading' ? 'active' : ''} onClick={() => setTab('reading')}>
+              Читаем
+            </button>
+            <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
+              Все книги
+            </button>
+          </div>
+          <ActionMenu label="Настройки каталога клуба">
+            {tab === 'all' && (
+              <button
+                type="button"
+                aria-label="Изменить вид книг клуба"
+                onClick={() =>
+                  void saveLayout(
+                    () =>
+                      getDB().settings.put({
+                        key: 'clubLayout',
+                        value: layout === 'grid' ? 'list' : 'grid',
+                      }),
+                    '',
+                  )
+                }
+              >
+                {layout === 'grid' ? <List size={16} /> : <LayoutGrid size={16} />}
+                {layout === 'grid' ? 'Показать списком' : 'Показать карточками'}
+              </button>
+            )}
+            {identity && (
+              <button type="button" onClick={() => setProposal(true)}>
+                <Plus size={16} />
+                Предложить книгу
+              </button>
+            )}
+            {identity && (
+              <button type="button" onClick={() => setPolls(true)}>
+                Предложения и голосования
+              </button>
+            )}
+          </ActionMenu>
         </div>
         <ErrorNote text={books.error?.message || readings.error?.message || layoutError} />
         {books.isLoading || readings.isLoading ? (
@@ -322,36 +353,13 @@ export function Club() {
               <>
                 <div className="toolbar club-search">
                   <SearchField label="Поиск книг клуба" value={q} onChange={setQ} />
-                  <ActionMenu label="Настройки каталога клуба">
-                    {(['grid', 'list'] as const).map((value) => (
-                      <button
-                        type="button"
-                        key={value}
-                        aria-label={`Вид клуба: ${value === 'grid' ? 'Карточки' : 'Список'}`}
-                        aria-pressed={layout === value}
-                        onClick={() =>
-                          void saveLayout(
-                            () => getDB().settings.put({ key: 'clubLayout', value }),
-                            '',
-                          )
-                        }
-                      >
-                        {value === 'grid' ? (
-                          <LayoutGrid size={16} aria-hidden="true" />
-                        ) : (
-                          <List size={16} aria-hidden="true" />
-                        )}
-                        {value === 'grid' ? 'Карточки' : 'Список'}
-                      </button>
-                    ))}
-                  </ActionMenu>
                 </div>
                 <div
                   className="tabs collection-tabs"
                   role="tablist"
                   aria-label="Книги клуба по статусу"
                 >
-                  {(['finished', 'unfinished', 'all'] as const).map((key) => (
+                  {(['all', 'finished'] as const).map((key) => (
                     <button
                       key={key}
                       role="tab"
@@ -359,24 +367,11 @@ export function Club() {
                       className={filter === key ? 'active' : ''}
                       onClick={() => setFilter(key)}
                     >
-                      {{ finished: 'Прочитано', unfinished: 'Не прочитано', all: 'Все' }[key]}
-                      <span className="tab-count">
-                        {clubCounts(all, history)[key === 'all' ? 'total' : key]}
-                      </span>
+                      {{ finished: 'Прочитано', all: 'Все' }[key]}
                     </button>
                   ))}
                 </div>
               </>
-            )}
-            {identity && (
-              <details className="book-extra proposals-section">
-                <summary>Предложения и голосования</summary>
-                <button className="primary" onClick={() => setProposal(true)}>
-                  <Plus size={18} />
-                  Предложить книгу
-                </button>
-                <BookPolls />
-              </details>
             )}
             {!visible.length ? (
               <Empty title={q || all.length ? 'Книги не найдены' : 'В коллекции пока нет книг'} />
@@ -397,7 +392,7 @@ export function Club() {
                           ? 'Прочитано клубом'
                           : current.some((x) => x.book.id === b.id)
                             ? 'Читаем'
-                            : 'Не прочитано'}
+                            : 'В планах'}
                       </span>
                       <h3>{b.title}</h3>
                       <p>{b.authors}</p>
@@ -409,6 +404,11 @@ export function Club() {
           </>
         )}
       </CloudGate>
+      {polls && (
+        <Modal title="Предложения и голосования" onClose={() => setPolls(false)}>
+          <BookPolls />
+        </Modal>
+      )}
       {proposal && <ProposalEditor onClose={() => setProposal(false)} />}
     </>
   );

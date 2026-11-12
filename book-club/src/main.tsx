@@ -11,6 +11,9 @@ import './collage-details.css';
 import './calm-ux.css';
 import './quiet-paper.css';
 import './themed-paper.css';
+import './reader-ux.css';
+import { restoreAppearance } from './appearance';
+restoreAppearance();
 const client = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000, refetchOnWindowFocus: false } },
 });

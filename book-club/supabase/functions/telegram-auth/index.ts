@@ -78,7 +78,13 @@ Deno.serve(
         })
         .eq('member_id', member.id),
     );
+    const { data: intro } = await admin
+      .from('club_settings')
+      .select('value')
+      .eq('key', 'intro')
+      .maybeSingle();
     return {
+      intro: intro?.value || null,
       access_token: auth.session.access_token,
       expires_at: auth.session.expires_at,
       member: { id: member.id, role: member.role, telegramId: String(tg.id) },

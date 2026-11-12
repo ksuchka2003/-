@@ -123,14 +123,11 @@ it('в прогрессе видны все действующие участн�
   expect(screen.getByText('Ещё не выбрал участие')).toBeVisible();
   expect(screen.queryByText(/0%/)).toBeNull();
 });
-it('предложения находятся во всех книгах, текущий раздел содержит только чтение', () => {
+it('предложение книги открывается через меню даже в пустом каталоге', () => {
   view(<Club />);
-  expect(screen.queryByRole('button', { name: 'Предложить книгу' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /^Все книги/ }));
-  fireEvent.click(screen.getByText('Предложения и голосования', { exact: true }));
-  expect(screen.getByRole('button', { name: 'Предложить книгу' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: /^Читаем/ }));
-  expect(screen.queryByRole('button', { name: 'Предложить книгу' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Настройки каталога клуба' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Предложить книгу' }));
+  expect(screen.getByRole('dialog', { name: 'Предложить книгу' })).toBeVisible();
 });
 
 it('главная показывает текущее чтение, ближайшую встречу и ссылки', () => {
@@ -243,7 +240,7 @@ it('управление открывается коротким меню, пу�
   view(<Admin />, {}, 'admin');
   expect(
     screen.getByRole('navigation', { name: 'Разделы управления' }).querySelectorAll('a'),
-  ).toHaveLength(6);
+  ).toHaveLength(7);
   expect(screen.queryByText('Последние отправки')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name: /Предложения книг/ }));
   expect(screen.getByText('Новых предложений нет')).toBeVisible();

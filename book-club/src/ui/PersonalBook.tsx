@@ -3,7 +3,6 @@ import { ActionMenu } from './ActionMenu';
 import { useSectionSwipe } from './useSectionSwipe';
 import { Pencil, Bookmark, Plus } from 'lucide-react';
 import { PaperFragment } from './EditorialArt';
-import { PaletteMotif } from './PaletteMotif';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDB } from '../db';
@@ -179,7 +178,6 @@ export function PersonalBook({
                         chapter={e.chapter}
                       />
                       <small className="muted">
-                        {dateLabel(e.createdAt)} ·{' '}
                         {e.published
                           ? published.data?.some((p) => p.id === e.id)
                             ? 'В клубе'
@@ -233,7 +231,6 @@ export function PersonalBook({
                         chapter={q.chapter}
                         savedFrom={q.sourceAuthor}
                       />
-                      <small>{dateLabel(q.createdAt)}</small>
                       <Link to={'/quotes?quote=' + q.id}>Открыть цитату →</Link>
                     </article>
                   ))}
@@ -251,14 +248,13 @@ export function PersonalBook({
                 {data.review?.text ? (
                   <p className="prewrap">{data.review.text}</p>
                 ) : (
-                  <Empty title="Отзыв — по желанию" />
+                  <Empty title="Здесь будет ваш отзыв" />
                 )}
               </>
             )}
           </div>
         </>
       )}
-      <PaletteMotif className="book-dossier-doodle" />
     </Modal>
   );
 }

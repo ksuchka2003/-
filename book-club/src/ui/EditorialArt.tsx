@@ -1,6 +1,5 @@
 import readersAtlas from '../assets/illustrations/readers-atlas.png';
 import clubLifeAtlas from '../assets/illustrations/club-life-atlas.png';
-import { PaletteMotif } from './PaletteMotif';
 
 export type ReaderScene =
   | 'reader'
@@ -39,12 +38,7 @@ export function BookmarkTab() {
 }
 
 export function PaperFrame() {
-  return (
-    <span className="profile-paper-frame" aria-hidden="true">
-      <PaletteMotif className="paper-frame-motif" />
-      <BotanicalSprig className="forest-vine" />
-    </span>
-  );
+  return <span className="profile-paper-frame" aria-hidden="true"></span>;
 }
 
 /** Artwork is decoration, never a profile picture or user publication. */
@@ -105,7 +99,6 @@ export function HeadingCollage({ scene }: { scene: ReaderScene }) {
       <PaperFragment />
       <PaperFragment className="paper-layer" ruled />
       <PaperTape />
-      <PaletteMotif className="heading-motif" />
       <ReaderIllustration scene={scene} />
     </span>
   );

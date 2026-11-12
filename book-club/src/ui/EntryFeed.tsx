@@ -62,12 +62,10 @@ export function EntryFeed({
               page={e.page}
               chapter={e.chapter}
             />
-            <small className="muted">{dateLabel(e.created_at)}</small>
             <div className="actions">
               <ReactionButtons kind={kind} id={e.id} />
               <DiscussionButton kind={kind} id={e.id} preview={e.text} />
             </div>
-            <PaletteMotif className="quote-corner-motif" />
           </article>
         ))}
       </div>
@@ -80,4 +78,3 @@ export function EntryFeed({
   );
 }
 import { PaperFragment } from './EditorialArt';
-import { PaletteMotif } from './PaletteMotif';

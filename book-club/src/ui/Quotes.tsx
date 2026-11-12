@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
 import { PaperSelect } from './PaperSelect';
-import { PaletteMotif } from './PaletteMotif';
 import { ActionMenu } from './ActionMenu';
 import { useSearchParams } from 'react-router-dom';
 import { resolveQuoteBook } from '../quoteBooks';
@@ -472,7 +471,30 @@ export function Quotes() {
             return (
               <article className="quote-card" key={x.id}>
                 <PaperFragment className="quote-paper" />
-                <QuoteIcon className="quote-mark" size={28} />
+                <div className="quote-card-top">
+                  <QuoteIcon className="quote-mark" size={28} />
+                  {!x.deletedAt && (
+                    <ActionMenu label="Действия с цитатой">
+                      <button aria-label="Редактировать цитату" onClick={() => setEdit(x)}>
+                        <Pencil size={17} /> Изменить
+                      </button>
+                      <button
+                        aria-label="В корзину"
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              'Переместить цитату в корзину? Публичная копия будет удалена после синхронизации.',
+                            )
+                          )
+                            void run(() => trashQuote(x.id), 'Цитата в корзине');
+                        }}
+                      >
+                        <Trash2 size={17} /> В корзину
+                      </button>
+                    </ActionMenu>
+                  )}
+                </div>
                 <blockquote>{x.text}</blockquote>
                 <SourceDisclosure
                   title={bookMap.get(x.bookId || '')?.title}
@@ -485,7 +507,7 @@ export function Quotes() {
                 />
                 {x.comment && <p className="prewrap muted">{x.comment}</p>}
                 <small className="muted">
-                  {x.sourceId ? 'Сохранено' : 'Создано'} {dateLabel(x.createdAt)}
+                  {x.sourceId ? 'Сохранённая цитата' : ''}
                   {queued
                     ? x.published
                       ? ' · Ожидает публикации'
@@ -564,29 +586,9 @@ export function Quotes() {
                       >
                         <Copy size={17} />
                       </button>
-                      <ActionMenu label="Действия с цитатой">
-                        <button aria-label="Редактировать цитату" onClick={() => setEdit(x)}>
-                          <Pencil size={17} /> Изменить
-                        </button>
-                        <button
-                          aria-label="В корзину"
-                          disabled={busy}
-                          onClick={() => {
-                            if (
-                              confirm(
-                                'Переместить цитату в корзину? Публичная копия будет удалена после синхронизации.',
-                              )
-                            )
-                              void run(() => trashQuote(x.id), 'Цитата в корзине');
-                          }}
-                        >
-                          <Trash2 size={17} /> В корзину
-                        </button>
-                      </ActionMenu>
                     </>
                   )}
                 </div>
-                <PaletteMotif className="quote-corner-motif" />
               </article>
             );
           })}

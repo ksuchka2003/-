@@ -8,6 +8,13 @@ Deno.serve(
       throw new Error('Неверный запрос');
     if (input.action.startsWith('admin.') && member.role !== 'admin')
       throw new Error('Требуется администратор');
+    if (input.action === 'admin.intro') {
+      if (typeof input.data.title !== 'string' || typeof input.data.text !== 'string')
+        throw new Error('Введите заголовок и текст вступления');
+      return checked(
+        await db.rpc('set_club_intro', { p_title: input.data.title, p_text: input.data.text }),
+      );
+    }
     if (input.action === 'book.search') {
       if (typeof input.data.query !== 'string' || input.data.query.length > 200)
         throw new Error('Введите название, автора или ISBN длиной до 200 символов');

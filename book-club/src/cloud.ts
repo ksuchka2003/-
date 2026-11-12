@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { initData } from './telegram';
 import { getDB } from './db';
+import { cacheIntro } from './clubIntro';
 import { type SyncOp, message } from './domain';
 import { requestJson } from '../supabase/functions/_shared/request';
 export type Identity = { id: string; role: 'admin' | 'member'; telegramId?: string };
@@ -45,6 +46,7 @@ export async function authenticate(): Promise<Identity> {
       inviteToken: new URLSearchParams(location.search).get('invite') || undefined,
     });
     token = data.access_token;
+    if (data.intro) cacheIntro(data.intro);
     expiry = data.expires_at;
     identity = data.member;
     client = createClient(
@@ -77,6 +79,7 @@ async function ensureAuth() {
 }
 export async function rows<T>(table: string, expectedMember?: string): Promise<T[]> {
   const cachedTables = [
+    'club_settings',
     'club_books',
     'club_readings',
     'member_profiles',

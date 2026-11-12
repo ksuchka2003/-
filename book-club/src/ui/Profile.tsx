@@ -1,3 +1,4 @@
+import { useDraftForm, DraftNote } from './useDraft';
 import { Appearance } from './Appearance';
 import { HeadingCollage, PaperFragment, PaperTape, PaperFrame } from './EditorialArt';
 import { PaperSelect } from './PaperSelect';
@@ -23,7 +24,7 @@ import { downloadBackup, importBackup, parseBackup, exportBackup } from '../back
 import { useCloud, useSession, Field, useTask, ErrorNote, Modal, dateLabel } from './shared';
 import { ProposalEditor } from './Club';
 function EditProfile({ profile, onClose }: { profile: ProfileData; onClose: () => void }) {
-  const [p, setP] = useState(profile);
+  const [p, setP, draft] = useDraftForm('profile', profile);
   const { run, busy, error } = useTask();
   const q = useQueryClient();
   return (
@@ -34,12 +35,14 @@ function EditProfile({ profile, onClose }: { profile: ProfileData; onClose: () =
           if (
             await run(async () => {
               await action('profile', p);
+              await draft.clear();
               await q.invalidateQueries({ queryKey: ['cloud'] });
             })
           )
             onClose();
         }}
       >
+        <DraftNote draft={draft} onLeave={onClose} />
         <Field label="Имя">
           <input
             required

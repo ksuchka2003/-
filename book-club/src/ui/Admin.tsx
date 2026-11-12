@@ -27,8 +27,10 @@ import { AdminMembers, type ManagedMember } from './AdminMembers';
 import { AdminNotifications } from './AdminNotifications';
 import { MeetingEditor, meetingDateLabel } from './Meetings';
 import { AdminReadingReport } from './AdminReadingReport';
+import { AdminIntro } from './AdminIntro';
 
 const sections = [
+  { key: 'intro', title: 'Первый экран', description: 'Вступление о нашем клубе', icon: BookOpen },
   {
     key: 'reports',
     title: 'Отчёты по чтению',
@@ -198,6 +200,7 @@ export function Admin() {
           {section.key === 'proposals' && <AdminProposals />}
           {section.key === 'members' && <AdminMembers />}
           {section.key === 'notifications' && <AdminNotifications />}
+          {section.key === 'intro' && <AdminIntro />}
         </section>
       )}
     </div>

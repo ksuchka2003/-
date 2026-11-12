@@ -70,6 +70,7 @@ function backend() {
             json: { error: 'Вы не включены в список участников клуба' },
           });
         body = {
+          intro: (extra.club_settings as any[])?.find((s: any) => s.key === 'intro')?.value,
           access_token: 'server-stub-session',
           expires_at: Date.now() / 1000 + 600,
           member: { id: owner, role: 'admin', telegramId: '42' },
@@ -268,6 +269,10 @@ function backend() {
           if (index >= 0) availability.splice(index, 1);
           if (input.data.status) availability.push({ ...input.data, member_id: owner });
           body = { ok: true };
+        } else if (input.action === 'admin.intro') {
+          extra.club_settings = [{ key: 'intro', value: input.data }];
+          publications.push(input);
+          body = input.data;
         } else if (input.action === 'admin.meeting') {
           const index = meetings.findIndex((m) => m.id === input.data.id);
           const old = meetings[index];
@@ -378,7 +383,7 @@ test('управление: короткое меню, отдельные раз
   await api.connect(context);
   await page.goto('/#/admin');
   const menu = page.getByRole('navigation', { name: 'Разделы управления' });
-  await expect(menu.getByRole('link')).toHaveCount(6);
+  await expect(menu.getByRole('link')).toHaveCount(7);
   await expect(page.locator('.management-page .tabs')).toHaveCount(0);
   expect(jobReads).toBe(0);
   for (const width of [320, 390, 768, 1280]) {
@@ -409,7 +414,7 @@ test('управление: короткое меню, отдельные раз
   await expect(page.getByRole('heading', { name: 'Предложения книг', exact: true })).toBeVisible();
 });
 
-test('управление: короткая форма книги сохраняет ввод при отказе сервера и отмене закрытия', async ({
+test('управление: форма книги сохраняет черновик при отказе сервера и закрытии', async ({
   page,
   context,
 }) => {
@@ -444,8 +449,9 @@ test('управление: короткая форма книги сохран�
   await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Не удалось сохранить книгу');
   await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Книга для клуба');
-  page.once('dialog', (dialog) => dialog.dismiss());
   await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Добавить книгу', exact: true }).click();
   await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Книга для клуба');
   fail = false;
   await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
@@ -934,7 +940,7 @@ test('книга из клуба открывается напрямую, быс
   await page.getByRole('button', { name: 'Сохранить мысль', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.goto('/#/');
-  await page.getByRole('link', { name: 'Обновить мой прогресс', exact: true }).click();
+  await page.getByRole('link', { name: 'Мой прогресс', exact: true }).click();
   dialog = page.getByRole('dialog', { name: 'Мой прогресс', exact: true });
   await expect(dialog.getByLabel('Приватные заметки')).toHaveCount(0);
   await dialog.getByLabel('Прочитано страниц').fill('150');
@@ -1127,7 +1133,7 @@ test('UX: карточка создаёт цитату без повторног
       .getByRole('heading', { name: 'Удобная книга', exact: true })
       .click();
     card = second.getByRole('dialog', { name: 'Моя книга', exact: true });
-    await expect(card.getByText('Только для меня', { exact: true })).toBeVisible();
+    await expect(card.locator('p.prewrap').filter({ hasText: /^Только для меня$/ })).toBeVisible();
     await card.getByRole('button', { name: /^Мысли/ }).click();
     await expect(card.getByText('Моё впечатление', { exact: true })).toBeVisible();
     await card.getByRole('button', { name: /^Цитаты/ }).click();
@@ -1723,11 +1729,11 @@ test('все книги: поиск, фильтр прочитанного, ре
   await api.connect(context);
   await page.goto('/#/club');
   await page.getByRole('button', { name: /^Все книги/ }).click();
-  await expect(page.getByRole('tab', { name: /^Все.*3/ })).toBeVisible();
-  await page.getByRole('tab', { name: /^Прочитано.*1/ }).click();
+  await expect(page.getByRole('tab', { name: 'Все', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Прочитано', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Давняя книга', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Будущая книга', exact: true })).not.toBeVisible();
-  await page.getByRole('tab', { name: /^Все.*3/ }).click();
+  await page.getByRole('tab', { name: 'Все', exact: true }).click();
   await page.getByLabel('Поиск книг клуба').fill('Будущая');
   await expect(page.getByRole('heading', { name: 'Будущая книга', exact: true })).toBeVisible();
   await page.getByLabel('Поиск книг клуба').fill('');
@@ -1997,7 +2003,7 @@ test('личная обложка и звёзды синхронизируютс
     await a.getByLabel('Поиск книг клуба').fill('Соля');
     await a.screenshot({ path: '../../work/club-compact-counts.png', fullPage: true });
     const filters = a.getByRole('tablist', { name: 'Книги клуба по статусу' });
-    await expect(filters.getByRole('tab')).toHaveCount(3);
+    await expect(filters.getByRole('tab')).toHaveCount(2);
     await filters.getByRole('tab', { name: /^Прочитано/ }).click();
     await expect(filters.getByRole('tab', { name: /^Прочитано/ })).toHaveAttribute(
       'aria-selected',
@@ -2128,7 +2134,7 @@ test('чтение клуба: отказ, просмотр чужих запи�
     .poll(() => (api.extra.visible_reading_participation?.[0] as any)?.choice)
     .toBe('declined');
   expect([...api.records.values()].filter((r) => r.kind === 'book')).toHaveLength(0);
-  await page.getByText('Прогресс участников', { exact: true }).click();
+  await page.getByText('Как читают другие', { exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Чтение Анна: Новая клубная', exact: true }),
   ).toContainText('Не будет читать');
@@ -2434,15 +2440,13 @@ test('редакционный дизайн: локальные кириллич
   await expect(page.locator('.club-catalog .cover')).toHaveCount(3);
   await page.evaluate(() => document.fonts.ready);
   expect(
-    await page.evaluate(() =>
-      document.fonts.check('500 32px "Cormorant Garamond"', 'Книжный клуб'),
-    ),
+    await page.evaluate(() => document.fonts.check('500 32px "Manrope"', 'Книжный клуб')),
   ).toBe(true);
   expect(
     await page
       .getByRole('heading', { name: 'Клуб', exact: true })
       .evaluate((el) => getComputedStyle(el).fontFamily),
-  ).toContain('Cormorant');
+  ).toContain('Manrope');
   expect(fonts.length).toBeGreaterThan(0);
   expect(fonts.every((url) => new URL(url).hostname === '127.0.0.1')).toBe(true);
   const cover = page.locator('.club-catalog .cover').first();
@@ -2524,7 +2528,7 @@ test('редакционный дизайн: контраст текста и о
           .evaluate((el) => getComputedStyle(el).backgroundColor),
       );
       const drawn = await page
-        .locator('.paper-frame-motif > g')
+        .locator('main > .page-palette-decor .palette-motif > g')
         .evaluateAll((nodes) =>
           nodes
             .filter((el) => getComputedStyle(el).display !== 'none')
@@ -2668,9 +2672,7 @@ test('плоский интерфейс без рамок и текстур со
       await expect(page.locator('.reader-illustration:visible').first()).toBeVisible();
       expect(
         await page
-          .locator(
-            'button, input, select, textarea, .panel, .cover, .quote-card, .action-menu-panel',
-          )
+          .locator('button, .panel, .cover, .quote-card, .action-menu-panel')
           .evaluateAll((nodes) =>
             nodes.every((el) => {
               const s = getComputedStyle(el);
@@ -2827,13 +2829,13 @@ test('клуб переключает карточки и список, сохр
   await api.connect(context);
   await page.goto('/#/club?tab=all');
   await expect(
-    page.getByRole('button', { name: 'Вид клуба: Список', exact: true }),
+    page.getByRole('button', { name: 'Изменить вид книг клуба', exact: true }),
   ).not.toBeVisible();
   await openActions(page, 'Настройки каталога клуба');
   await expect(
-    page.getByRole('button', { name: 'Вид клуба: Карточки', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Вид клуба: Список', exact: true }).click();
+    page.getByRole('button', { name: 'Изменить вид книг клуба', exact: true }),
+  ).toContainText('Показать списком');
+  await page.getByRole('button', { name: 'Изменить вид книг клуба', exact: true }).click();
   await expect(page.locator('.club-catalog')).toHaveClass(/catalog-list/);
   await expect(
     page.locator(
@@ -2856,7 +2858,7 @@ test('клуб переключает карточки и список, сохр
   await page.reload();
   await expect(page.locator('.club-catalog')).toHaveClass(/catalog-list/);
   await openActions(page, 'Настройки каталога клуба');
-  await page.getByRole('button', { name: 'Вид клуба: Карточки', exact: true }).click();
+  await page.getByRole('button', { name: 'Изменить вид книг клуба', exact: true }).click();
   await expect(page.locator('.club-catalog')).toHaveClass(/catalog-grid/);
 });
 
@@ -2916,4 +2918,160 @@ test('книга открывает полки видимой кнопкой, п
   await expect(page.locator('.personal-book-card').getByRole('heading')).toHaveText(
     'На моей полке',
   );
+});
+
+test('первый экран сохраняет палитру до входа, удерживается до отпускания и получает текст клуба', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  api.extra.club_settings = [
+    {
+      key: 'intro',
+      value: { title: 'Книги и разговоры', text: 'Наш новый текст.\n\nНаш второй абзац.' },
+    },
+  ];
+  await context.addInitScript(() =>
+    localStorage.setItem(
+      'bookclub-appearance',
+      JSON.stringify({ palette: 'forest', theme: 'dark' }),
+    ),
+  );
+  await api.connect(context);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await context.route('**/functions/v1/telegram-auth', async (route) => {
+    if (route.request().method() === 'POST') await gate;
+    await route.fallback();
+  });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'forest');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  const intro = page.locator('.startup-screen');
+  await expect(page.getByRole('progressbar', { name: 'Подключение к клубу' })).toBeVisible();
+  await page.mouse.move(120, 200);
+  await page.mouse.down();
+  await expect(intro).toHaveAttribute('data-held', 'true');
+  release();
+  await expect(page.getByText('Клуб готов', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Книги и разговоры', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Читаем сейчас', exact: true })).toHaveCount(0);
+  await page.mouse.up();
+  await expect(page.getByRole('heading', { name: 'Читаем сейчас', exact: true })).toBeVisible();
+});
+
+test('администратор оставляет вступление личным черновиком, очищает и публикует явно', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  api.extra.club_settings = [
+    { key: 'intro', value: { title: 'Наш клуб', text: 'Исходный текст клуба.' } },
+  ];
+  await api.connect(context);
+  await page.goto('/#/admin?section=intro');
+  await page.getByLabel('Текст первого экрана').fill('Только мой незаконченный текст');
+  await page.locator('.draft-tools > summary').click();
+  await page.getByRole('button', { name: 'Оставить черновик', exact: true }).click();
+  await expect(page).toHaveURL(/#\/admin$/);
+  await expect(page.getByRole('heading', { name: 'Управление', exact: true })).toBeVisible();
+  expect(api.extra.club_settings[0]).toEqual({
+    key: 'intro',
+    value: { title: 'Наш клуб', text: 'Исходный текст клуба.' },
+  });
+  expect(api.publications.filter((p) => p.action === 'admin.intro')).toHaveLength(0);
+  await page.goto('/#/admin?section=intro');
+  await expect(page.getByLabel('Текст первого экрана')).toHaveValue(
+    'Только мой незаконченный текст',
+  );
+  await page.locator('.draft-tools > summary').click();
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Очистить черновик', exact: true }).click();
+  await expect(page.getByLabel('Текст первого экрана')).toHaveValue('Исходный текст клуба.');
+  await page.getByLabel('Текст первого экрана').fill('Сохранённый текст для читателей.');
+  await page.getByRole('button', { name: 'Сохранить вступление', exact: true }).click();
+  await expect
+    .poll(() => api.publications.filter((p) => p.action === 'admin.intro').length)
+    .toBe(1);
+  await page.goto('/#/admin?section=intro');
+  await expect(page.getByLabel('Текст первого экрана')).toHaveValue(
+    'Сохранённый текст для читателей.',
+  );
+  expect([...api.records.keys()].some((k) => k.includes('_draft:'))).toBe(false);
+});
+
+test('профиль и новая встреча оставляют правки в черновике до сохранения', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  await page.goto('/#/profile');
+  await page.getByRole('button', { name: 'Редактировать профиль', exact: true }).click();
+  await page.getByLabel('О себе', { exact: true }).fill('Незаконченная биография');
+  await page.locator('.draft-tools > summary').click();
+  await page.getByRole('button', { name: 'Оставить черновик', exact: true }).click();
+  await expect(page.getByText('Незаконченная биография', { exact: true })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Редактировать профиль', exact: true }).click();
+  await expect(page.getByLabel('О себе', { exact: true })).toHaveValue('Незаконченная биография');
+  await page.getByRole('dialog').getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect(page.getByText('Незаконченная биография', { exact: true })).toBeVisible();
+  await page.goto('/#/admin?section=meetings');
+  await page.getByRole('button', { name: 'Создать встречу', exact: true }).click();
+  await page.getByLabel('Название встречи', { exact: true }).fill('Встреча в черновике');
+  await page.locator('.draft-tools > summary').click();
+  await page.getByRole('button', { name: 'Оставить черновик', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Создать встречу', exact: true })).toHaveCount(0);
+  expect(api.meetings).toHaveLength(0);
+  await page.getByRole('button', { name: 'Создать встречу', exact: true }).click();
+  await expect(page.getByLabel('Название встречи', { exact: true })).toHaveValue(
+    'Встреча в черновике',
+  );
+  expect([...api.records.keys()].some((k) => k.includes('_draft:'))).toBe(false);
+});
+
+test('палитра сохраняется в клубе, на странице один рисунок, поля имеют нейтральную рамку', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  await page.goto('/#/profile');
+  await choosePaper(page, 'Палитра', 'beer');
+  await choosePaper(page, 'Тема', 'dark');
+  await page.reload();
+  for (const route of [
+    '/',
+    '/club',
+    '/books',
+    '/quotes',
+    '/members',
+    '/meetings',
+    '/profile',
+    '/admin',
+  ]) {
+    await page.goto('/#' + route);
+    await expect(page.locator('html')).toHaveAttribute('data-palette', 'beer');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('main .palette-motif:visible')).toHaveCount(1);
+    for (const width of [320, 390, 768]) {
+      await page.setViewportSize({ width, height: 844 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    }
+    const families = await page
+      .locator('main h1, main h2, main p, main button')
+      .evaluateAll((nodes) => nodes.map((n) => getComputedStyle(n).fontFamily));
+    expect(families.every((f) => f.includes('Manrope'))).toBe(true);
+  }
+  await page.goto('/#/profile');
+  await page.getByRole('button', { name: 'Редактировать профиль', exact: true }).click();
+  expect(
+    await page
+      .getByLabel('О себе', { exact: true })
+      .evaluate((el) => getComputedStyle(el).borderTopWidth),
+  ).toBe('1px');
+  await expect(page.locator('.palette-motif:visible')).toHaveCount(1);
 });

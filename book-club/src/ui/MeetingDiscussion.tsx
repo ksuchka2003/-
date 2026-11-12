@@ -1,3 +1,4 @@
+import { useDraftForm, useDraft, DraftNote } from './useDraft';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../cloud';
@@ -36,7 +37,11 @@ export function MeetingDiscussion({
   const { run, busy, error } = useTask();
   const [tab, setTab] = useState(initialTab);
   const input = useRef<HTMLTextAreaElement>(null);
-  const [draft, setDraft] = useState<{ id: string; text: string; version: number }>({
+  const [draft, setDraft, questionDraft] = useDraftForm<{
+    id: string;
+    text: string;
+    version: number;
+  }>('meeting:question:' + meeting.id, {
     id: uid(),
     text: '',
     version: 1,
@@ -44,18 +49,22 @@ export function MeetingDiscussion({
   const mine = reflections.data?.find(
     (r) => r.meeting_id === meeting.id && r.member_id === identity?.id,
   );
-  const [reflection, setReflection] = useState<
-    Pick<MeetingReflection, 'id' | 'favorite_thought' | 'debate' | 'impression' | 'version'>
-  >({ id: uid(), favorite_thought: '', debate: '', impression: '', version: 1 });
-  const [dirty, setDirty] = useState(false);
+  type ReflectionValue = Pick<
+    MeetingReflection,
+    'id' | 'favorite_thought' | 'debate' | 'impression' | 'version'
+  >;
+  const [reflectionSeed, setReflectionSeed] = useState<ReflectionValue | null>(null);
+  const reflectionDraft = useDraft('meeting:reflection:' + meeting.id, reflectionSeed);
+  const reflection = reflectionDraft.value;
+  const setReflection = reflectionDraft.setValue;
   useEffect(() => {
-    if (!dirty)
-      setReflection(
+    if (reflections.data && !reflectionSeed)
+      setReflectionSeed(
         mine
           ? { ...mine }
           : { id: uid(), favorite_thought: '', debate: '', impression: '', version: 1 },
       );
-  }, [mine?.id, mine?.version, dirty]);
+  }, [reflections.data, reflectionSeed, mine]);
   const canAsk = !meeting.cancelled && meetingEnd(meeting) > Date.now();
   const canReflect = !meeting.cancelled && meetingEnd(meeting) <= Date.now();
   const name = (id: string) =>
@@ -101,7 +110,6 @@ export function MeetingDiscussion({
                   {q.answered && <span className="badge">Обсудили</span>}
                 </div>
                 <p className="prewrap">{q.text}</p>
-                <small className="muted">{dateLabel(q.created_at)}</small>
                 <div className="actions">
                   {q.member_id === identity?.id && canAsk && (
                     <button
@@ -149,9 +157,10 @@ export function MeetingDiscussion({
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (await change('meeting.question', { ...draft, meeting_id: meeting.id }))
-                  setDraft({ id: uid(), text: '', version: 1 });
+                  await questionDraft.reset({ id: uid(), text: '', version: 1 });
               }}
             >
+              <DraftNote draft={questionDraft} onLeave={onClose} />
               <Field label="Что хочется обсудить?">
                 <textarea
                   ref={input}
@@ -190,7 +199,6 @@ export function MeetingDiscussion({
                       </div>
                     ),
                 )}
-                <small className="muted">{dateLabel(r.updated_at)}</small>
                 {(r.member_id === identity?.id || identity?.role === 'admin') && (
                   <button
                     disabled={busy}
@@ -205,15 +213,26 @@ export function MeetingDiscussion({
               </article>
             ))}
           </div>
-          {canReflect ? (
+          {canReflect && reflection ? (
             <form
               className="discussion-form"
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (await change('meeting.reflection', { ...reflection, meeting_id: meeting.id }))
-                  setDirty(false);
+                  await reflectionDraft.reset(
+                    query
+                      .getQueryData<MeetingReflection[]>([
+                        'cloud',
+                        identity?.id,
+                        'meeting_reflections',
+                      ])
+                      ?.find(
+                        (r) => r.meeting_id === meeting.id && r.member_id === identity?.id,
+                      ) || { ...reflection, version: mine ? reflection.version + 1 : 1 },
+                  );
               }}
             >
+              <DraftNote draft={reflectionDraft} onLeave={onClose} />
               <h3>{mine ? 'Мои итоги' : 'Поделиться впечатлениями'}</h3>
               {(
                 [
@@ -228,7 +247,6 @@ export function MeetingDiscussion({
                     maxLength={5000}
                     value={reflection[key]}
                     onChange={(e) => {
-                      setDirty(true);
                       setReflection({ ...reflection, [key]: e.target.value });
                     }}
                   />

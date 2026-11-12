@@ -2,7 +2,7 @@ import { clubDay } from '../calendar';
 import { ActionMenu } from './ActionMenu';
 import { BookJacket } from './BookJacket';
 import { PaperSelect } from './PaperSelect';
-import { PaletteMotif } from './PaletteMotif';
+import { CountVine } from './CountVine';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
 import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
@@ -591,15 +591,9 @@ export function MyBooks() {
   const progress = useLiveQuery(() => getDB().reading_progress.toArray()) || [];
   const shelf = params.get('shelf') || '';
   const q = params.get('q') || '';
-  const status = [
-    'all',
-    'reading',
-    'finished',
-    'unfinished',
-    'planned',
-    'paused',
-    'abandoned',
-  ].includes(params.get('status') || '')
+  const status = ['all', 'reading', 'finished', 'planned', 'paused', 'abandoned'].includes(
+    params.get('status') || '',
+  )
     ? params.get('status')!
     : 'all';
   const sort = params.get('sort') === 'title' ? 'title' : 'updated';
@@ -737,14 +731,13 @@ export function MyBooks() {
           </div>
           {books.length > 0 && (
             <section className="library-numbers" aria-label="Статистика моей библиотеки">
-              <PaletteMotif className="board-corner-motif" />
+              <CountVine />
               <dl className="library-scoreboard">
                 {(
                   [
                     ['all', 'В коллекции', counts.total],
                     ['reading', 'Читаю', counts.reading],
                     ['finished', 'Прочитано', counts.finished],
-                    ['unfinished', 'Не прочитано', counts.unfinished],
                   ] as const
                 ).map(([key, label, count]) => (
                   <div key={key}>

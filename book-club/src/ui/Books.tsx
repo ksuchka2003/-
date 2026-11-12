@@ -1,5 +1,6 @@
 import { clubDay } from '../calendar';
-import { PaperFragment, PaperTape, ReaderIllustration, JournalTail } from './EditorialArt';
+import { PaperFragment, PaperTape, ReaderIllustration } from './EditorialArt';
+import { CreativeInsert } from './CreativeInsert';
 import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -873,7 +874,7 @@ export function MyBooks() {
           )}
         </>
       )}
-      {!trash && filtered.length > 0 && <JournalTail scene="headphones" />}
+      {!trash && filtered.length > 0 && <CreativeInsert motif="flowers" />}
       {(edit || editorOpen) && (
         <BookEditor
           key={linked?.id || 'new'}

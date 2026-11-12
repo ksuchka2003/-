@@ -1,5 +1,6 @@
 import { Appearance } from './Appearance';
 import { HeadingCollage, PaperFragment, PaperTape } from './EditorialArt';
+import { CreativeInsert } from './CreativeInsert';
 import { Achievements } from './Achievements';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -281,6 +282,7 @@ export function Profile() {
           </section>
         )}
       </div>
+      <CreativeInsert motif="stamp" />
       {identity && conflicts.length > 0 && (
         <section className="panel conflict-panel">
           <h2>Изменения с двух устройств</h2>

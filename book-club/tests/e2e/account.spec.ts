@@ -2565,3 +2565,62 @@ test('бумажные коллажи не перекрывают заголов
     }
   }
 });
+
+test('творческие вставки отдельно от людей, картинки загружаются и каталог сохраняет ровную сетку', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  api.extra.club_books = Array.from({ length: 8 }, (_, i) => ({
+    id: `20000000-0000-4000-8000-00000000008${i}`,
+    title: `Книга ${i + 1}`,
+    authors: 'Автор',
+    description: '',
+    genre: '',
+    year: null,
+    isbn: '',
+    cover: '',
+    default_pages: 300,
+    status: 'planned',
+  }));
+  await api.connect(context);
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const route of ['/', '/club?tab=all', '/profile']) {
+      await page.goto('/#' + route);
+      const insert = page.locator('.creative-insert').first();
+      await expect(insert).toBeVisible();
+      await insert.scrollIntoViewIfNeeded();
+      await expect(insert.locator('.reader-illustration')).toHaveCount(0);
+      await expect(insert.locator('button, a, input, textarea')).toHaveCount(0);
+      await expect(insert).toHaveAttribute('aria-hidden', 'true');
+      await expect
+        .poll(() =>
+          insert.locator('img').evaluateAll((images) =>
+            images.every((node) => {
+              const img = node as HTMLImageElement;
+              return (
+                img.complete &&
+                img.naturalWidth === 1254 &&
+                img.naturalHeight === 1254 &&
+                new URL(img.src).origin === location.origin
+              );
+            }),
+          ),
+        )
+        .toBe(true);
+      expect(await insert.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+      const bounds = (await insert.boundingBox())!;
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (route.startsWith('/club')) {
+        await expect(page.locator('.club-catalog .book-card')).toHaveCount(8);
+        const cover = (await page.locator('.club-catalog .cover').first().boundingBox())!;
+        expect(bounds.width).toBeGreaterThan(cover.width);
+      }
+    }
+  }
+});

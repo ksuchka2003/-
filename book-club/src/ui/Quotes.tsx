@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
+import { CreativeInsert } from './CreativeInsert';
 import { useSearchParams } from 'react-router-dom';
 import { resolveQuoteBook } from '../quoteBooks';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -595,6 +596,7 @@ export function Quotes() {
           })}
         </div>
       )}
+      {!publicTab && tab !== 'trash' && items.length > 0 && <CreativeInsert motif="butterfly" />}
       {filters && (
         <Modal title="Фильтры цитат" onClose={() => setFilters(false)}>
           <form

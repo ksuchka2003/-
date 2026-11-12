@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BookmarkPlus, ChevronRight } from 'lucide-react';
 import { HeadingCollage, PaperFragment, PaperTape } from './EditorialArt';
+import { CreativeInsert } from './CreativeInsert';
 import {
   type Profile,
   type PublicQuote,
@@ -228,6 +229,9 @@ export function PublicContent({
         <button className="load-more" onClick={() => setPageSize(pageSize + 24)}>
           Показать ещё · {list.length - pageSize}
         </button>
+      )}
+      {type === 'quotes' && !bookId && !memberId && list.length > 0 && (
+        <CreativeInsert motif="butterfly" />
       )}
     </>
   );

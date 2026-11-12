@@ -1,6 +1,7 @@
 import { EntryFeed } from './EntryFeed';
 import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import { CreativeInsert } from './CreativeInsert';
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -124,6 +125,7 @@ export function MainBooks() {
 export function Home() {
   const clock = useClock();
   const meetings = useCloud<Meeting>('meetings');
+  const books = useCloud<ClubBook>('club_books');
   const upcoming = nextClubMeeting(meetings.data || [], clock);
   return (
     <>
@@ -157,6 +159,7 @@ export function Home() {
         ) : (
           <Empty title="Пока нет предстоящих встреч" illustration="conversation" />
         )}
+        {!!books.data?.length && <CreativeInsert motif="moon" className="home-creative-insert" />}
       </CloudGate>
     </>
   );
@@ -350,22 +353,25 @@ export function Club() {
               <Empty title={q || all.length ? 'Книги не найдены' : 'В коллекции пока нет книг'} />
             ) : (
               <div className="book-list club-catalog">
-                {visible.map((b) => (
-                  <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
-                    <PaperTape className="catalog-tape" />
-                    <Cover title={b.title} cover={b.cover} />
-                    <div>
-                      <span className="badge">
-                        {clubBookFinished(b, history)
-                          ? 'Прочитано клубом'
-                          : current.some((x) => x.book.id === b.id)
-                            ? 'Читаем'
-                            : 'Не прочитано'}
-                      </span>
-                      <h3>{b.title}</h3>
-                      <p>{b.authors}</p>
-                    </div>
-                  </Link>
+                {visible.map((b, index) => (
+                  <Fragment key={b.id}>
+                    <Link className="book-card" to={`/club/${b.id}`}>
+                      <PaperTape className="catalog-tape" />
+                      <Cover title={b.title} cover={b.cover} />
+                      <div>
+                        <span className="badge">
+                          {clubBookFinished(b, history)
+                            ? 'Прочитано клубом'
+                            : current.some((x) => x.book.id === b.id)
+                              ? 'Читаем'
+                              : 'Не прочитано'}
+                        </span>
+                        <h3>{b.title}</h3>
+                        <p>{b.authors}</p>
+                      </div>
+                    </Link>
+                    {index === 5 && visible.length > 6 && <CreativeInsert motif="butterfly" />}
+                  </Fragment>
                 ))}
               </div>
             )}

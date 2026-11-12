@@ -1,0 +1,148 @@
+/* Botanical and astronomical cutouts are independent interludes, never backgrounds for people. */
+.scrapbook-image,
+.creative-insert {
+  pointer-events: none;
+  user-select: none;
+}
+.scrapbook-image {
+  position: relative;
+  display: block;
+  width: 150px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.scrapbook-image > img {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 200%;
+  height: 200%;
+  max-width: none;
+}
+.scrapbook-butterfly > img {
+  transform: translateX(-50%);
+}
+.scrapbook-moon > img {
+  transform: translateY(-50%);
+}
+.scrapbook-stamp > img {
+  transform: translate(-50%, -50%);
+}
+.creative-insert {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 370px;
+  height: 156px;
+  margin: 28px auto;
+}
+.creative-insert > .creative-paper {
+  width: 235px;
+  height: 58px;
+  left: 24px;
+  top: 60px;
+  transform: rotate(-5deg);
+  opacity: 0.68;
+  z-index: -1;
+}
+.creative-insert > .paper-tape {
+  left: 44px;
+  top: 54px;
+  transform: rotate(-14deg);
+}
+.creative-insert > .creative-primary {
+  position: absolute;
+  width: 158px;
+  right: 24px;
+  bottom: 0;
+  transform: rotate(5deg);
+}
+.creative-insert > .creative-companion {
+  position: absolute;
+  width: 88px;
+  left: 42px;
+  bottom: 22px;
+  transform: rotate(-11deg);
+}
+.creative-moon > .creative-primary {
+  left: 24px;
+  right: auto;
+  transform: rotate(-8deg);
+}
+.creative-moon > .creative-companion {
+  left: auto;
+  right: 31px;
+  bottom: 24px;
+  width: 102px;
+  transform: rotate(9deg);
+}
+.creative-moon > .creative-paper {
+  left: 126px;
+  width: 170px;
+  transform: rotate(7deg);
+}
+.creative-moon > .paper-tape {
+  left: auto;
+  right: 57px;
+  top: 105px;
+}
+.creative-butterfly > .creative-primary {
+  right: 35px;
+  transform: rotate(-10deg);
+}
+.creative-butterfly > .creative-companion {
+  left: 29px;
+  bottom: 14px;
+  width: 105px;
+  transform: rotate(-5deg);
+}
+.creative-stamp > .creative-primary {
+  right: 35px;
+  transform: rotate(9deg);
+}
+.creative-stamp > .creative-companion {
+  left: 30px;
+  bottom: 13px;
+  width: 103px;
+  transform: rotate(-12deg);
+}
+.club-catalog > .creative-insert {
+  grid-column: 1 / -1;
+  margin-block: 4px 12px;
+}
+.home-creative-insert {
+  margin-block: 18px 0;
+}
+:root[data-theme='dark'] .scrapbook-image {
+  filter: saturate(0.85) brightness(0.94);
+}
+@media (max-width: 359px) {
+  .creative-insert {
+    height: 144px;
+  }
+  .creative-insert > .creative-primary {
+    width: 145px;
+    right: 9px;
+  }
+  .creative-insert > .creative-companion {
+    width: 78px;
+    left: 19px;
+  }
+  .creative-insert > .creative-paper {
+    width: 205px;
+    left: 16px;
+  }
+  .creative-moon > .creative-primary {
+    left: 8px;
+    right: auto;
+  }
+  .creative-moon > .creative-companion {
+    width: 88px;
+    left: auto;
+    right: 16px;
+  }
+  .creative-moon > .creative-paper {
+    left: 96px;
+    width: 154px;
+  }
+}

@@ -41,7 +41,7 @@ import { clubBookFinished, clubCounts } from '../collection';
 import { bookCover } from '../covers';
 import { BookMemory, BookThoughtEditor } from './BookMemory';
 import { ClubReadingDecision } from './ReadingParticipation';
-import { BotanicalSprig } from './EditorialArt';
+import { BotanicalSprig, HeadingCollage, PaperFragment } from './EditorialArt';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -68,6 +68,7 @@ export function MainBooks() {
                   to={`/club/${b.id}`}
                 >
                   <div className="featured-cover">
+                    <PaperFragment />
                     <BotanicalSprig />
                     <span className="book-edition-mark" aria-hidden="true">
                       между
@@ -131,7 +132,7 @@ export function Home() {
           <h1>Книжный клуб</h1>
           <p className="home-subtitle">У каждого своя страница.</p>
         </div>
-        <BotanicalSprig />
+        <HeadingCollage scene="reader" />
       </div>
       <CloudGate>
         <div className="section-title editorial-section">
@@ -153,7 +154,7 @@ export function Home() {
         ) : upcoming ? (
           <MeetingCard compact meeting={upcoming} />
         ) : (
-          <Empty title="Пока нет предстоящих встреч" />
+          <Empty title="Пока нет предстоящих встреч" illustration="conversation" />
         )}
       </CloudGate>
     </>
@@ -254,11 +255,12 @@ export function Club() {
     .sort((a, b) => a.title.localeCompare(b.title, 'ru'));
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading collage-page-heading">
         <div>
           <p className="eyebrow">Общая коллекция</p>
           <h1>Клуб</h1>
         </div>
+        <HeadingCollage scene="conversation" />
       </div>
       <CloudGate>
         <div className="tabs club-library-tabs" aria-label="Разделы библиотеки">

@@ -715,7 +715,7 @@ textarea:focus {
   font: 500 52px/0.9 var(--font-display);
   letter-spacing: -2px;
 }
-.meeting-date-stamp span {
+.meeting-date-stamp > .meeting-month {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -1639,7 +1639,7 @@ textarea:focus {
   .meeting-date-stamp b {
     font-size: 44px;
   }
-  .meeting-date-stamp span {
+  .meeting-date-stamp > .meeting-month {
     font-size: 8px;
   }
   .meeting-card .section-title h2 {

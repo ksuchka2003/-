@@ -349,7 +349,8 @@ export function Quotes() {
     );
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading paper-page-heading">
+        <PaperFragment className="heading-paper" />
         <div>
           <p className="eyebrow">Слова, которые остались</p>
           <h1>Цитаты</h1>
@@ -450,6 +451,7 @@ export function Quotes() {
         </CloudGate>
       ) : !items.length ? (
         <Empty
+          illustration={!q && !favorite && tab !== 'trash' ? 'coffee' : undefined}
           title={
             tab === 'trash'
               ? 'Корзина пуста'
@@ -473,6 +475,7 @@ export function Quotes() {
             const queued = pending.find((p) => p.kind === 'quote' && p.entityId === x.id);
             return (
               <article className="quote-card" key={x.id}>
+                <PaperFragment className="quote-paper" />
                 <QuoteIcon className="quote-mark" size={28} />
                 <blockquote>{x.text}</blockquote>
                 <SourceDisclosure
@@ -648,3 +651,4 @@ export function Quotes() {
     </>
   );
 }
+import { PaperFragment } from './EditorialArt';

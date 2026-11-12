@@ -1,0 +1,348 @@
+/* Collage pieces stay outside text and hit targets; all are hidden from assistive technology. */
+.paper-fragment,
+.reader-illustration,
+.heading-collage {
+  pointer-events: none;
+  user-select: none;
+}
+.paper-fragment {
+  position: absolute;
+  display: block;
+  width: 130px;
+  height: 145px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--paper-piece) 78%, var(--surface));
+  color: var(--text);
+  clip-path: polygon(
+    3% 4%,
+    12% 2%,
+    19% 4%,
+    28% 0,
+    37% 3%,
+    47% 1%,
+    56% 4%,
+    65% 1%,
+    73% 3%,
+    84% 0,
+    93% 3%,
+    100% 1%,
+    98% 13%,
+    100% 23%,
+    97% 34%,
+    100% 45%,
+    98% 56%,
+    100% 68%,
+    96% 79%,
+    99% 91%,
+    97% 98%,
+    87% 96%,
+    78% 100%,
+    69% 97%,
+    60% 99%,
+    49% 96%,
+    40% 100%,
+    29% 97%,
+    20% 99%,
+    10% 96%,
+    0 99%,
+    2% 86%,
+    0 76%,
+    3% 64%,
+    1% 54%,
+    4% 44%,
+    0 33%,
+    3% 22%,
+    0 12%
+  );
+}
+.paper-print {
+  display: block;
+  columns: 2;
+  column-gap: 7px;
+  padding: 10px 8px;
+  font: 500 5px/1.55 var(--font-display);
+  letter-spacing: 0.08px;
+  text-align: justify;
+  opacity: 0.36;
+}
+.paper-print > span {
+  display: block;
+  margin-bottom: 3px;
+}
+.paper-ruled {
+  background-image: repeating-linear-gradient(
+    transparent 0 11px,
+    color-mix(in srgb, var(--muted) 22%, transparent) 11px 12px
+  );
+}
+.paper-ruled .paper-print {
+  columns: 1;
+  font-style: italic;
+  font-size: 6px;
+  line-height: 2;
+  transform: rotate(-2deg);
+}
+.reader-illustration {
+  position: relative;
+  display: block;
+  width: 112px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.reader-illustration > img {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  max-width: none;
+  inset: 0 auto auto 0;
+}
+.reader-coffee > img {
+  transform: translateX(-50%);
+}
+.reader-conversation > img {
+  transform: translateY(-50%);
+}
+.reader-headphones > img {
+  transform: translate(-50%, -50%);
+}
+:root[data-theme='dark'] .reader-illustration {
+  filter: invert(0.88) sepia(0.15);
+  opacity: 0.88;
+}
+.heading-collage {
+  position: relative;
+  display: block;
+  width: 140px;
+  height: 128px;
+  flex: 0 0 auto;
+  isolation: isolate;
+}
+.heading-collage > .paper-fragment {
+  width: 103px;
+  height: 108px;
+  right: 10px;
+  top: 4px;
+  transform: rotate(12deg);
+  z-index: -2;
+}
+.heading-collage > .paper-layer {
+  width: 92px;
+  height: 60px;
+  top: auto;
+  bottom: 3px;
+  right: 30px;
+  transform: rotate(-11deg);
+  background-color: var(--soft);
+  z-index: -1;
+}
+.heading-collage > .reader-illustration {
+  position: absolute;
+  width: 132px;
+  right: 0;
+  bottom: 0;
+}
+.home-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  align-items: center;
+  gap: 12px;
+}
+.home-heading > div {
+  min-width: 0;
+}
+.home-heading .home-subtitle {
+  max-width: none;
+}
+.home-heading > .heading-collage {
+  align-self: end;
+}
+.collage-page-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 122px;
+  align-items: center;
+  min-height: 116px;
+  margin-top: -10px;
+  margin-bottom: 20px;
+}
+.collage-page-heading > div:first-child {
+  min-width: 0;
+}
+.collage-page-heading .heading-collage {
+  width: 122px;
+  height: 108px;
+}
+.collage-page-heading .reader-illustration {
+  width: 113px;
+}
+.collage-page-heading .paper-fragment {
+  width: 95px;
+  height: 85px;
+}
+.collage-page-heading .paper-layer {
+  width: 84px;
+  height: 47px;
+}
+.paper-page-heading {
+  position: relative;
+  isolation: isolate;
+}
+.paper-page-heading > .heading-paper {
+  width: 125px;
+  height: 73px;
+  right: -5px;
+  top: -10px;
+  transform: rotate(9deg);
+  opacity: 0.75;
+  z-index: -1;
+}
+.featured-cover > .paper-fragment {
+  inset: -5px auto auto -5px;
+  width: calc(100% + 12px);
+  height: calc(100% + 5px);
+  transform: rotate(-12deg);
+  z-index: -1;
+}
+.featured-cover > .paper-fragment .paper-print {
+  font-size: 7px;
+}
+.featured-cover > .botanical-sprig {
+  z-index: 0;
+}
+.featured-cover > .cover {
+  z-index: 1;
+}
+.quote-card {
+  position: relative;
+  margin-top: 12px;
+  padding-top: 32px;
+}
+.quote-card > .quote-paper {
+  width: 94px;
+  height: 32px;
+  right: 16px;
+  top: -11px;
+  transform: rotate(4deg);
+  z-index: 0;
+}
+.quote-card > .quote-paper .paper-print {
+  padding: 4px 7px;
+  font-size: 4px;
+  line-height: 1.3;
+}
+.quote-card:nth-child(2n) > .quote-paper {
+  transform: rotate(-5deg);
+  background-color: var(--soft);
+}
+.meeting-date-stamp {
+  position: relative;
+  isolation: isolate;
+}
+.meeting-date-stamp > b,
+.meeting-date-stamp > span:not(.reader-illustration):not(.paper-fragment) {
+  position: relative;
+  z-index: 1;
+}
+.meeting-date-stamp > .date-paper {
+  width: 67px;
+  height: 82px;
+  right: 7px;
+  top: -9px;
+  transform: rotate(-7deg);
+  z-index: -1;
+}
+.meeting-date-stamp > .date-paper .paper-print {
+  opacity: 0.17;
+}
+.meeting-date-stamp > .reader-illustration {
+  width: 65px;
+  margin-top: 28px;
+  margin-left: -8px;
+}
+.illustrated-empty {
+  position: relative;
+  padding-top: 24px;
+}
+.illustrated-empty > .heading-collage {
+  margin: 0 auto 20px;
+  width: 144px;
+  height: 140px;
+}
+.illustrated-empty > .heading-collage .reader-illustration {
+  width: 142px;
+}
+@media (max-width: 600px) {
+  .home-heading {
+    grid-template-columns: minmax(0, 1fr) 102px;
+    gap: 4px;
+    padding-bottom: 22px;
+  }
+  .home-heading h1 {
+    font-size: 44px;
+  }
+  .home-heading .eyebrow {
+    padding-right: 0;
+  }
+  .home-heading .home-subtitle {
+    font-size: 21px;
+  }
+  .home-heading > .heading-collage {
+    width: 106px;
+    height: 130px;
+  }
+  .home-heading .reader-illustration {
+    width: 107px;
+  }
+  .home-heading .paper-fragment {
+    width: 82px;
+    height: 104px;
+    right: 0;
+    top: 20px;
+  }
+  .home-heading .paper-layer {
+    width: 86px;
+    height: 48px;
+    right: 20px;
+    top: auto;
+  }
+  .collage-page-heading {
+    grid-template-columns: minmax(0, 1fr) 102px;
+    min-height: 101px;
+    margin-top: -8px;
+    margin-bottom: 14px;
+  }
+  .collage-page-heading .heading-collage {
+    width: 102px;
+    height: 98px;
+  }
+  .collage-page-heading .reader-illustration {
+    width: 100px;
+  }
+  .collage-page-heading .paper-fragment {
+    width: 83px;
+    height: 78px;
+    right: 0;
+  }
+  .collage-page-heading .paper-layer {
+    width: 75px;
+    height: 42px;
+    right: 20px;
+  }
+  .paper-page-heading > .heading-paper {
+    width: 96px;
+    height: 64px;
+  }
+  .quote-card {
+    padding-top: 30px;
+  }
+  .meeting-date-stamp > .date-paper {
+    width: 50px;
+    height: 66px;
+    right: 7px;
+  }
+  .meeting-date-stamp > .reader-illustration {
+    width: 48px;
+    margin-top: 25px;
+    margin-left: -7px;
+  }
+}

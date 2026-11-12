@@ -3,7 +3,8 @@ import { EntryFeed } from './EntryFeed';
 import { Achievements } from './Achievements';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { BookmarkPlus, Users, ChevronRight } from 'lucide-react';
+import { BookmarkPlus, ChevronRight } from 'lucide-react';
+import { HeadingCollage, PaperFragment } from './EditorialArt';
 import {
   type Profile,
   type PublicQuote,
@@ -125,6 +126,7 @@ export function PublicContent({
         <div className="quote-grid">
           {list.slice(0, limit ?? pageSize).map((item) => (
             <article key={item.id} className="quote-card">
+              <PaperFragment className="quote-paper" />
               <Link className="author" to={`/members/${item.member_id}`}>
                 {author(item.member_id)}
               </Link>
@@ -238,11 +240,11 @@ export function Members() {
   );
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading collage-page-heading">
         <div>
           <h1>Участники</h1>
         </div>
-        <Users size={25} />
+        <HeadingCollage scene="conversation" />
       </div>
       <CloudGate>
         {!!profiles.data?.length && (

@@ -626,7 +626,8 @@ export function MyBooks() {
     );
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading paper-page-heading">
+        <PaperFragment className="heading-paper" ruled />
         <div>
           <p className="eyebrow">Личная коллекция</p>
           <h1>{trash ? 'Корзина книг' : 'Мои книги'}</h1>
@@ -779,7 +780,10 @@ export function MyBooks() {
             </p>
           )}
           {!filtered.length ? (
-            <Empty title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'}>
+            <Empty
+              title={q || books.length ? 'Книги не найдены' : 'Пока нет книг'}
+              illustration={!q && !books.length ? 'headphones' : undefined}
+            >
               {books.length > 0 && (
                 <button
                   onClick={() => {
@@ -940,3 +944,4 @@ export function MyBooks() {
     </>
   );
 }
+import { PaperFragment } from './EditorialArt';

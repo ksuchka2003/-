@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PaperFragment, ReaderIllustration } from './EditorialArt';
 import { meetingCountdown, meetingEnd } from '../collection';
 import { MeetingDiscussion } from './MeetingDiscussion';
 import { Link } from 'react-router-dom';
@@ -239,17 +240,19 @@ export function MeetingCard({
   return (
     <article className={`meeting-card ${m.cancelled ? 'cancelled' : ''}`}>
       <div className="meeting-date-stamp" aria-hidden="true">
+        <PaperFragment className="date-paper" ruled />
         <b>
           {new Date(m.starts_at).toLocaleDateString('ru-RU', {
             day: '2-digit',
             timeZone: 'Europe/Moscow',
           })}
         </b>
-        <span>
+        <span className="meeting-month">
           {new Date(m.starts_at)
             .toLocaleDateString('ru-RU', { month: 'short', timeZone: 'Europe/Moscow' })
             .replace('.', '')}
         </span>
+        <ReaderIllustration scene="conversation" />
       </div>
       <div className="meeting-body">
         <div className="section-title">
@@ -338,7 +341,8 @@ export function Meetings() {
     );
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading paper-page-heading">
+        <PaperFragment className="heading-paper" />
         <div>
           <p className="eyebrow">Продолжение разговора</p>
           <h1>Встречи клуба</h1>
@@ -365,7 +369,10 @@ export function Meetings() {
         ) : (
           !meetings.error &&
           (!listed.length ? (
-            <Empty title={past ? 'Прошедших встреч нет' : 'Предстоящих встреч пока нет'} />
+            <Empty
+              title={past ? 'Прошедших встреч нет' : 'Предстоящих встреч пока нет'}
+              illustration="conversation"
+            />
           ) : (
             <div className="stack">
               {listed.map((m) => (

@@ -748,6 +748,9 @@ test('мобильный UX: длинное описание не закрыва
   await expect(add).toBeInViewport();
   await add.click();
   await page.getByRole('button', { name: 'Сохранить книгу', exact: true }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Настроить моё издание', exact: true }),
+  ).not.toBeVisible();
   await page.goto('/#/club/' + book);
   const progress = page.getByRole('link', { name: 'Обновить мой прогресс', exact: true });
   await expect(progress).toBeVisible();
@@ -2496,6 +2499,63 @@ test('редакционный дизайн: контраст текста и о
       await expect
         .poll(async () => (await contrast()).button, { message: palette + ' ' + theme + ' button' })
         .toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
+test('бумажные коллажи не перекрывают заголовки и добавление записей на телефоне', async ({
+  page,
+  context,
+}) => {
+  const api = backend();
+  await api.connect(context);
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const route of ['/', '/club', '/members', '/books', '/quotes', '/meetings']) {
+      await page.goto('/#' + route);
+      await expect(page.locator('.reader-illustration').first()).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await expect
+        .poll(() =>
+          page.locator('.reader-illustration img').evaluateAll((images) =>
+            images.every((node) => {
+              const img = node as HTMLImageElement;
+              return (
+                img.complete &&
+                img.naturalWidth === 1254 &&
+                img.naturalHeight === 1254 &&
+                new URL(img.src).origin === location.origin
+              );
+            }),
+          ),
+        )
+        .toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        await page
+          .locator('.paper-fragment, .reader-illustration')
+          .evaluateAll((nodes) =>
+            nodes.every(
+              (node) =>
+                node.getAttribute('aria-hidden') === 'true' &&
+                getComputedStyle(node).pointerEvents === 'none',
+            ),
+          ),
+      ).toBe(true);
+      const art = page.locator('.page-heading > .heading-collage');
+      if (await art.count()) {
+        const picture = (await art.boundingBox())!;
+        const title = (await page.locator('.page-heading h1').boundingBox())!;
+        expect(title.x + title.width).toBeLessThanOrEqual(picture.x);
+      }
+      if (['/books', '/quotes'].includes(route)) {
+        await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+        await expect(page.getByRole('dialog')).toBeVisible();
+        await page.getByRole('dialog').getByRole('button', { name: 'Назад', exact: true }).click();
+        await expect(page.getByRole('dialog')).not.toBeVisible();
+      }
     }
   }
 });

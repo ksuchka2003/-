@@ -1,3 +1,60 @@
+import readersAtlas from '../assets/illustrations/readers-atlas.png';
+
+export type ReaderScene = 'reader' | 'coffee' | 'conversation' | 'headphones';
+
+/** Artwork is decoration, never a profile picture or user publication. */
+export function ReaderIllustration({
+  scene = 'reader',
+  className = '',
+}: {
+  scene?: ReaderScene;
+  className?: string;
+}) {
+  return (
+    <span className={`reader-illustration reader-${scene} ${className}`} aria-hidden="true">
+      <img src={readersAtlas} alt="" decoding="async" draggable="false" />
+    </span>
+  );
+}
+
+const paperLines = [
+  'На полях остаются слова, к которым однажды хочется вернуться.',
+  'Страницы остаются с нами: в разговорах, заметках и воспоминаниях.',
+  'Мы читаем, чтобы замечать больше. В мире, в людях и в самих себе.',
+  'Одна история заканчивается, другая начинается между её строк.',
+];
+
+export function PaperFragment({
+  className = '',
+  ruled = false,
+}: {
+  className?: string;
+  ruled?: boolean;
+}) {
+  return (
+    <span
+      className={`paper-fragment ${ruled ? 'paper-ruled' : ''} ${className}`}
+      aria-hidden="true"
+    >
+      <span className="paper-print">
+        {[...paperLines, ...paperLines, ...paperLines].map((line, i) => (
+          <span key={i}>{line}</span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+export function HeadingCollage({ scene = 'reader' }: { scene?: ReaderScene }) {
+  return (
+    <span className={`heading-collage heading-collage-${scene}`} aria-hidden="true">
+      <PaperFragment />
+      <PaperFragment className="paper-layer" ruled />
+      <ReaderIllustration scene={scene} />
+    </span>
+  );
+}
+
 export function BotanicalSprig({ className = '' }: { className?: string }) {
   const leaves = [
     [88, 185, -62, 1],

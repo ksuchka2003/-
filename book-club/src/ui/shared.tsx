@@ -16,6 +16,7 @@ import { ArrowLeft, BookOpen, LoaderCircle, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { type Identity, rows } from '../cloud';
 import { message } from '../domain';
+import { HeadingCollage, type ReaderScene } from './EditorialArt';
 export const Session = createContext<{
   identity: Identity | null;
   error: string;
@@ -202,10 +203,18 @@ export function BackLink({ fallback }: { fallback: string }) {
     </button>
   );
 }
-export function Empty({ title, children }: { title: string; children?: ReactNode }) {
+export function Empty({
+  title,
+  children,
+  illustration,
+}: {
+  title: string;
+  children?: ReactNode;
+  illustration?: ReaderScene;
+}) {
   return (
-    <div className="empty">
-      <BookOpen size={32} />
+    <div className={`empty ${illustration ? 'illustrated-empty' : ''}`}>
+      {illustration ? <HeadingCollage scene={illustration} /> : <BookOpen size={32} />}
       <h3>{title}</h3>
       {children && <p>{children}</p>}
     </div>

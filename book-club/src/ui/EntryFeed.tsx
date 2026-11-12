@@ -50,6 +50,7 @@ export function EntryFeed({
       <div className="quote-grid">
         {items.slice(0, limit || size).map((e) => (
           <article className="quote-card entry-card" key={e.id}>
+            <PaperFragment className="quote-paper" ruled />
             <Link className="author" to={`/members/${e.member_id}`}>
               {profiles.data?.find((p) => p.member_id === e.member_id)?.name || 'Участник клуба'}
             </Link>
@@ -77,3 +78,4 @@ export function EntryFeed({
     </>
   );
 }
+import { PaperFragment } from './EditorialArt';

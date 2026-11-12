@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDB } from '../db';
@@ -97,15 +98,18 @@ export function ClubReadingDecision({ book }: { book: ClubBook }) {
       {decision.choice ? (
         <>
           <div className="decision-summary">
-            <span className="badge">
+            <button
+              className="badge reading-choice"
+              type="button"
+              aria-label="Изменить решение"
+              onClick={() => setOpen(true)}
+            >
               {decision.choice === 'reading' && own?.status === 'finished'
                 ? 'Прочитано'
                 : decision.choice === 'reading' && own?.status === 'abandoned'
                   ? 'Бросил'
                   : choiceLabels[decision.choice]}
-            </span>
-            <button className="text-button" onClick={() => setOpen(true)}>
-              Изменить решение
+              <ChevronDown size={15} aria-hidden="true" />
             </button>
           </div>
           {decision.pending && <small role="status">Статус ожидает синхронизации</small>}

@@ -60,10 +60,12 @@ export function Modal({
   title,
   children,
   onClose,
+  actions,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  actions?: ReactNode;
 }) {
   const section = useRef<HTMLElement>(null);
   const close = useRef(onClose);
@@ -124,6 +126,7 @@ export function Modal({
             <ArrowLeft size={21} />
           </button>
           <h2>{title}</h2>
+          {actions}
         </header>
         {children}
       </section>
@@ -262,7 +265,6 @@ export function Cover({
         />
       ) : null}
       <span>{title.slice(0, 80)}</span>
-      <i>МЕЖДУ СТРОК</i>
     </div>
   );
 }

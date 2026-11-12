@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { ActionMenu } from './ActionMenu';
+import { useSectionSwipe } from './useSectionSwipe';
+import { Pencil, Bookmark, Plus } from 'lucide-react';
 import { PaperFragment, PaperTape, MarginDoodle } from './EditorialArt';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -28,6 +31,11 @@ export function PersonalBook({
   onThought?: () => void;
 }) {
   const [section, setSection] = useState<'note' | 'thought' | 'quote' | 'review'>('note');
+  const swipe = useSectionSwipe(
+    ['note', 'thought', 'quote', 'review'] as const,
+    section,
+    setSection,
+  );
   const [editor, setEditor] = useState<
     Entry | 'new' | 'legacy' | 'quote' | 'review' | 'shelves' | null
   >(null);
@@ -61,7 +69,20 @@ export function PersonalBook({
     );
   const entries = data?.entries.filter((e) => e.kind === section) || [];
   return (
-    <Modal title="Моя книга" onClose={onClose}>
+    <Modal
+      title="Моя книга"
+      onClose={onClose}
+      actions={
+        <ActionMenu label="Действия с книгой">
+          <button onClick={onEdit}>
+            <Pencil size={18} /> Издание и обложка
+          </button>
+          <button onClick={() => setEditor('shelves')}>
+            <Bookmark size={18} /> На полки
+          </button>
+        </ActionMenu>
+      }
+    >
       <div className="personal-book-summary">
         <PaperFragment className="personal-book-paper" />
         <PaperTape className="personal-book-tape" />
@@ -76,10 +97,6 @@ export function PersonalBook({
             </Link>
           )}
         </div>
-      </div>
-      <div className="actions">
-        <button onClick={onEdit}>Издание и обложка</button>
-        <button onClick={() => setEditor('shelves')}>На полки</button>
       </div>
       {!data ? (
         <Loading />
@@ -102,138 +119,147 @@ export function PersonalBook({
               Обновить прогресс
             </button>
           </div>
-          <div className="book-section-nav" role="group" aria-label="Мои записи о книге">
-            {(
-              [
+          <div className="book-swipe-content" {...swipe}>
+            <div className="book-section-nav" role="group" aria-label="Мои записи о книге">
+              {(
                 [
-                  'note',
-                  'Заметки',
-                  data.entries.filter((e) => e.kind === 'note').length + Number(!!book.notes),
-                ],
-                ['thought', 'Мысли', data.entries.filter((e) => e.kind === 'thought').length],
-                ['quote', 'Цитаты', data.quotes.length],
-                ['review', 'Отзыв', null],
-              ] as const
-            ).map(([key, label, count]) => (
-              <button
-                key={key}
-                className={section === key ? 'active' : ''}
-                aria-pressed={section === key}
-                onClick={() => setSection(key)}
-              >
-                {label}
-                {count !== null && <small>{count}</small>}
-              </button>
-            ))}
-          </div>
-          <ErrorNote text={error} />
-          {section === 'note' || section === 'thought' ? (
-            <>
-              <button className="primary section-add" onClick={() => setEditor('new')}>
-                {section === 'note' ? 'Добавить заметку' : 'Добавить мысль'}
-              </button>
-              {section === 'note' && book.notes && (
-                <article className="quote-card">
-                  <PaperFragment className="quote-paper" ruled />
-                  <span className="badge">Личная заметка из прежней версии</span>
-                  <p className="prewrap">{book.notes}</p>
-                  <button onClick={() => setEditor('legacy')}>Открыть как отдельную заметку</button>
-                </article>
-              )}
-              {!entries.length && !(section === 'note' && book.notes) && (
-                <Empty
-                  title={section === 'note' ? 'Здесь будут ваши заметки' : 'Здесь будут ваши мысли'}
-                  illustration={section === 'note' ? 'coffee' : 'headphones'}
-                />
-              )}
-              <div className="stack">
-                {entries.map((e) => (
-                  <article className="quote-card" key={e.id}>
-                    <PaperFragment className="quote-paper" ruled={e.kind === 'note'} />
-                    <p className="prewrap">{e.text}</p>
-                    <SourceDisclosure
-                      title={book.title}
-                      personalId={book.id}
-                      page={e.page}
-                      chapter={e.chapter}
-                    />
-                    <small className="muted">
-                      {dateLabel(e.createdAt)} ·{' '}
-                      {e.published
-                        ? published.data?.some((p) => p.id === e.id)
-                          ? 'В клубе'
-                          : 'Ожидает публикации'
-                        : 'Только для меня'}
-                    </small>
-                    <div className="actions">
-                      <button onClick={() => setEditor(e)}>Изменить</button>
-                      <button
-                        className="danger"
-                        disabled={busy}
-                        onClick={() => {
-                          if (
-                            confirm(
-                              'Удалить запись? Её публикация и комментарии также будут удалены после синхронизации.',
+                  [
+                    'note',
+                    'Заметки',
+                    data.entries.filter((e) => e.kind === 'note').length + Number(!!book.notes),
+                  ],
+                  ['thought', 'Мысли', data.entries.filter((e) => e.kind === 'thought').length],
+                  ['quote', 'Цитаты', data.quotes.length],
+                  ['review', 'Отзыв', null],
+                ] as const
+              ).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  className={section === key ? 'active' : ''}
+                  aria-pressed={section === key}
+                  onClick={() => setSection(key)}
+                >
+                  {label}
+                  {count !== null && count > 0 && <small>{count}</small>}
+                </button>
+              ))}
+            </div>
+            <ErrorNote text={error} />
+            {section === 'note' || section === 'thought' ? (
+              <>
+                <button className="primary section-add" onClick={() => setEditor('new')}>
+                  <Plus size={17} />
+                  {section === 'note' ? 'Добавить заметку' : 'Добавить мысль'}
+                </button>
+                {section === 'note' && book.notes && (
+                  <article className="quote-card">
+                    <PaperFragment className="quote-paper" ruled />
+                    <span className="badge">Личная заметка из прежней версии</span>
+                    <p className="prewrap">{book.notes}</p>
+                    <button onClick={() => setEditor('legacy')}>
+                      Открыть как отдельную заметку
+                    </button>
+                  </article>
+                )}
+                {!entries.length && !(section === 'note' && book.notes) && (
+                  <Empty
+                    title={
+                      section === 'note' ? 'Здесь будут ваши заметки' : 'Здесь будут ваши мысли'
+                    }
+                    illustration={section === 'note' ? 'coffee' : 'headphones'}
+                  />
+                )}
+                <div className="stack">
+                  {entries.map((e) => (
+                    <article className="quote-card" key={e.id}>
+                      <PaperFragment className="quote-paper" ruled={e.kind === 'note'} />
+                      <p className="prewrap">{e.text}</p>
+                      <SourceDisclosure
+                        title={book.title}
+                        personalId={book.id}
+                        page={e.page}
+                        chapter={e.chapter}
+                      />
+                      <small className="muted">
+                        {dateLabel(e.createdAt)} ·{' '}
+                        {e.published
+                          ? published.data?.some((p) => p.id === e.id)
+                            ? 'В клубе'
+                            : 'Ожидает публикации'
+                          : 'Только для меня'}
+                      </small>
+                      <div className="actions">
+                        <button onClick={() => setEditor(e)}>Изменить</button>
+                        <button
+                          className="danger"
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              confirm(
+                                'Удалить запись? Её публикация и комментарии также будут удалены после синхронизации.',
+                              )
                             )
-                          )
-                            void run(() => deleteEntry(e.id), 'Запись удалена');
-                        }}
-                      >
-                        Удалить
-                      </button>
-                      {published.data?.some((p) => p.id === e.id) && (
-                        <>
-                          <ReactionButtons kind={e.kind} id={e.id} />
-                          <DiscussionButton kind={e.kind} id={e.id} preview={e.text} />
-                        </>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </>
-          ) : section === 'quote' ? (
-            <>
-              <button className="primary section-add" onClick={() => setEditor('quote')}>
-                Добавить цитату
-              </button>
-              {!data.quotes.length && (
-                <Empty title="Здесь будут ваши цитаты" illustration="reader" />
-              )}
-              <div className="stack">
-                {data.quotes.map((q) => (
-                  <article className="quote-card" key={q.id}>
-                    <PaperFragment className="quote-paper" />
-                    <blockquote>{q.text}</blockquote>
-                    {q.comment && <p className="prewrap">{q.comment}</p>}
-                    <SourceDisclosure
-                      title={book.title}
-                      personalId={book.id}
-                      page={q.page}
-                      chapter={q.chapter}
-                      savedFrom={q.sourceAuthor}
-                    />
-                    <small>{dateLabel(q.createdAt)}</small>
-                    <Link to={'/quotes?quote=' + q.id}>Открыть цитату →</Link>
-                  </article>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <button className="primary section-add" onClick={() => setEditor('review')}>
-                {data.review?.text || data.review?.rating
-                  ? 'Изменить отзыв и оценку'
-                  : 'Написать отзыв'}
-              </button>
-              {data.review?.rating && <RatingStars value={data.review.rating} />}
-              {data.review?.text ? (
-                <p className="prewrap">{data.review.text}</p>
-              ) : (
-                <Empty title="Отзыв — по желанию" />
-              )}
-            </>
-          )}
+                              void run(() => deleteEntry(e.id), 'Запись удалена');
+                          }}
+                        >
+                          Удалить
+                        </button>
+                        {published.data?.some((p) => p.id === e.id) && (
+                          <>
+                            <ReactionButtons kind={e.kind} id={e.id} />
+                            <DiscussionButton kind={e.kind} id={e.id} preview={e.text} />
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : section === 'quote' ? (
+              <>
+                <button className="primary section-add" onClick={() => setEditor('quote')}>
+                  <Plus size={17} />
+                  Добавить цитату
+                </button>
+                {!data.quotes.length && (
+                  <Empty title="Здесь будут ваши цитаты" illustration="reader" />
+                )}
+                <div className="stack">
+                  {data.quotes.map((q) => (
+                    <article className="quote-card" key={q.id}>
+                      <PaperFragment className="quote-paper" />
+                      <blockquote>{q.text}</blockquote>
+                      {q.comment && <p className="prewrap">{q.comment}</p>}
+                      <SourceDisclosure
+                        title={book.title}
+                        personalId={book.id}
+                        page={q.page}
+                        chapter={q.chapter}
+                        savedFrom={q.sourceAuthor}
+                      />
+                      <small>{dateLabel(q.createdAt)}</small>
+                      <Link to={'/quotes?quote=' + q.id}>Открыть цитату →</Link>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <button className="primary section-add" onClick={() => setEditor('review')}>
+                  <Plus size={17} />
+                  {data.review?.text || data.review?.rating
+                    ? 'Изменить отзыв и оценку'
+                    : 'Написать отзыв'}
+                </button>
+                {data.review?.rating && <RatingStars value={data.review.rating} />}
+                {data.review?.text ? (
+                  <p className="prewrap">{data.review.text}</p>
+                ) : (
+                  <Empty title="Отзыв — по желанию" />
+                )}
+              </>
+            )}
+          </div>
         </>
       )}
       <MarginDoodle className="book-dossier-doodle" />

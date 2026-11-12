@@ -1,7 +1,7 @@
 import { EntryFeed } from './EntryFeed';
 import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
-import { Fragment, useState } from 'react';
-import { CreativeInsert } from './CreativeInsert';
+import { useState } from 'react';
+import { useSectionSwipe } from './useSectionSwipe';
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -42,7 +42,13 @@ import { clubBookFinished, clubCounts } from '../collection';
 import { bookCover } from '../covers';
 import { BookMemory, BookThoughtEditor } from './BookMemory';
 import { ClubReadingDecision } from './ReadingParticipation';
-import { BotanicalSprig, HeadingCollage, PaperFragment, PaperTape } from './EditorialArt';
+import {
+  BotanicalSprig,
+  HeadingCollage,
+  PaperFragment,
+  PaperTape,
+  BookmarkTab,
+} from './EditorialArt';
 export function MainBooks() {
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
@@ -71,12 +77,8 @@ export function MainBooks() {
                   <div className="featured-cover">
                     <PaperFragment />
                     <PaperTape className="featured-tape" />
+                    <BookmarkTab />
                     <BotanicalSprig />
-                    <span className="book-edition-mark" aria-hidden="true">
-                      между
-                      <br />
-                      строк
-                    </span>
                     <Cover title={b.title} cover={bookCover(own, b.cover)} />
                   </div>
                   <div className="featured-copy">
@@ -98,7 +100,7 @@ export function MainBooks() {
                         </small>
                       </>
                     )}
-                    <span className="book-open-label">Открыть книгу →</span>
+                    <ArrowUpRight className="book-open-icon" size={20} aria-hidden="true" />
                   </div>
                 </Link>
                 <ClubReadingDecision book={b} />
@@ -125,7 +127,6 @@ export function MainBooks() {
 export function Home() {
   const clock = useClock();
   const meetings = useCloud<Meeting>('meetings');
-  const books = useCloud<ClubBook>('club_books');
   const upcoming = nextClubMeeting(meetings.data || [], clock);
   return (
     <>
@@ -159,7 +160,6 @@ export function Home() {
         ) : (
           <Empty title="Пока нет предстоящих встреч" illustration="conversation" />
         )}
-        {!!books.data?.length && <CreativeInsert motif="moon" className="home-creative-insert" />}
       </CloudGate>
     </>
   );
@@ -353,25 +353,23 @@ export function Club() {
               <Empty title={q || all.length ? 'Книги не найдены' : 'В коллекции пока нет книг'} />
             ) : (
               <div className="book-list club-catalog">
-                {visible.map((b, index) => (
-                  <Fragment key={b.id}>
-                    <Link className="book-card" to={`/club/${b.id}`}>
-                      <PaperTape className="catalog-tape" />
-                      <Cover title={b.title} cover={b.cover} />
-                      <div>
-                        <span className="badge">
-                          {clubBookFinished(b, history)
-                            ? 'Прочитано клубом'
-                            : current.some((x) => x.book.id === b.id)
-                              ? 'Читаем'
-                              : 'Не прочитано'}
-                        </span>
-                        <h3>{b.title}</h3>
-                        <p>{b.authors}</p>
-                      </div>
-                    </Link>
-                    {index === 5 && visible.length > 6 && <CreativeInsert motif="butterfly" />}
-                  </Fragment>
+                {visible.map((b) => (
+                  <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
+                    <PaperTape className="catalog-tape" />
+                    <Cover title={b.title} cover={b.cover} />
+                    {current.some((x) => x.book.id === b.id) && <BookmarkTab />}
+                    <div>
+                      <span className="badge">
+                        {clubBookFinished(b, history)
+                          ? 'Прочитано клубом'
+                          : current.some((x) => x.book.id === b.id)
+                            ? 'Читаем'
+                            : 'Не прочитано'}
+                      </span>
+                      <h3>{b.title}</h3>
+                      <p>{b.authors}</p>
+                    </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -389,6 +387,11 @@ export function ClubDetail() {
   const readings = useCloud<Reading>('club_readings');
   const { run, error, busy } = useTask();
   const [tab, setTab] = useState('overview');
+  const swipe = useSectionSwipe(
+    ['overview', 'quotes', 'reviews', 'thought', 'note', 'progress'],
+    tab,
+    setTab,
+  );
   const [thought, setThought] = useState(false);
   const b = books.data?.find((x) => x.id === id);
   const personal = useLiveQuery(() => getDB().personal_books.toArray()) || [];
@@ -484,48 +487,50 @@ export function ClubDetail() {
           </details>
         )}
       </section>
-      <div className="book-section-nav">
-        {[
-          ['overview', 'О книге'],
-          ['quotes', 'Цитаты'],
-          ['reviews', 'Отзывы'],
-          ['thought', 'Мысли'],
-          ['note', 'Заметки'],
-          ['progress', 'Читатели'],
-        ].map(([k, v]) => (
-          <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
-            {v}
-          </button>
-        ))}
+      <div className="book-swipe-content" {...swipe}>
+        <div className="book-section-nav">
+          {[
+            ['overview', 'О книге'],
+            ['quotes', 'Цитаты'],
+            ['reviews', 'Отзывы'],
+            ['thought', 'Мысли'],
+            ['note', 'Заметки'],
+            ['progress', 'Читатели'],
+          ].map(([k, v]) => (
+            <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
+              {v}
+            </button>
+          ))}
+        </div>
+        {tab === 'overview' ? (
+          <>
+            <BookMemory bookId={b.id} onTab={setTab} />
+            {(readings.data || []).some((r) => r.book_id === id) && (
+              <details className="book-extra">
+                <summary>История чтения клубом</summary>
+                {readings.data
+                  ?.filter((r) => r.book_id === id)
+                  .map((r) => (
+                    <p key={r.id}>
+                      {r.starts_on} — {r.ends_on || 'без даты окончания'} ·{' '}
+                      {{ active: 'Читаем', finished: 'Завершено', cancelled: 'Отменено' }[r.status]}
+                    </p>
+                  ))}
+              </details>
+            )}
+          </>
+        ) : tab === 'thought' || tab === 'note' ? (
+          <EntryFeed key={tab} kind={tab} bookId={id} />
+        ) : tab === 'progress' ? (
+          <BookReaders bookId={id!} title={b.title} />
+        ) : (
+          <PublicContent
+            type={tab as 'quotes' | 'reviews' | 'progress'}
+            bookId={id}
+            sort={tab === 'quotes' ? 'likes' : 'newest'}
+          />
+        )}
       </div>
-      {tab === 'overview' ? (
-        <>
-          <BookMemory bookId={b.id} onTab={setTab} />
-          {(readings.data || []).some((r) => r.book_id === id) && (
-            <details className="book-extra">
-              <summary>История чтения клубом</summary>
-              {readings.data
-                ?.filter((r) => r.book_id === id)
-                .map((r) => (
-                  <p key={r.id}>
-                    {r.starts_on} — {r.ends_on || 'без даты окончания'} ·{' '}
-                    {{ active: 'Читаем', finished: 'Завершено', cancelled: 'Отменено' }[r.status]}
-                  </p>
-                ))}
-            </details>
-          )}
-        </>
-      ) : tab === 'thought' || tab === 'note' ? (
-        <EntryFeed key={tab} kind={tab} bookId={id} />
-      ) : tab === 'progress' ? (
-        <BookReaders bookId={id!} title={b.title} />
-      ) : (
-        <PublicContent
-          type={tab as 'quotes' | 'reviews' | 'progress'}
-          bookId={id}
-          sort={tab === 'quotes' ? 'likes' : 'newest'}
-        />
-      )}
       {thought && <BookThoughtEditor book={b} onClose={() => setThought(false)} />}
     </CloudGate>
   );

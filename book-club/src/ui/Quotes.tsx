@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
-import { CreativeInsert } from './CreativeInsert';
+import { ActionMenu } from './ActionMenu';
 import { useSearchParams } from 'react-router-dom';
 import { resolveQuoteBook } from '../quoteBooks';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -571,23 +571,25 @@ export function Quotes() {
                       >
                         <Copy size={17} />
                       </button>
-                      <button aria-label="Редактировать цитату" onClick={() => setEdit(x)}>
-                        <Pencil size={17} />
-                      </button>
-                      <button
-                        aria-label="В корзину"
-                        disabled={busy}
-                        onClick={() => {
-                          if (
-                            confirm(
-                              'Переместить цитату в корзину? Публичная копия будет удалена после синхронизации.',
+                      <ActionMenu label="Действия с цитатой">
+                        <button aria-label="Редактировать цитату" onClick={() => setEdit(x)}>
+                          <Pencil size={17} /> Изменить
+                        </button>
+                        <button
+                          aria-label="В корзину"
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              confirm(
+                                'Переместить цитату в корзину? Публичная копия будет удалена после синхронизации.',
+                              )
                             )
-                          )
-                            void run(() => trashQuote(x.id), 'Цитата в корзине');
-                        }}
-                      >
-                        <Trash2 size={17} />
-                      </button>
+                              void run(() => trashQuote(x.id), 'Цитата в корзине');
+                          }}
+                        >
+                          <Trash2 size={17} /> В корзину
+                        </button>
+                      </ActionMenu>
                     </>
                   )}
                 </div>
@@ -596,7 +598,6 @@ export function Quotes() {
           })}
         </div>
       )}
-      {!publicTab && tab !== 'trash' && items.length > 0 && <CreativeInsert motif="butterfly" />}
       {filters && (
         <Modal title="Фильтры цитат" onClose={() => setFilters(false)}>
           <form

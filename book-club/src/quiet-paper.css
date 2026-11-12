@@ -1,0 +1,235 @@
+/* Flat paper, tiny edge details and readable controls. No standalone collages or brand marks. */
+*,
+*::before,
+*::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border-radius: 0 !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+}
+body {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.025' filter='url(%23n)'/%3E%3C/svg%3E") !important;
+}
+:is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font: 500 29px/1 var(--font-display);
+  letter-spacing: -0.6px;
+  color: var(--text);
+}
+.mobile-header {
+  padding-bottom: 12px;
+  border-bottom-color: transparent;
+}
+.sidebar .brand {
+  font-size: 30px;
+}
+.cover {
+  background: var(--soft);
+  color: var(--text);
+}
+.cover::after {
+  background: transparent;
+  border-color: var(--line);
+  opacity: 0.45;
+}
+.featured-cover .cover {
+  transform: rotate(-1deg);
+}
+.featured-cover::before {
+  inset: 6px -3px 0 -3px;
+  transform: rotate(-3deg);
+  opacity: 0.35;
+}
+.featured-cover > .paper-fragment {
+  left: -2px;
+  top: 2px;
+  width: calc(100% + 5px);
+  height: calc(100% + 1px);
+  transform: rotate(-4deg);
+}
+.featured-cover > .botanical-sprig {
+  width: 70px;
+  height: 112px;
+  right: -20px;
+  top: 21px;
+  opacity: 0.22;
+}
+.paper-print {
+  opacity: 0.23;
+}
+.paper-ruled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='12'%3E%3Cpath d='M0 11.5H160' stroke='%23998c77' stroke-opacity='.18' stroke-width='.5'/%3E%3C/svg%3E") !important;
+  background-repeat: repeat;
+}
+.paper-tape {
+  width: 34px;
+  height: 11px;
+  border: 0;
+  background-color: color-mix(in srgb, var(--paper-piece) 54%, transparent);
+}
+.heading-collage > .paper-tape {
+  width: 30px;
+}
+.paper-page-heading > .heading-paper {
+  width: 79px;
+  height: 45px;
+  top: -3px;
+  opacity: 0.42;
+}
+.heading-collage > .paper-fragment {
+  opacity: 0.65;
+}
+.quote-card {
+  background: color-mix(in srgb, var(--surface) 58%, transparent);
+}
+.quote-card > .quote-paper {
+  width: 72px;
+  height: 23px;
+  right: 25px;
+  top: -7px;
+  opacity: 0.6;
+}
+.quote-card::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  background: var(--soft);
+  opacity: 0.65;
+  pointer-events: none;
+}
+.bookmark-tab {
+  display: block;
+  position: absolute;
+  width: 6px;
+  height: 21px;
+  top: -2px;
+  right: 12px;
+  background: var(--green);
+  opacity: 0.55;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  pointer-events: none;
+  user-select: none;
+  z-index: 3;
+}
+.featured-cover > .bookmark-tab {
+  right: 15px;
+  top: 2px;
+}
+.book-detail-compact > .book-detail-paper {
+  width: 143px;
+  left: -2px;
+  transform: rotate(-3deg);
+  opacity: 0.55;
+}
+.personal-book-paper {
+  left: -1px;
+  transform: rotate(-3deg);
+  opacity: 0.55;
+}
+.profile-paper-frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  color: var(--muted);
+  pointer-events: none;
+  user-select: none;
+}
+.paper-frame-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  opacity: 0.35;
+  border-color: var(--muted);
+  border-style: solid;
+  border-width: 0;
+}
+.paper-frame-corner:nth-child(1) {
+  top: 5px;
+  left: 5px;
+  border-left-width: 1px;
+  border-top-width: 1px;
+}
+.paper-frame-corner:nth-child(2) {
+  top: 5px;
+  right: 5px;
+  border-right-width: 1px;
+  border-top-width: 1px;
+}
+.paper-frame-corner:nth-child(3) {
+  bottom: 5px;
+  left: 5px;
+  border-left-width: 1px;
+  border-bottom-width: 1px;
+}
+.paper-frame-corner:nth-child(4) {
+  bottom: 5px;
+  right: 5px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+.profile-paper-frame > .paper-frame-sprig {
+  position: absolute;
+  width: 37px;
+  height: 53px;
+  right: -8px;
+  bottom: -7px;
+  opacity: 0.25;
+  transform: rotate(10deg);
+}
+.journal-profile-panel {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.profile-header {
+  padding: 18px 14px;
+}
+.profile-corner-paper {
+  width: 47px;
+  height: 28px;
+  opacity: 0.5;
+}
+.catalog-tape,
+.cover-open > .cover-tape {
+  width: 30px;
+  height: 10px;
+}
+.book-grid .cover-open,
+.club-catalog .cover {
+  border-bottom: 2px solid color-mix(in srgb, var(--muted) 24%, transparent);
+}
+.page-heading .primary {
+  position: relative;
+}
+.page-heading .primary::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  right: 0;
+  bottom: 0;
+  background: var(--bg);
+  opacity: 0.5;
+  clip-path: polygon(0 100%, 100% 0, 100% 100%);
+  pointer-events: none;
+}
+.action-menu-panel {
+  border-color: var(--line);
+}
+@media (max-width: 600px) {
+  .book-detail-compact > .book-detail-paper {
+    width: 119px;
+  }
+  .brand {
+    font-size: 27px;
+  }
+}

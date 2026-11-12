@@ -1,4 +1,4 @@
-import { openBookEditor, writeEntry, expectEntry } from './helpers';
+import { openBookEditor, writeEntry, expectEntry, openActions } from './helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function addBook(page: Page) {
   await page.goto('/#/books');
@@ -139,6 +139,7 @@ test('цитаты: создание, избранное, корзина и во
   await dialog.getByRole('button', { name: 'Сохранить цитату' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByText('Страх убивает разум', { exact: true })).toBeVisible();
+  await openActions(page, 'Действия с цитатой');
   await page.getByRole('button', { name: 'Редактировать цитату', exact: true }).click();
   await expect(dialog.getByLabel('Страница', { exact: true })).not.toBeVisible();
   await dialog.getByLabel('Текст цитаты').fill('Страх убивает разум.');
@@ -158,6 +159,7 @@ test('цитаты: создание, избранное, корзина и во
   await page.getByRole('button', { name: 'Показать цитаты', exact: true }).click();
   await expect(page.getByText('Страх убивает разум.', { exact: true })).toBeVisible();
   page.once('dialog', (d) => d.accept());
+  await openActions(page, 'Действия с цитатой');
   await page.getByRole('button', { name: 'В корзину', exact: true }).click();
   await page.getByLabel('Раздел цитат').selectOption('trash');
   await expect(page.getByText('Страх убивает разум.', { exact: true })).toBeVisible();

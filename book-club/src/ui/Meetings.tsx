@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
-import { CreativeInsert } from './CreativeInsert';
 import { meetingCountdown, meetingEnd } from '../collection';
 import { MeetingDiscussion } from './MeetingDiscussion';
 import { Link } from 'react-router-dom';
@@ -383,9 +382,6 @@ export function Meetings() {
           ))
         )}
       </CloudGate>
-      {!meetings.isLoading && !meetings.error && listed.length > 0 && (
-        <CreativeInsert motif="flowers" />
-      )}
       {edit && <MeetingEditor onClose={() => setEdit(false)} />}
     </>
   );

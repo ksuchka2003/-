@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
         appUrl.searchParams.set('invite', match[3].slice(5));
       await telegram('sendMessage', {
         chat_id: message.chat.id,
-        text: 'Книжный клуб «Между строк»',
+        text: 'Книжный клуб',
         reply_markup: {
           inline_keyboard: [
             [{ text: 'Открыть книжный клуб', web_app: { url: appUrl.toString() } }],

@@ -1,6 +1,12 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
+export async function openActions(scope: Page | Locator, label: string) {
+  const trigger = scope.getByRole('button', { name: label, exact: true });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+}
 export async function editOpenBook(page: Page) {
   const card = page.getByRole('dialog', { name: 'Моя книга', exact: true });
+  await openActions(card, 'Действия с книгой');
   await card.getByRole('button', { name: 'Издание и обложка', exact: true }).click();
   await page.getByRole('dialog').getByText('Моё чтение', { exact: true }).click();
 }

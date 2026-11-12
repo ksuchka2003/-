@@ -153,13 +153,8 @@ function Shell({
     <Session.Provider value={{ identity, error, notify: setToast, retryLogin: onRetry }}>
       <div className="app-shell">
         <aside className="sidebar">
-          <Link className="brand" to="/">
-            <span>
-              <BookOpen size={26} />
-            </span>
-            <div>
-              между строк<small>КНИЖНЫЙ КЛУБ</small>
-            </div>
+          <Link className="brand" aria-label="На главную" to="/">
+            Книжный клуб
           </Link>
           <nav>
             {navigation.map(([to, label, Icon]) => (
@@ -186,11 +181,8 @@ function Shell({
         </aside>
         <div className="main-column">
           <header className="mobile-header">
-            <Link className="brand" to="/">
-              <BookOpen size={24} />
-              <div>
-                между строк<small>КНИЖНЫЙ КЛУБ</small>
-              </div>
+            <Link className="brand" aria-label="На главную" to="/">
+              Книжный клуб
             </Link>
             {identity?.role === 'admin' && (
               <Link aria-label="Управление" to="/admin">

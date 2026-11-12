@@ -2,7 +2,9 @@
 
 Оформление по книжным референсам: бумажная палитра, бордовый акцент, локальная кириллическая типографика и каталог обложек. [Описание дизайна](docs/EDITORIAL_DESIGN.md). [Рваные страницы и рисунки читателей](docs/COLLAGE_DESIGN.md).
 
-[Отдельные творческие вставки: цветы, бабочки, луна и марки](docs/CREATIVE_INSERTS.md).
+[Ненавязчивое книжное оформление без отдельного логотипа](docs/QUIET_PAPER.md).
+
+[Более спокойный интерфейс: меню, отступы и жесты](docs/CALM_UX.md).
 
 Русскоязычное приложение для закрытого клуба до 20 человек. React + TypeScript + Vite + Tailwind, React Router, TanStack Query, Dexie, Telegram Mini Apps SDK (`@tma.js/sdk-react`, поддерживаемый преемник `@telegram-apps/sdk-react`), Supabase PostgreSQL/Auth/Edge Functions.
 

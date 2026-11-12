@@ -1,0 +1,286 @@
+/* Keep the bookish collage, with quieter controls and space instead of repeated rules. */
+.home-heading,
+.current-book,
+.reading-decision,
+.library-controls,
+.book-detail-compact,
+.book-section-nav,
+.quote-card .actions,
+.meeting-card,
+.meeting-date-stamp,
+.stats,
+.sidebar-footer,
+.management-menu,
+.management-menu .management-row {
+  border-color: transparent;
+}
+.home-heading {
+  padding-bottom: 8px;
+}
+.editorial-section > h2::after {
+  display: none;
+}
+.section-title {
+  margin-top: 32px;
+}
+.current-book {
+  padding-bottom: 14px;
+}
+.book-open-icon {
+  margin-top: 15px;
+  color: var(--green);
+  stroke-width: 1.4;
+}
+.reading-decision {
+  padding-block: 12px;
+}
+.decision-summary .reading-choice {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  gap: 9px;
+}
+.home-readers {
+  margin-top: 12px;
+}
+.library-controls {
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+.library-controls .field {
+  flex: 1;
+}
+.library-controls > .action-menu {
+  flex: 0 0 44px;
+  margin-bottom: 1px;
+}
+.shelf-tabs {
+  gap: 0 18px;
+}
+.shelf-tabs button,
+.tabs button,
+.book-section-nav button {
+  min-height: 44px;
+}
+.book-list:not(.book-grid):not(.club-catalog) {
+  gap: 14px;
+}
+.book-list:not(.book-grid):not(.club-catalog) .book-card {
+  border-bottom: 0;
+  padding-block: 18px;
+}
+.book-list .quick-status,
+.quote-navigation,
+.tabs.club-library-tabs,
+.book-extra {
+  border-color: transparent;
+}
+.book-section-nav {
+  margin-block: 24px;
+  gap: 0 18px;
+}
+.book-swipe-content {
+  touch-action: pan-y pinch-zoom;
+}
+.book-detail-actions > .button,
+.book-detail-actions > a.button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding-inline: 10px;
+}
+.personal-progress {
+  padding-top: 4px;
+  margin-top: 16px;
+}
+.modal .section-add.primary {
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  padding: 9px 0;
+  border-radius: 0;
+  gap: 8px;
+  box-shadow: none;
+}
+.modal .section-add.primary:hover {
+  background: transparent;
+  color: var(--text);
+}
+.quote-grid {
+  gap: 28px;
+}
+.quote-card {
+  border: 0;
+  padding-bottom: 24px;
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+}
+.quote-card .actions {
+  padding-top: 12px;
+  margin-top: 14px;
+  gap: 4px;
+}
+.quote-card .actions > button,
+.reaction-controls button,
+.discussion-action,
+.save-quote-action {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  gap: 6px;
+}
+.reaction-controls {
+  gap: 0;
+}
+.quote-card .actions button.selected,
+.reaction-controls .selected {
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+}
+.book-extra > summary,
+.source-disclosure > summary {
+  min-height: 44px;
+  align-content: center;
+}
+.meeting-card {
+  padding-block: 28px;
+}
+.meeting-card .countdown {
+  background: transparent;
+  padding-inline: 0;
+  color: var(--green);
+}
+.meeting-card .discussion-links {
+  gap: 8px 18px;
+  margin-top: 20px;
+}
+.meeting-card .discussion-links button,
+.meeting-card .meeting-more {
+  border: 0;
+  background: transparent;
+  min-height: 44px;
+  padding: 9px 0;
+}
+.panel {
+  border: 0;
+  padding: 26px;
+}
+.settings-grid {
+  gap: 28px;
+}
+.empty {
+  border: 0;
+}
+.management-menu {
+  gap: 10px;
+}
+.management-menu .management-row {
+  border: 0;
+  border-radius: 6px;
+  padding-block: 20px;
+}
+.icon,
+button.icon,
+.detail-back,
+.modal-back {
+  min-width: 44px;
+  min-height: 44px;
+}
+.action-menu {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.action-menu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 9px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.action-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.action-menu[open] > summary,
+.action-menu > summary:hover {
+  background: var(--soft);
+  color: var(--text);
+}
+.action-menu > summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.action-menu-panel {
+  position: absolute;
+  z-index: 200;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(250px, calc(100vw - 32px));
+  max-height: 360px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px var(--ink-shadow);
+}
+.action-menu:not([open]) > .action-menu-panel {
+  display: none;
+}
+.action-menu .action-menu-panel > button,
+.action-menu .action-menu-panel > a {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.4;
+  gap: 10px;
+}
+.action-menu .action-menu-panel > button:hover,
+.action-menu .action-menu-panel > a:hover {
+  background: var(--soft);
+}
+.modal > header > h2 {
+  flex: 1;
+}
+.modal > header {
+  border-bottom: 0;
+  gap: 8px;
+}
+.modal:focus {
+  outline: none;
+}
+@media (max-width: 600px) {
+  .quote-card {
+    padding-inline: 18px;
+  }
+  .book-section-nav {
+    gap: 0 16px;
+  }
+  .panel {
+    padding: 24px;
+  }
+}

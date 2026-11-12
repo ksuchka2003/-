@@ -97,9 +97,15 @@ export function DiscussionButton({
     comments.data?.filter((c) => c.target_kind === kind && c.target_id === id).length || 0;
   return (
     <>
-      <button type="button" aria-label="Комментарии" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className="discussion-action"
+        aria-label="Комментарии"
+        title="Комментарии"
+        onClick={() => setOpen(true)}
+      >
         <MessageCircle size={17} />
-        {count ? `Комментарии · ${count}` : 'Комментировать'}
+        {count > 0 && <span>{count}</span>}
       </button>
       {open && (
         <CommentThread kind={kind} id={id} preview={preview} onClose={() => setOpen(false)} />

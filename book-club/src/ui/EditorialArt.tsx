@@ -23,14 +23,18 @@ export function MarginDoodle({ className = '' }: { className?: string }) {
   );
 }
 
-export function JournalTail({ scene = 'headphones' }: { scene?: ReaderScene }) {
+export function BookmarkTab() {
+  return <span className="bookmark-tab" aria-hidden="true" />;
+}
+
+export function PaperFrame() {
   return (
-    <div className="journal-tail" aria-hidden="true">
-      <PaperFragment ruled />
-      <PaperTape />
-      <MarginDoodle />
-      <ReaderIllustration scene={scene} />
-    </div>
+    <span className="profile-paper-frame" aria-hidden="true">
+      {[0, 1, 2, 3].map((corner) => (
+        <span className="paper-frame-corner" key={corner} />
+      ))}
+      <BotanicalSprig className="paper-frame-sprig" />
+    </span>
   );
 }
 

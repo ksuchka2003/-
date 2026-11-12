@@ -4,8 +4,7 @@ import { Achievements } from './Achievements';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BookmarkPlus, ChevronRight } from 'lucide-react';
-import { HeadingCollage, PaperFragment, PaperTape } from './EditorialArt';
-import { CreativeInsert } from './CreativeInsert';
+import { HeadingCollage, PaperFragment, PaperTape, PaperFrame } from './EditorialArt';
 import {
   type Profile,
   type PublicQuote,
@@ -159,6 +158,8 @@ export function PublicContent({
                           <DiscussionButton kind="quote" id={q.id} preview={q.text} />
                           {q.member_id !== identity?.id && (
                             <button
+                              className="save-quote-action"
+                              aria-label="Сохранить себе"
                               disabled={busy}
                               title="Копия останется у вас после удаления оригинала"
                               onClick={() =>
@@ -168,7 +169,7 @@ export function PublicContent({
                                 )
                               }
                             >
-                              <BookmarkPlus size={17} /> Сохранить себе
+                              <BookmarkPlus size={18} />
                             </button>
                           )}
                         </div>
@@ -229,9 +230,6 @@ export function PublicContent({
         <button className="load-more" onClick={() => setPageSize(pageSize + 24)}>
           Показать ещё · {list.length - pageSize}
         </button>
-      )}
-      {type === 'quotes' && !bookId && !memberId && list.length > 0 && (
-        <CreativeInsert motif="butterfly" />
       )}
     </>
   );
@@ -312,6 +310,7 @@ export function MemberDetail() {
   return (
     <CloudGate>
       <div className="profile-header">
+        <PaperFrame />
         <PaperFragment className="avatar-paper" />
         <PaperTape className="avatar-tape" />
         <Avatar profile={p} />

@@ -1,6 +1,6 @@
 import { clubDay } from '../calendar';
-import { PaperFragment, PaperTape, ReaderIllustration } from './EditorialArt';
-import { CreativeInsert } from './CreativeInsert';
+import { ActionMenu } from './ActionMenu';
+import { PaperFragment, PaperTape, ReaderIllustration, BookmarkTab } from './EditorialArt';
 import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -714,22 +714,24 @@ export function MyBooks() {
                 ))}
               </select>
             </Field>
-            <button onClick={() => setManageShelves(true)}>Мои полки</button>
-            <button
-              aria-label="Вид библиотеки"
-              onClick={() =>
-                void run(
-                  () =>
-                    getDB().settings.put({
-                      key: 'bookLayout',
-                      value: layout === 'grid' ? 'list' : 'grid',
-                    }),
-                  'Вид изменён',
-                )
-              }
-            >
-              {layout === 'grid' ? 'Список' : 'Карточки'}
-            </button>
+            <ActionMenu label="Настройки библиотеки">
+              <button onClick={() => setManageShelves(true)}>Мои полки</button>
+              <button
+                aria-label="Вид библиотеки"
+                onClick={() =>
+                  void run(
+                    () =>
+                      getDB().settings.put({
+                        key: 'bookLayout',
+                        value: layout === 'grid' ? 'list' : 'grid',
+                      }),
+                    'Вид изменён',
+                  )
+                }
+              >
+                {layout === 'grid' ? 'Список' : 'Карточки'}
+              </button>
+            </ActionMenu>
           </div>
           {books.length > 0 && (
             <div className="shelf-tabs" role="group" aria-label="Книги на полке">
@@ -823,6 +825,7 @@ export function MyBooks() {
                         title={b.title}
                       />
                       <PaperTape className="cover-tape" />
+                      {b.status === 'reading' && <BookmarkTab />}
                     </button>
                     <div>
                       <button
@@ -874,7 +877,6 @@ export function MyBooks() {
           )}
         </>
       )}
-      {!trash && filtered.length > 0 && <CreativeInsert motif="flowers" />}
       {(edit || editorOpen) && (
         <BookEditor
           key={linked?.id || 'new'}

@@ -202,7 +202,8 @@ it('публичная лента доступна во вкладке цита�
     ],
     member_profiles: [{ member_id: owner, name: 'Анна' }],
   });
-  fireEvent.change(screen.getByLabelText('Раздел цитат'), { target: { value: 'club' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Раздел цитат' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Цитаты клуба' }));
   expect(screen.getByText('Публичная цитата')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Книга' })).toHaveAttribute('href', `/club/${bookId}`);
 });
@@ -259,25 +260,49 @@ it('участник не получает интерфейс и действи�
     screen.queryByRole('button', { name: /Добавить|Пригласить|Закрыть доступ/ }),
   ).not.toBeInTheDocument();
 });
-it('пустая память книги показывает одно короткое состояние без нулевой статистики и пустых разделов', () => {
+it('о книге показывает сведения и рейтинг без пустых лент и лишней статистики', () => {
   const id = uid();
-  view(<BookMemory bookId={id} onTab={vi.fn()} />, {
-    club_book_stats: [
-      {
-        book_id: id,
-        average_rating: null,
-        rating_count: 0,
-        finished_readers: 0,
-        pace_count: 0,
-        pages_per_day: null,
-        average_days: null,
-      },
-    ],
-  });
-  expect(screen.getByText('Пока нет цитат и впечатлений к этой книге.')).toBeVisible();
+  view(
+    <BookMemory
+      book={{
+        ...book('Книга', 'planned'),
+        id,
+        genre: 'Роман',
+        year: 2001,
+        description: 'Аннотация книги',
+      }}
+      readings={[
+        {
+          id: uid(),
+          book_id: id,
+          starts_on: '2026-10-01',
+          ends_on: '2026-11-10',
+          position: 0,
+          status: 'finished',
+        },
+      ]}
+    />,
+    {
+      club_book_stats: [
+        {
+          book_id: id,
+          average_rating: null,
+          rating_count: 0,
+          finished_readers: 0,
+          pace_count: 0,
+          pages_per_day: null,
+          average_days: null,
+        },
+      ],
+    },
+  );
+  expect(screen.getByText('Аннотация книги')).toBeVisible();
+  expect(screen.getByText('Роман')).toBeVisible();
+  expect(screen.getByText('2001')).toBeVisible();
+  expect(screen.getByText('10 ноября 2026 г.')).toBeVisible();
   expect(screen.queryByText('Пока нет публикаций')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Все цитаты' })).not.toBeInTheDocument();
-  expect(screen.queryByText('Оценок в клубе пока нет.')).not.toBeInTheDocument();
+  expect(screen.getByText('Оценок в клубе пока нет.')).toBeVisible();
 });
 it('несколько главных книг сохраняют порядок, завершённые и архивные не попадают на главную', () => {
   const first = book('Первая', 'reading'),

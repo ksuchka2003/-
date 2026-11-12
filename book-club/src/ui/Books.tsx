@@ -1,12 +1,8 @@
 import { clubDay } from '../calendar';
 import { ActionMenu } from './ActionMenu';
-import {
-  PaperFragment,
-  PaperTape,
-  ReaderIllustration,
-  BookmarkTab,
-  BotanicalSprig,
-} from './EditorialArt';
+import { BookJacket } from './BookJacket';
+import { PaperSelect } from './PaperSelect';
+import { PaperFragment, ReaderIllustration } from './EditorialArt';
 import { saveBookEdition } from '../readerLocal';
 import { useEffect, useState, useRef, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -710,16 +706,15 @@ export function MyBooks() {
       ) : (
         <>
           <div className="library-controls">
-            <Field label="Полка">
-              <select value={shelf} onChange={(e) => updateFilter('shelf', e.target.value)}>
-                <option value="">Вся коллекция</option>
-                {shelves.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <PaperSelect
+              label="Полка"
+              value={shelf}
+              onChange={(value) => updateFilter('shelf', value)}
+              options={[
+                { value: '', label: 'Вся коллекция' },
+                ...shelves.map((s) => ({ value: s.id, label: s.name })),
+              ]}
+            />
             <ActionMenu label="Настройки библиотеки">
               <button onClick={() => setManageShelves(true)}>Мои полки</button>
               <button
@@ -820,16 +815,14 @@ export function MyBooks() {
                       aria-label={`Открыть книгу: ${b.title}`}
                       onClick={() => openBook(b)}
                     >
-                      <Cover
+                      <BookJacket
                         cover={bookCover(
                           b,
                           catalog.data?.find((c) => c.id === b.clubBookId)?.cover,
                         )}
                         title={b.title}
+                        reading={b.status === 'reading'}
                       />
-                      <PaperTape className="cover-tape" />
-                      <BotanicalSprig className="catalog-sprig" />
-                      {b.status === 'reading' && <BookmarkTab />}
                     </button>
                     <div>
                       <button
@@ -910,12 +903,15 @@ export function MyBooks() {
       {filters && (
         <Modal title="Фильтры книг" onClose={() => setFilters(false)}>
           <ReadingStatus filter value={filterStatus} onChange={setFilterStatus} />
-          <Field label="Сортировка">
-            <select value={filterSort} onChange={(e) => setFilterSort(e.target.value)}>
-              <option value="updated">По обновлению</option>
-              <option value="title">По названию</option>
-            </select>
-          </Field>
+          <PaperSelect
+            label="Сортировка"
+            value={filterSort}
+            onChange={setFilterSort}
+            options={[
+              { value: 'updated', label: 'По обновлению' },
+              { value: 'title', label: 'По названию' },
+            ]}
+          />
           <footer>
             <button
               className="primary"

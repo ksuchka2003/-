@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BookmarkPlus, ChevronRight } from 'lucide-react';
 import { HeadingCollage, PaperFragment, PaperTape, PaperFrame } from './EditorialArt';
+import { PaperSelect } from './PaperSelect';
 import {
   type Profile,
   type PublicQuote,
@@ -336,22 +337,19 @@ export function MemberDetail() {
         </div>
       )}
       <Achievements memberId={id!} />
-      <Field label="В профиле">
-        <select value={tab} onChange={(e) => setTab(e.target.value)}>
-          {[
-            ['progress', 'Книги'],
-            ['current', 'Сейчас читает'],
-            ['quotes', 'Цитаты'],
-            ['note', 'Заметки'],
-            ['thought', 'Мысли'],
-            ['reviews', 'Отзывы'],
-          ].map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <PaperSelect
+        label="В профиле"
+        value={tab}
+        onChange={setTab}
+        options={[
+          ['progress', 'Книги'],
+          ['current', 'Сейчас читает'],
+          ['quotes', 'Цитаты'],
+          ['note', 'Заметки'],
+          ['thought', 'Мысли'],
+          ['reviews', 'Отзывы'],
+        ].map(([value, label]) => ({ value, label }))}
+      />
       {tab === 'note' || tab === 'thought' ? (
         <EntryFeed key={tab} kind={tab} memberId={id} />
       ) : (

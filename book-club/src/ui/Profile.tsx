@@ -1,5 +1,6 @@
 import { Appearance } from './Appearance';
 import { HeadingCollage, PaperFragment, PaperTape, PaperFrame } from './EditorialArt';
+import { PaperSelect } from './PaperSelect';
 import { Achievements } from './Achievements';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -400,12 +401,15 @@ export function Profile() {
       {file && (
         <Modal title="Импорт резервной копии" onClose={() => setFile(null)}>
           <p>В файле {file.count} книг.</p>
-          <Field label="Режим импорта">
-            <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-              <option value="merge">Объединить</option>
-              <option value="replace">Полностью заменить личные данные</option>
-            </select>
-          </Field>
+          <PaperSelect
+            label="Режим импорта"
+            value={mode}
+            onChange={(value) => setMode(value as typeof mode)}
+            options={[
+              { value: 'merge', label: 'Объединить' },
+              { value: 'replace', label: 'Полностью заменить личные данные' },
+            ]}
+          />
           {mode === 'replace' && (
             <p className="error">
               Текущая библиотека будет заменена на всех ваших устройствах после синхронизации.

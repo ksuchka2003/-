@@ -1,5 +1,6 @@
 import { useAppearance } from './Appearance';
-import { ReaderIllustration, PaperFragment, MarginDoodle } from './EditorialArt';
+import { ReaderIllustration, PaperFragment } from './EditorialArt';
+import { PaletteMotif } from './PaletteMotif';
 import { useEffect, useState, Component, type ReactNode } from 'react';
 import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -173,7 +174,7 @@ function Shell({
           <div className="sidebar-footer">
             <div className="sidebar-collage" aria-hidden="true">
               <PaperFragment />
-              <MarginDoodle />
+              <PaletteMotif className="sidebar-palette-motif" />
             </div>
             <span className="status-dot" />
             {identity ? 'Закрытый клуб' : 'Личная библиотека'}

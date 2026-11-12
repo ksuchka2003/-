@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDB } from '../db';
 import { paletteLabels, type Palette } from '../readerDomain';
-import { Field, useTask, ErrorNote } from './shared';
+import { useTask, ErrorNote } from './shared';
+import { PaperSelect } from './PaperSelect';
 import { applyTelegramTheme } from '../telegram';
 export function useAppearance() {
   const palette = useLiveQuery(async () => (await getDB().settings.get('palette'))?.value) as
@@ -26,34 +27,28 @@ export function Appearance() {
   return (
     <section className="panel">
       <h2>Моё оформление</h2>
-      <Field label="Палитра">
-        <select
-          disabled={busy}
-          value={String(values[0]?.value || 'library')}
-          onChange={(e) =>
-            void run(() => getDB().settings.put({ key: 'palette', value: e.target.value }), '')
-          }
-        >
-          {Object.entries(paletteLabels).map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Тема">
-        <select
-          disabled={busy}
-          value={String(values[1]?.value || 'system')}
-          onChange={(e) =>
-            void run(() => getDB().settings.put({ key: 'theme', value: e.target.value }), '')
-          }
-        >
-          <option value="system">Как в Telegram или на устройстве</option>
-          <option value="light">Светлая</option>
-          <option value="dark">Тёмная</option>
-        </select>
-      </Field>
+      <PaperSelect
+        label="Палитра"
+        disabled={busy}
+        value={String(values[0]?.value || 'library')}
+        onChange={(value) => void run(() => getDB().settings.put({ key: 'palette', value }), '')}
+        options={Object.entries(paletteLabels).map(([value, label]) => ({
+          value,
+          label,
+          motif: value as Palette,
+        }))}
+      />
+      <PaperSelect
+        label="Тема"
+        disabled={busy}
+        value={String(values[1]?.value || 'system')}
+        onChange={(value) => void run(() => getDB().settings.put({ key: 'theme', value }), '')}
+        options={[
+          { value: 'system', label: 'Как в Telegram или на устройстве' },
+          { value: 'light', label: 'Светлая' },
+          { value: 'dark', label: 'Тёмная' },
+        ]}
+      />
       <ErrorNote text={error} />
     </section>
   );

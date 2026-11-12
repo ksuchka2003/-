@@ -1,3 +1,4 @@
+import { PaperSelect } from './PaperSelect';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { action } from '../cloud';
@@ -200,17 +201,17 @@ export function AdminReadingReport() {
           placeholder="Название или автор"
         />
       </Field>
-      <Field label="Книга">
-        <select
-          value={bookId}
-          onChange={(e) => {
-            setBookId(e.target.value);
-            setCycle('');
-          }}
-        >
-          <option value="">Выберите книгу</option>
-          {books.data
-            ?.filter(
+      <PaperSelect
+        label="Книга"
+        value={bookId}
+        onChange={(value) => {
+          setBookId(value);
+          setCycle('');
+        }}
+        options={[
+          { value: '', label: 'Выберите книгу' },
+          ...(books.data || [])
+            .filter(
               (b) =>
                 b.id === bookId ||
                 (b.title + ' ' + b.authors)
@@ -218,32 +219,25 @@ export function AdminReadingReport() {
                   .includes(search.toLocaleLowerCase('ru')),
             )
             .sort((a, b) => a.title.localeCompare(b.title, 'ru'))
-            .map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.title}
-              </option>
-            ))}
-        </select>
-      </Field>
+            .map((b) => ({ value: b.id, label: b.title })),
+        ]}
+      />
       {bookId && (
-        <Field label="Период клубного чтения">
-          <select value={cycle} onChange={(e) => setCycle(e.target.value)}>
-            <option value="">Текущее или последнее чтение</option>
-            {readings.data
-              ?.filter((p) => p.book_id === bookId)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.starts_on} — {p.ends_on || 'без даты'} ·{' '}
-                  {p.status === 'active'
-                    ? 'читаем'
-                    : p.status === 'finished'
-                      ? 'завершено'
-                      : 'отменено'}
-                </option>
-              ))}
-            <option value="all">Все чтения этой книги</option>
-          </select>
-        </Field>
+        <PaperSelect
+          label="Период клубного чтения"
+          value={cycle}
+          onChange={setCycle}
+          options={[
+            { value: '', label: 'Текущее или последнее чтение' },
+            ...(readings.data || [])
+              .filter((p) => p.book_id === bookId)
+              .map((p) => ({
+                value: p.id,
+                label: `${p.starts_on} — ${p.ends_on || 'без даты'} · ${p.status === 'active' ? 'читаем' : p.status === 'finished' ? 'завершено' : 'отменено'}`,
+              })),
+            { value: 'all', label: 'Все чтения этой книги' },
+          ]}
+        />
       )}
       <ErrorNote text={report.error?.message || books.error?.message} />
       {report.isFetching ? (

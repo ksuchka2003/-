@@ -183,7 +183,8 @@ export async function importBackup(
         if (
           (s.key === 'theme' && ['light', 'dark', 'system'].includes(String(s.value))) ||
           (s.key === 'palette' && Object.hasOwn(paletteLabels, String(s.value))) ||
-          (s.key === 'bookLayout' && ['list', 'grid'].includes(String(s.value)))
+          (['bookLayout', 'clubLayout'].includes(s.key) &&
+            ['list', 'grid'].includes(String(s.value)))
         ) {
           if (!(await db.settings.get(s.key))) await db.settings.add(s);
         }

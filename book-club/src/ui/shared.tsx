@@ -75,6 +75,11 @@ export function Modal({
     document.body.style.overflow = 'hidden';
     section.current?.focus();
     const keydown = (e: KeyboardEvent) => {
+      if (
+        [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].at(-1) !==
+        section.current
+      )
+        return;
       if (e.key === 'Escape') {
         e.preventDefault();
         close.current();

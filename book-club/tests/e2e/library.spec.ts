@@ -1,4 +1,4 @@
-import { openBookEditor, writeEntry, expectEntry, openActions } from './helpers';
+import { openBookEditor, writeEntry, expectEntry, openActions, choosePaper } from './helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function addBook(page: Page) {
   await page.goto('/#/books');
@@ -161,10 +161,10 @@ test('цитаты: создание, избранное, корзина и во
   page.once('dialog', (d) => d.accept());
   await openActions(page, 'Действия с цитатой');
   await page.getByRole('button', { name: 'В корзину', exact: true }).click();
-  await page.getByLabel('Раздел цитат').selectOption('trash');
+  await choosePaper(page, 'Раздел цитат', 'trash');
   await expect(page.getByText('Страх убивает разум.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Восстановить' }).click();
-  await page.getByLabel('Раздел цитат').selectOption('mine');
+  await choosePaper(page, 'Раздел цитат', 'mine');
   await expect(page.getByText('Страх убивает разум.', { exact: true })).toBeVisible();
 });
 test('локальная библиотека работает без сети после загрузки', async ({ page, context }) => {
@@ -200,7 +200,7 @@ test('экспорт и валидируемый импорт JSON', async ({ pa
   });
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Режим импорта').selectOption('replace');
+  await choosePaper(page, 'Режим импорта', 'replace');
   page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: 'Импортировать' }).click();
   await page.goto('/#/books');

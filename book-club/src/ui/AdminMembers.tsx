@@ -1,3 +1,4 @@
+import { PaperSelect } from './PaperSelect';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { UserPlus, ChevronRight } from 'lucide-react';
@@ -48,12 +49,15 @@ function Invitation({ onClose }: { onClose: () => void }) {
           }}
         >
           <p className="form-context">Новый участник войдёт по ссылке. Telegram ID не нужен.</p>
-          <Field label="Кому доступна ссылка">
-            <select value={uses} onChange={(e) => setUses(Number(e.target.value))}>
-              <option value={1}>Одному человеку</option>
-              <option value={19}>До 19 новых участников</option>
-            </select>
-          </Field>
+          <PaperSelect
+            label="Кому доступна ссылка"
+            value={String(uses)}
+            onChange={(value) => setUses(Number(value))}
+            options={[
+              { value: '1', label: 'Одному человеку' },
+              { value: '19', label: 'До 19 новых участников' },
+            ]}
+          />
           <footer>
             <button className="primary" disabled={busy}>
               Создать приглашение

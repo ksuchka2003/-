@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { EntryFeed } from './EntryFeed';
 import { PublicContent } from './Social';
-import { Field } from './shared';
+import { PaperSelect } from './PaperSelect';
 export function ContentSection({ bookId, memberId }: { bookId?: string; memberId?: string }) {
   const [section, setSection] = useState('quotes');
   return (
     <section className="public-content-section">
-      <Field label="Записи участника">
-        <select value={section} onChange={(e) => setSection(e.target.value)}>
-          <option value="quotes">Цитаты</option>
-          <option value="note">Заметки</option>
-          <option value="thought">Мысли</option>
-          <option value="reviews">Отзывы и оценки</option>
-        </select>
-      </Field>
+      <PaperSelect
+        label="Записи участника"
+        value={section}
+        onChange={setSection}
+        options={[
+          { value: 'quotes', label: 'Цитаты' },
+          { value: 'note', label: 'Заметки' },
+          { value: 'thought', label: 'Мысли' },
+          { value: 'reviews', label: 'Отзывы и оценки' },
+        ]}
+      />
       {section === 'note' || section === 'thought' ? (
         <EntryFeed key={section} kind={section} bookId={bookId} memberId={memberId} />
       ) : (

@@ -10,6 +10,7 @@ import './collage.css';
 import './collage-details.css';
 import './calm-ux.css';
 import './quiet-paper.css';
+import './themed-paper.css';
 const client = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000, refetchOnWindowFocus: false } },
 });

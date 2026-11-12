@@ -1,4 +1,14 @@
 import { expect, type Page, type Locator } from '@playwright/test';
+export async function choosePaper(page: Page, label: string, choice: string | { label: string }) {
+  await page.getByRole('button', { name: label, exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: label, exact: true });
+  const option =
+    typeof choice === 'string'
+      ? sheet.locator('[data-option-value=' + JSON.stringify(choice) + ']')
+      : sheet.getByRole('button', { name: choice.label, exact: true });
+  await option.click();
+  await expect(sheet).not.toBeVisible();
+}
 export async function openActions(scope: Page | Locator, label: string) {
   const trigger = scope.getByRole('button', { name: label, exact: true });
   await trigger.click();

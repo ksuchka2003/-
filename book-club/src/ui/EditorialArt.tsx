@@ -1,5 +1,6 @@
 import readersAtlas from '../assets/illustrations/readers-atlas.png';
 import clubLifeAtlas from '../assets/illustrations/club-life-atlas.png';
+import { PaletteMotif } from './PaletteMotif';
 
 export type ReaderScene =
   | 'reader'
@@ -43,7 +44,8 @@ export function PaperFrame() {
       {[0, 1, 2, 3].map((corner) => (
         <span className="paper-frame-corner" key={corner} />
       ))}
-      <BotanicalSprig className="paper-frame-sprig" />
+      <PaletteMotif className="paper-frame-motif" />
+      <BotanicalSprig className="forest-vine" />
       <BookplateSticker className="paper-frame-sticker" />
     </span>
   );
@@ -107,7 +109,7 @@ export function HeadingCollage({ scene }: { scene: ReaderScene }) {
       <PaperFragment />
       <PaperFragment className="paper-layer" ruled />
       <PaperTape />
-      <BotanicalSprig className="heading-sprig" />
+      <PaletteMotif className="heading-motif" />
       <ReaderIllustration scene={scene} />
     </span>
   );

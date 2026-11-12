@@ -1,3 +1,4 @@
+import { PaperSelect } from './PaperSelect';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -94,15 +95,12 @@ function AdminBook({ book, onClose }: { book?: ClubBook; onClose: () => void }) 
             </button>
           )}
           <MetadataFields value={v} onChange={setV} compact pagesLabel="Страниц по умолчанию" />
-          <Field label="Клубный статус">
-            <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-              {Object.entries(clubStatuses).map(([k, name]) => (
-                <option key={k} value={k}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <PaperSelect
+            label="Клубный статус"
+            value={status}
+            onChange={(value) => setStatus(value as typeof status)}
+            options={Object.entries(clubStatuses).map(([value, label]) => ({ value, label }))}
+          />
           <details className="book-extra">
             <summary>Подобрать обложку и данные</summary>
             <BookLookup onSelect={setV} />
@@ -290,16 +288,16 @@ function ReadingEditor({
               onChange={(e) => setV({ ...v, position: Number(e.target.value) - 1 })}
             />
           </Field>
-          <Field label="Состояние чтения">
-            <select
-              value={v.status}
-              onChange={(e) => setV({ ...v, status: e.target.value as Reading['status'] })}
-            >
-              <option value="active">Читаем сейчас</option>
-              <option value="finished">Чтение завершено</option>
-              <option value="cancelled">Отменено</option>
-            </select>
-          </Field>
+          <PaperSelect
+            label="Состояние чтения"
+            value={v.status}
+            onChange={(status) => setV({ ...v, status: status as Reading['status'] })}
+            options={[
+              { value: 'active', label: 'Читаем сейчас' },
+              { value: 'finished', label: 'Чтение завершено' },
+              { value: 'cancelled', label: 'Отменено' },
+            ]}
+          />
         </details>
         <ErrorNote text={error} />
         <footer>

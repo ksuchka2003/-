@@ -6,6 +6,8 @@
 
 [Восемь сюжетов без повторов и лёгкий книжный декор](docs/READER_ART.md).
 
+[Бумажные кнопки, два вида клуба и оформление под палитру](docs/THEMED_PAPER.md).
+
 [Более спокойный интерфейс: меню, отступы и жесты](docs/CALM_UX.md).
 
 Русскоязычное приложение для закрытого клуба до 20 человек. React + TypeScript + Vite + Tailwind, React Router, TanStack Query, Dexie, Telegram Mini Apps SDK (`@tma.js/sdk-react`, поддерживаемый преемник `@telegram-apps/sdk-react`), Supabase PostgreSQL/Auth/Edge Functions.

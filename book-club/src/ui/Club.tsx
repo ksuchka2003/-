@@ -1,11 +1,13 @@
 import { EntryFeed } from './EntryFeed';
+import { BookJacket } from './BookJacket';
+import { PaletteMotif } from './PaletteMotif';
 import { currentClubBooks, nextClubMeeting } from '../clubSelectors';
 import { useState } from 'react';
 import { useSectionSwipe } from './useSectionSwipe';
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, ArrowUpRight, BookOpen, CalendarDays } from 'lucide-react';
+import { Plus, ArrowUpRight, BookOpen, CalendarDays, LayoutGrid, List } from 'lucide-react';
 import {
   type ClubBook,
   type Reading,
@@ -78,7 +80,7 @@ export function MainBooks() {
                     <PaperFragment />
                     <PaperTape className="featured-tape" />
                     <BookmarkTab />
-                    <BotanicalSprig />
+                    <PaletteMotif className="featured-palette-motif" />
                     <Cover title={b.title} cover={bookCover(own, b.cover)} />
                   </div>
                   <div className="featured-copy">
@@ -223,6 +225,9 @@ export function ProposalEditor({
 }
 export function Club() {
   const { identity } = useSession();
+  const layout =
+    useLiveQuery(async () => (await getDB().settings.get('clubLayout'))?.value) || 'grid';
+  const { run: saveLayout, error: layoutError } = useTask();
   const books = useCloud<ClubBook>('club_books');
   const readings = useCloud<Reading>('club_readings');
   const [params, setParams] = useSearchParams();
@@ -275,7 +280,7 @@ export function Club() {
             Все книги{all.length ? ` · ${all.length}` : ''}
           </button>
         </div>
-        <ErrorNote text={books.error?.message || readings.error?.message} />
+        <ErrorNote text={books.error?.message || readings.error?.message || layoutError} />
         {books.isLoading || readings.isLoading ? (
           <Loading />
         ) : books.error || readings.error ? null : tab === 'reading' ? (
@@ -291,7 +296,7 @@ export function Club() {
                     aria-label={`Открыть прогресс: ${b.title}`}
                     onClick={() => setOpened(opened === b.id ? null : b.id)}
                   >
-                    <Cover title={b.title} cover={b.cover} small />
+                    <BookJacket title={b.title} cover={b.cover} reading />
                     <span>
                       <h2>{b.title}</h2>
                       <small>{b.authors}</small>
@@ -316,6 +321,29 @@ export function Club() {
               <>
                 <div className="toolbar club-search">
                   <SearchField label="Поиск книг клуба" value={q} onChange={setQ} />
+                  <div className="catalog-view" role="group" aria-label="Вид книг клуба">
+                    {(['grid', 'list'] as const).map((value) => (
+                      <button
+                        type="button"
+                        key={value}
+                        className="paper-button"
+                        aria-pressed={layout === value}
+                        onClick={() =>
+                          void saveLayout(
+                            () => getDB().settings.put({ key: 'clubLayout', value }),
+                            '',
+                          )
+                        }
+                      >
+                        {value === 'grid' ? (
+                          <LayoutGrid size={16} aria-hidden="true" />
+                        ) : (
+                          <List size={16} aria-hidden="true" />
+                        )}
+                        {value === 'grid' ? 'Карточки' : 'Список'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div
                   className="tabs collection-tabs"
@@ -352,13 +380,16 @@ export function Club() {
             {!visible.length ? (
               <Empty title={q || all.length ? 'Книги не найдены' : 'В коллекции пока нет книг'} />
             ) : (
-              <div className="book-list club-catalog">
+              <div
+                className={`book-list club-catalog ${layout === 'list' ? 'catalog-list' : 'catalog-grid'}`}
+              >
                 {visible.map((b) => (
                   <Link className="book-card" key={b.id} to={`/club/${b.id}`}>
-                    <PaperTape className="catalog-tape" />
-                    <BotanicalSprig className="catalog-sprig" />
-                    <Cover title={b.title} cover={b.cover} />
-                    {current.some((x) => x.book.id === b.id) && <BookmarkTab />}
+                    <BookJacket
+                      title={b.title}
+                      cover={b.cover}
+                      reading={current.some((x) => x.book.id === b.id)}
+                    />
                     <div>
                       <span className="badge">
                         {clubBookFinished(b, history)
@@ -415,11 +446,6 @@ export function ClubDetail() {
           <span className="badge">{clubStatuses[b.status]}</span>
           <h1>{b.title}</h1>
           <h3>{b.authors}</h3>
-          <p className="muted">
-            {[b.genre, b.year, b.default_pages ? `${b.default_pages} стр.` : '']
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
         </div>
         <div className="book-detail-actions">
           <ClubReadingDecision book={b} />
@@ -481,12 +507,6 @@ export function ClubDetail() {
           )}
           <ErrorNote text={error} />
         </div>
-        {b.description && (
-          <details className="book-extra book-description">
-            <summary>Описание книги</summary>
-            <p className="prewrap">{b.description}</p>
-          </details>
-        )}
       </section>
       <div className="book-swipe-content" {...swipe}>
         <div className="book-section-nav">
@@ -504,22 +524,7 @@ export function ClubDetail() {
           ))}
         </div>
         {tab === 'overview' ? (
-          <>
-            <BookMemory bookId={b.id} onTab={setTab} />
-            {(readings.data || []).some((r) => r.book_id === id) && (
-              <details className="book-extra">
-                <summary>История чтения клубом</summary>
-                {readings.data
-                  ?.filter((r) => r.book_id === id)
-                  .map((r) => (
-                    <p key={r.id}>
-                      {r.starts_on} — {r.ends_on || 'без даты окончания'} ·{' '}
-                      {{ active: 'Читаем', finished: 'Завершено', cancelled: 'Отменено' }[r.status]}
-                    </p>
-                  ))}
-              </details>
-            )}
-          </>
+          <BookMemory book={b} readings={readings.data || []} />
         ) : tab === 'thought' || tab === 'note' ? (
           <EntryFeed key={tab} kind={tab} bookId={id} />
         ) : tab === 'progress' ? (

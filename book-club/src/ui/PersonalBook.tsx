@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ActionMenu } from './ActionMenu';
 import { useSectionSwipe } from './useSectionSwipe';
 import { Pencil, Bookmark, Plus } from 'lucide-react';
-import { PaperFragment, PaperTape, MarginDoodle } from './EditorialArt';
+import { PaperFragment, PaperTape } from './EditorialArt';
+import { PaletteMotif } from './PaletteMotif';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDB } from '../db';
@@ -259,7 +260,7 @@ export function PersonalBook({
           </div>
         </>
       )}
-      <MarginDoodle className="book-dossier-doodle" />
+      <PaletteMotif className="book-dossier-doodle" />
     </Modal>
   );
 }

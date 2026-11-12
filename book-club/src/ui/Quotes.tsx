@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { PaperFragment, ReaderIllustration } from './EditorialArt';
+import { PaperSelect } from './PaperSelect';
 import { ActionMenu } from './ActionMenu';
 import { useSearchParams } from 'react-router-dom';
 import { resolveQuoteBook } from '../quoteBooks';
@@ -375,20 +376,12 @@ export function Quotes() {
         />
       )}
       <div className="quote-navigation">
-        <Field label="Раздел цитат">
-          <select
-            value={tab}
-            onChange={(e) =>
-              update({ tab: e.target.value === 'mine' ? '' : e.target.value, favorite: '' })
-            }
-          >
-            {sections.map(([key, label]) => (
-              <option value={key} key={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <PaperSelect
+          label="Раздел цитат"
+          value={tab}
+          onChange={(value) => update({ tab: value === 'mine' ? '' : value, favorite: '' })}
+          options={sections.map(([value, label]) => ({ value, label }))}
+        />
         {(quotes.length > 0 || publicTab) && (
           <button
             type="button"
@@ -609,15 +602,15 @@ export function Quotes() {
               setFilters(false);
             }}
           >
-            <Field label="Сортировка цитат">
-              <select
-                value={filterSort}
-                onChange={(e) => setFilterSort(e.target.value as 'newest' | 'likes')}
-              >
-                <option value="newest">Сначала новые</option>
-                <option value="likes">Больше лайков</option>
-              </select>
-            </Field>
+            <PaperSelect
+              label="Сортировка цитат"
+              value={filterSort}
+              onChange={(value) => setFilterSort(value as 'newest' | 'likes')}
+              options={[
+                { value: 'newest', label: 'Сначала новые' },
+                { value: 'likes', label: 'Больше лайков' },
+              ]}
+            />
             {!publicTab && tab !== 'trash' && (
               <label className="check">
                 <input

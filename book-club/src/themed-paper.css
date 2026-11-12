@@ -1,0 +1,507 @@
+/* Shared physical materials follow the reader's palette, including dark modes. */
+:root[data-palette='wine'] {
+  --bg: #f5ecef;
+  --surface: #fcf6f7;
+  --text: #40252f;
+  --muted: #7a5c66;
+  --green: #78394f;
+  --soft: #eadbe1;
+  --line: #ddc8d1;
+  --cream: #edd4de;
+}
+:root[data-theme='dark'][data-palette='wine'] {
+  --bg: #261b22;
+  --surface: #33222c;
+  --text: #f1dfe7;
+  --muted: #c3a0b1;
+  --green: #e1a5bd;
+  --soft: #49303d;
+  --line: #604151;
+  --cream: #4a303c;
+}
+:root[data-palette='beer'] {
+  --bg: #f6efdf;
+  --surface: #fffaf0;
+  --text: #46361f;
+  --muted: #806c4c;
+  --green: #78501c;
+  --soft: #eadcbf;
+  --line: #ddcca7;
+  --cream: #efdcaf;
+}
+:root[data-theme='dark'][data-palette='beer'] {
+  --bg: #252016;
+  --surface: #342b1d;
+  --text: #f3e7cc;
+  --muted: #c5b18b;
+  --green: #dfb871;
+  --soft: #463921;
+  --line: #5c4a2b;
+  --cream: #49391d;
+}
+:root[data-palette='coffee'] {
+  --bg: #f2ece5;
+  --surface: #fbf6ef;
+  --text: #3c2b23;
+  --muted: #7b6557;
+  --green: #6d4634;
+  --soft: #e7dacd;
+  --line: #d6c3b2;
+  --cream: #e4cdb9;
+}
+:root[data-theme='dark'][data-palette='coffee'] {
+  --bg: #211c19;
+  --surface: #2f2520;
+  --text: #efe2d7;
+  --muted: #bda48f;
+  --green: #d3ab86;
+  --soft: #403128;
+  --line: #574133;
+  --cream: #443025;
+}
+:root[data-palette='sea'] {
+  --bg: #edf3f2;
+  --surface: #f7fcfb;
+  --text: #273d42;
+  --muted: #60787a;
+  --green: #315e65;
+  --soft: #dce9e8;
+  --line: #c9dddd;
+  --cream: #dcecea;
+}
+:root[data-theme='dark'][data-palette='sea'] {
+  --bg: #18262b;
+  --surface: #22343a;
+  --text: #deedef;
+  --muted: #a0bec2;
+  --green: #95c7cc;
+  --soft: #2b454b;
+  --line: #395a62;
+  --cream: #2f494f;
+}
+:root,
+:root[data-theme='dark'] {
+  --paper-piece: color-mix(in srgb, var(--soft) 86%, var(--green) 14%);
+  --paper-edge: color-mix(in srgb, var(--soft) 88%, var(--bg));
+  --decor-ink: color-mix(in srgb, var(--muted) 62%, var(--bg));
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='.085'/%3E%3C/svg%3E");
+  --torn-edge: polygon(
+    0 5%,
+    8% 2%,
+    17% 5%,
+    27% 1%,
+    37% 4%,
+    48% 0,
+    60% 3%,
+    72% 1%,
+    82% 4%,
+    92% 0,
+    100% 3%,
+    98.8% 24%,
+    100% 43%,
+    99% 64%,
+    100% 83%,
+    99% 97%,
+    89% 100%,
+    78% 97%,
+    67% 100%,
+    55% 96%,
+    44% 99%,
+    33% 97%,
+    21% 100%,
+    10% 97%,
+    0 100%,
+    1% 78%,
+    0 58%,
+    1% 36%
+  );
+}
+body,
+.paper-fragment,
+.panel,
+.quote-card,
+.book-extra,
+.action-menu-panel {
+  background-image: var(--paper-grain) !important;
+  background-size: 140px 140px;
+}
+.paper-ruled {
+  background-image:
+    var(--paper-grain),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='12'%3E%3Cpath d='M0 11.5H160' stroke='%23887e72' stroke-opacity='.12' stroke-width='.5'/%3E%3C/svg%3E") !important;
+}
+/* Only the background is clipped: the full tap target and keyboard ring remain. */
+.paper-button,
+.primary,
+.profile-actions > button,
+.modal footer > button {
+  --button-paper: var(--paper-piece);
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  background: transparent !important;
+  color: var(--text);
+  min-height: 44px;
+}
+.paper-button::before,
+.primary::before,
+.profile-actions > button::before,
+.modal footer > button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  clip-path: var(--torn-edge);
+  background-color: var(--button-paper);
+  background-image: var(--paper-grain) !important;
+  background-size: 110px 110px;
+}
+.primary,
+.paper-button[aria-pressed='true'] {
+  --button-paper: var(--green);
+  color: var(--surface);
+}
+.primary:hover::before {
+  background-color: color-mix(in srgb, var(--green) 88%, var(--text));
+}
+.modal .section-add.primary {
+  --button-paper: var(--paper-piece);
+  color: var(--text);
+  padding: 12px 16px;
+}
+.paper-button:not([aria-pressed='true']):hover::before {
+  background-color: color-mix(in srgb, var(--paper-piece) 85%, var(--green));
+}
+.paper-select {
+  min-width: 0;
+}
+.paper-select .paper-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 48px;
+  padding: 13px 16px;
+  font-size: 14px;
+  text-align: left;
+}
+.paper-select-trigger > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.paper-select-trigger > svg {
+  flex: 0 0 auto;
+}
+.paper-options {
+  display: grid;
+  gap: 12px;
+  padding-block: 6px 16px;
+}
+.paper-options > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 52px;
+  padding: 16px 20px;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.paper-options > button svg {
+  flex: 0 0 auto;
+}
+.club-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+}
+.club-search > .search-field {
+  flex: 1 1 200px;
+}
+.catalog-view {
+  display: flex;
+  gap: 9px;
+  margin-left: auto;
+}
+.catalog-view > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 13px;
+}
+.book-jacket {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  flex: 0 0 auto;
+}
+.book-jacket > .jacket-paper {
+  width: calc(100% + 7px);
+  height: calc(100% + 3px);
+  top: 2px;
+  left: -3px;
+  transform: rotate(-2deg);
+  opacity: 0.85;
+  z-index: -1;
+}
+.book-jacket > .cover {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  z-index: 1;
+}
+.book-jacket > .jacket-tape {
+  top: -3px;
+  left: 9px;
+  width: 27px;
+  height: 9px;
+  transform: rotate(-15deg);
+  z-index: 2;
+}
+.book-jacket > .bookmark-tab {
+  right: 10px;
+  top: -1px;
+  width: 6px;
+  height: 22px;
+}
+.book-jacket > .jacket-sprig {
+  position: absolute;
+  display: none;
+  right: -11px;
+  top: 15px;
+  width: 33px;
+  height: 56px;
+  color: var(--decor-ink);
+  opacity: 0.42;
+  pointer-events: none;
+  z-index: -1;
+}
+.palette-motif {
+  display: block;
+  width: 70px;
+  height: 40px;
+  color: var(--decor-ink);
+  pointer-events: none;
+  user-select: none;
+}
+.palette-motif > g {
+  display: none;
+}
+.palette-motif:not([data-motif='auto']) > g,
+:root:not([data-palette]) .palette-motif[data-motif='auto'] > [data-art='library'],
+:root[data-palette='library'] .palette-motif[data-motif='auto'] > [data-art='library'],
+:root[data-palette='forest'] .palette-motif[data-motif='auto'] > [data-art='forest'],
+:root[data-palette='clay'] .palette-motif[data-motif='auto'] > [data-art='clay'],
+:root[data-palette='ink'] .palette-motif[data-motif='auto'] > [data-art='ink'],
+:root[data-palette='wine'] .palette-motif[data-motif='auto'] > [data-art='wine'],
+:root[data-palette='beer'] .palette-motif[data-motif='auto'] > [data-art='beer'],
+:root[data-palette='coffee'] .palette-motif[data-motif='auto'] > [data-art='coffee'],
+:root[data-palette='sea'] .palette-motif[data-motif='auto'] > [data-art='sea'] {
+  display: inline;
+}
+.profile-paper-frame > .paper-frame-motif {
+  position: absolute;
+  width: 70px;
+  height: 40px;
+  right: 2px;
+  bottom: 5px;
+  opacity: 0.45;
+  transform: rotate(-7deg);
+}
+.profile-paper-frame > .forest-vine {
+  display: none;
+  position: absolute;
+  right: -15px;
+  bottom: 22px;
+  width: 52px;
+  height: 152px;
+  color: var(--decor-ink);
+  opacity: 0.25;
+}
+:root[data-palette='forest'] .profile-paper-frame > .forest-vine {
+  display: block;
+}
+.heading-collage > .heading-motif {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 45px;
+  height: 26px;
+  opacity: 0.35;
+  z-index: -1;
+}
+.book-jacket > .jacket-motif {
+  display: none;
+  position: absolute;
+  width: 33px;
+  height: 21px;
+  right: -6px;
+  bottom: -5px;
+  opacity: 0.5;
+}
+.book-card:nth-child(4n + 2) .jacket-motif {
+  display: block;
+}
+.featured-cover > .featured-palette-motif {
+  position: absolute;
+  right: -17px;
+  bottom: -8px;
+  width: 52px;
+  height: 32px;
+  opacity: 0.55;
+  z-index: 2;
+}
+.paper-select-trigger > .paper-control-motif {
+  position: absolute;
+  right: 42px;
+  bottom: -6px;
+  width: 34px;
+  height: 21px;
+  opacity: 0.3;
+}
+.paper-options .palette-option-motif {
+  flex: 0 0 55px;
+  width: 55px;
+  height: 32px;
+  color: currentColor;
+  opacity: 0.58;
+}
+.paper-options > button > span {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-palette-motif {
+  position: absolute;
+  width: 100px;
+  height: 58px;
+  bottom: 13px;
+  right: 10px;
+  opacity: 0.5;
+}
+.book-dossier-doodle.palette-motif {
+  width: 95px;
+  height: 55px;
+  opacity: 0.5;
+}
+.book-card:nth-child(4n + 2) .jacket-sprig {
+  display: block;
+}
+.book-card:nth-child(3n + 2) .jacket-tape {
+  left: auto;
+  right: 9px;
+  transform: rotate(14deg);
+}
+.personal-book-card > .cover-open {
+  width: 94px;
+  flex: 0 0 94px;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  background: transparent;
+  align-self: start;
+}
+.book-grid .personal-book-card > .cover-open {
+  width: 100%;
+  flex: initial;
+}
+.book-grid .cover-open::before {
+  display: none;
+}
+.cover::before {
+  border-left-color: color-mix(in srgb, var(--bg) 30%, transparent);
+  border-right-color: var(--paper-edge);
+}
+.reading-summary > .book-jacket {
+  width: 85px;
+}
+.book-list.club-catalog.catalog-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 26px;
+}
+.club-catalog.catalog-list .book-card {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  padding: 8px 0;
+}
+.club-catalog.catalog-list .book-card > div:last-child {
+  padding-top: 3px;
+}
+.club-catalog.catalog-list .book-card h3 {
+  font-size: 29px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.club-catalog.catalog-list .cover > span {
+  font-size: 17px;
+}
+.book-overview {
+  display: grid;
+  gap: 28px;
+  padding-block: 6px 18px;
+}
+.book-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin: 0;
+}
+.book-facts dt {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.book-facts dd {
+  margin: 0;
+  font-size: 14px;
+}
+.book-annotation h2,
+.book-rating h2 {
+  font-size: 27px;
+  margin-bottom: 12px;
+}
+.book-rating {
+  display: grid;
+  gap: 8px;
+}
+.book-rating > small {
+  color: var(--muted);
+}
+:root[data-theme='dark']
+  :is(input, select, textarea, .search-field, .action-menu-panel, .avatar, .cover, .segmented) {
+  border-color: var(--paper-edge);
+}
+:root[data-theme='dark'] .paper-frame-corner {
+  display: none;
+}
+:root[data-theme='dark'] .cover::before {
+  border-left-color: var(--bg);
+  border-right-color: var(--paper-edge);
+}
+:root[data-theme='dark'] .cover::after {
+  border: 0;
+}
+@media (max-width: 600px) {
+  .club-catalog.catalog-list .book-card {
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 22px;
+  }
+  .club-catalog.catalog-list .book-card h3 {
+    font-size: 26px;
+  }
+  .club-catalog.catalog-list .cover > span {
+    font-size: 14px;
+  }
+}

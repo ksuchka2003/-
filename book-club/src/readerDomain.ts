@@ -57,10 +57,14 @@ export const choiceLabels: Record<ReadingChoice, string> = {
   declined: 'Не буду читать',
 };
 export const entryLabels = { note: 'Заметка', thought: 'Мысль' } as const;
-export type Palette = 'library' | 'forest' | 'clay' | 'ink';
+export type Palette = 'library' | 'forest' | 'clay' | 'ink' | 'wine' | 'beer' | 'coffee' | 'sea';
 export const paletteLabels: Record<Palette, string> = {
   library: 'Тёплая библиотека',
   forest: 'Лесная',
   clay: 'Терракотовая',
   ink: 'Чернильная',
+  wine: 'Винная',
+  beer: 'Пивная',
+  coffee: 'Кофейная',
+  sea: 'Морская',
 };

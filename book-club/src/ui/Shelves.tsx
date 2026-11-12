@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PaperSelect } from './PaperSelect';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Pencil, Trash2 } from 'lucide-react';
 import { getDB } from '../db';
@@ -163,18 +164,17 @@ export function ShelfPicker({
       {fromShelf && shelves.some((s) => s.id !== fromShelf) && (
         <details className="book-extra">
           <summary>Переместить с текущей полки</summary>
-          <Field label="Куда переместить">
-            <select value={to} onChange={(e) => setTo(e.target.value)}>
-              <option value="">Выберите полку</option>
-              {shelves
+          <PaperSelect
+            label="Куда переместить"
+            value={to}
+            onChange={setTo}
+            options={[
+              { value: '', label: 'Выберите полку' },
+              ...shelves
                 .filter((s) => s.id !== fromShelf)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-          </Field>
+                .map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
           <button
             disabled={busy || !to}
             onClick={async () => {

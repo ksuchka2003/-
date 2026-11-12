@@ -1,120 +1,80 @@
 import { useEffect, useState } from 'react';
-import {
-  type Book,
-  type ClubBook,
-  type BookStats,
-  type PublicQuote,
-  type PublicReview,
-  message,
-} from '../domain';
-import { decimal } from '../collection';
-import { PublicContent } from './Social';
+import { type Book, type ClubBook, type BookStats, type Reading, message } from '../domain';
 import { RatingStars } from './RatingStars';
 import { EntryEditor } from './EntryEditor';
-import { EntryFeed } from './EntryFeed';
 import { ensurePersonalClubBook } from '../readerLocal';
 import { Modal, useCloud, ErrorNote, Loading } from './shared';
+
 export function BookStatistics({ bookId }: { bookId: string }) {
   const all = useCloud<BookStats>('club_book_stats');
   const stats = all.data?.find((s) => s.book_id === bookId);
-  if (
-    !all.isLoading &&
-    !all.error &&
-    (!stats ||
-      !(
-        Number(stats.rating_count) > 0 ||
-        Number(stats.finished_readers) > 0 ||
-        Number(stats.pace_count) > 0
-      ))
-  )
-    return null;
   return (
-    <section className="book-statistics">
+    <section className="book-rating" aria-label="Рейтинг книги">
+      <h2>Рейтинг клуба</h2>
       <ErrorNote text={all.error?.message} />
       {all.isLoading ? (
         <Loading />
       ) : (
-        stats && (
+        !all.error &&
+        (stats?.average_rating !== null &&
+        stats?.average_rating !== undefined &&
+        Number(stats.rating_count) > 0 ? (
           <>
-            {stats.average_rating !== null && Number(stats.rating_count) > 0 && (
-              <div>
-                <RatingStars value={Number(stats.average_rating)} label="Средняя оценка" />
-                <span>Средняя оценка · оценок: {stats.rating_count}</span>
-              </div>
-            )}
-            {Number(stats.finished_readers) > 0 && (
-              <div>
-                <b>{stats.finished_readers}</b>
-                <span>Отметили прочтение</span>
-              </div>
-            )}
-            {Number(stats.pace_count) > 0 &&
-              stats.pages_per_day !== null &&
-              stats.average_days !== null && (
-                <div>
-                  <b>{decimal(stats.pages_per_day)} стр./день</b>
-                  <span>В среднем {decimal(stats.average_days)} дн. на книгу</span>
-                  <small>По указанным датам чтения · участников: {stats.pace_count}</small>
-                </div>
-              )}
+            <RatingStars value={Number(stats.average_rating)} label="Средняя оценка" />
+            <small>Оценок в клубе: {stats.rating_count}</small>
           </>
-        )
+        ) : (
+          <p className="muted">Оценок в клубе пока нет.</p>
+        ))
       )}
     </section>
   );
 }
-export function BookMemory({ bookId, onTab }: { bookId: string; onTab: (tab: string) => void }) {
-  const quotes = useCloud<PublicQuote>('club_quotes');
-  const reviews = useCloud<PublicReview>('club_reviews');
-  const hasQuotes = quotes.data?.some((q) => q.book_id === bookId);
-  const hasReviews = reviews.data?.some((r) => r.book_id === bookId);
+
+export function BookMemory({ book, readings }: { book: ClubBook; readings: Reading[] }) {
+  const completed = readings.filter((r) => r.book_id === book.id && r.status === 'finished');
+  const ended = completed
+    .filter((r) => r.ends_on)
+    .sort((a, b) => b.ends_on!.localeCompare(a.ends_on!))[0]?.ends_on;
+  const date =
+    ended &&
+    new Date(ended + 'T12:00:00Z').toLocaleDateString('ru-RU', {
+      dateStyle: 'long',
+      timeZone: 'Europe/Moscow',
+    });
   return (
-    <>
-      <BookStatistics bookId={bookId} />
-      <details className="book-extra">
-        <summary>Мысли участников</summary>
-        <EntryFeed kind="thought" bookId={bookId} sort="likes" limit={3} />
-        <button onClick={() => onTab('thought')}>Все мысли</button>
-      </details>
-      <details className="book-extra">
-        <summary>Заметки по ходу чтения</summary>
-        <EntryFeed kind="note" bookId={bookId} sort="likes" limit={3} />
-        <button onClick={() => onTab('note')}>Все заметки</button>
-      </details>
-      <ErrorNote text={quotes.error?.message || reviews.error?.message} />
-      {quotes.isLoading || reviews.isLoading ? (
-        <Loading />
-      ) : (
-        !quotes.error &&
-        !reviews.error && (
-          <>
-            {!hasQuotes && !hasReviews && (
-              <p className="quiet-empty">Пока нет цитат и впечатлений к этой книге.</p>
-            )}
-            {hasQuotes && (
-              <>
-                <div className="section-title">
-                  <h2>Цитаты, которые зацепили</h2>
-                  <button onClick={() => onTab('quotes')}>Все цитаты</button>
-                </div>
-                <PublicContent type="quotes" bookId={bookId} sort="likes" limit={3} />
-              </>
-            )}
-            {hasReviews && (
-              <>
-                <div className="section-title">
-                  <h2>Отзывы участников</h2>
-                  <button onClick={() => onTab('reviews')}>Все отзывы</button>
-                </div>
-                <PublicContent type="reviews" bookId={bookId} limit={3} />
-              </>
-            )}
-          </>
-        )
+    <section className="book-overview" aria-label="О книге">
+      <dl className="book-facts">
+        {book.genre && (
+          <div>
+            <dt>Жанр</dt>
+            <dd>{book.genre}</dd>
+          </div>
+        )}
+        {book.year && (
+          <div>
+            <dt>Год</dt>
+            <dd>{book.year}</dd>
+          </div>
+        )}
+        {(date || completed.length > 0 || book.status === 'finished') && (
+          <div>
+            <dt>Прочитано клубом</dt>
+            <dd>{date || 'Дата не указана'}</dd>
+          </div>
+        )}
+      </dl>
+      {book.description && (
+        <div className="book-annotation">
+          <h2>Аннотация</h2>
+          <p className="prewrap">{book.description}</p>
+        </div>
       )}
-    </>
+      <BookStatistics bookId={book.id} />
+    </section>
   );
 }
+
 export function BookThoughtEditor({ book, onClose }: { book: ClubBook; onClose: () => void }) {
   const [personal, setPersonal] = useState<Book | null>(null),
     [error, setError] = useState('');
